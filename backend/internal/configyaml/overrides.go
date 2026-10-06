@@ -7,7 +7,7 @@ import (
 )
 
 // MergeOverrides preserves subscription nodes and comments. Only TUN is merged
-// per field; other top-level values (including explicit empty lists) replace it.
+// per field, with null removing a field to use the core default; other top-level values (including explicit empty lists) replace it.
 func MergeOverrides(raw []byte, overrides map[string]any) ([]byte, error) {
 	if len(overrides) == 0 {
 		return raw, nil
@@ -33,14 +33,12 @@ func MergeOverrides(raw []byte, overrides map[string]any) ([]byte, error) {
 				break
 			}
 		}
-		if index < 0 {
-			root.Content = append(root.Content, key, value)
-			continue
-		}
 		if key.Value == "tun" && value.Kind == yaml.MappingNode {
 			var base map[string]any
-			if err := root.Content[index+1].Decode(&base); err != nil {
-				return nil, err
+			if index >= 0 {
+				if err := root.Content[index+1].Decode(&base); err != nil {
+					return nil, err
+				}
 			}
 			if base == nil {
 				base = map[string]any{}
@@ -50,11 +48,19 @@ func MergeOverrides(raw []byte, overrides map[string]any) ([]byte, error) {
 				return nil, err
 			}
 			for k, v := range changes {
-				base[k] = v
+				if v == nil {
+					delete(base, k)
+				} else {
+					base[k] = v
+				}
 			}
 			if err := value.Encode(base); err != nil {
 				return nil, err
 			}
+		}
+		if index < 0 {
+			root.Content = append(root.Content, key, value)
+			continue
 		}
 		previous := root.Content[index+1]
 		value.HeadComment = previous.HeadComment

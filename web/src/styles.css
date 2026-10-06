@@ -959,3 +959,12 @@ html[data-theme="light"] .dashboard-mode-row .mode-btn.active{background:#f2f5ff
 .setting-toggle.disabled{opacity:1;background:var(--surface-disabled);color:var(--muted)}
 .setting-toggle.disabled>div,.setting-toggle.disabled>.switch{opacity:.58}
 html[data-theme="light"] .topbar{background:rgba(248,250,253,.9)}
+
+/* Keep the optional TUN congestion control beside stack and MTU. */
+@media(min-width:901px){.tun-main-grid:has([aria-label="TCP 拥塞控制"]){grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,.6fr)}}
+@media(min-width:681px){.tun-settings-main-grid:has([aria-label="TCP 拥塞控制"]){grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,.6fr)}}
+
+/* Medium latency follows the active theme accent. */
+.latency.primary,.node-delay.primary,html[data-theme="light"] .node-delay.primary,.dashboard-node-delay-text.primary{color:var(--accent)}
+.current-delay.primary{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 28%,transparent)}
+.dashboard-delay.primary,html[data-theme="light"] .dashboard-delay.primary{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 20%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent)}

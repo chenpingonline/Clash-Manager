@@ -104,6 +104,12 @@ func cleanOptionalPath(path string) string {
 	return filepath.Clean(path)
 }
 
+// Linux appends this suffix to /proc/PID/exe when an executable is replaced.
+// Keep ownership tied to the exact managed path, including after atomic updates.
+func managedExecutable(exe, managedPath string) bool {
+	return exe != "" && managedPath != "" && filepath.Clean(strings.TrimSuffix(exe, " (deleted)")) == filepath.Clean(managedPath)
+}
+
 func (h *helper) processes() []processInfo {
 	entries, _ := os.ReadDir("/proc")
 	items := []processInfo{}
@@ -130,7 +136,11 @@ func (h *helper) processes() []processInfo {
 			cwd, _ := os.Readlink(fmt.Sprintf("/proc/%d/cwd", pid))
 			file = filepath.Join(cwd, file)
 		}
-		items = append(items, processInfo{PID: pid, Exe: exe, ConfigPath: cleanOptionalPath(file), ConfigDir: cleanOptionalPath(dir), Managed: filepath.Clean(exe) == h.config.managedCore})
+		managed := managedExecutable(exe, h.config.managedCore)
+		if managed {
+			exe = h.config.managedCore
+		}
+		items = append(items, processInfo{PID: pid, Exe: exe, ConfigPath: cleanOptionalPath(file), ConfigDir: cleanOptionalPath(dir), Managed: managed})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].PID < items[j].PID })
 	return items
@@ -148,10 +158,10 @@ func (h *helper) managedProcess() *processInfo {
 		return nil
 	}
 	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
-	if err != nil || filepath.Clean(exe) != filepath.Clean(h.config.managedCore) {
+	if err != nil || !managedExecutable(exe, h.config.managedCore) {
 		return nil
 	}
-	return &processInfo{PID: pid, Exe: exe, ConfigPath: h.config.managedConfig, ConfigDir: h.config.managedConfigDir, Managed: true}
+	return &processInfo{PID: pid, Exe: h.config.managedCore, ConfigPath: h.config.managedConfig, ConfigDir: h.config.managedConfigDir, Managed: true}
 }
 func (h *helper) primary() *processInfo {
 	mode := h.readMode()
@@ -387,6 +397,14 @@ func (h *helper) stopManagedLocked() {
 	// Never signal an unrelated process through a stale PID file.
 	if proc := h.managedProcess(); proc != nil {
 		terminateManagedPID(proc.PID, 3*time.Second)
+	}
+	// Recover cores left running by older helpers after they removed the PID file.
+	// Discovery still requires the exact managed executable path; external cores
+	// and unrelated processes referenced by stale PID files remain untouched.
+	for _, proc := range h.processes() {
+		if proc.Managed {
+			terminateManagedPID(proc.PID, 3*time.Second)
+		}
 	}
 	h.managed = nil
 	_ = os.Remove(h.config.managedPID)
@@ -1005,6 +1023,8 @@ func replaceTopLevel(raw, key, rendered string) string {
 }
 func scalar(value any) string {
 	switch v := value.(type) {
+	case nil:
+		return "null"
 	case bool:
 		if v {
 			return "true"
@@ -1023,7 +1043,7 @@ var yamlKeys = map[string]string{
 	"enhancedMode": "enhanced-mode", "fakeIpRange": "fake-ip-range", "fakeIpRange6": "fake-ip-range6", "fakeIpFilterMode": "fake-ip-filter-mode",
 	"preferH3": "prefer-h3", "respectRules": "respect-rules", "useHosts": "use-hosts", "useSystemHosts": "use-system-hosts", "directNameserverFollowPolicy": "direct-nameserver-follow-policy",
 	"defaultNameserver": "default-nameserver", "proxyServerNameserver": "proxy-server-nameserver", "directNameserver": "direct-nameserver", "fakeIpFilter": "fake-ip-filter", "nameserverPolicy": "nameserver-policy",
-	"autoRoute": "auto-route", "autoRedirect": "auto-redirect", "autoDetectInterface": "auto-detect-interface", "dnsHijack": "dns-hijack", "strictRoute": "strict-route", "routeExcludeAddress": "route-exclude-address",
+	"autoRoute": "auto-route", "autoRedirect": "auto-redirect", "autoDetectInterface": "auto-detect-interface", "dnsHijack": "dns-hijack", "strictRoute": "strict-route", "routeExcludeAddress": "route-exclude-address", "congestionController": "congestion-controller",
 }
 
 func yamlKey(value string) string {
@@ -1129,6 +1149,11 @@ func normalizeTunForYAML(input map[string]any) (map[string]any, error) {
 	tun := map[string]any{}
 	for key, value := range input {
 		tun[key] = value
+	}
+	for _, key := range []string{"stack", "congestionController"} {
+		if value, exists := tun[key].(string); exists && value == "" {
+			tun[key] = nil // Remove the override to follow the core default.
+		}
 	}
 	if enabled, ok := tun["dnsHijack"].(bool); ok {
 		if enabled {
@@ -1476,11 +1501,16 @@ func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 		}
 		return map[string]any{"enabled": true, "port": value}
 	}
-	settings := map[string]any{"controller": map[string]any{"enabled": true, "port": controllerPort}, "mixed": port("mixed-port", mixed), "socks": port("socks-port", 7898), "http": port("port", 7899), "redir": port("redir-port", 7895), "tproxy": port("tproxy-port", 7896), "allowLan": yamlBoolean(raw, "allow-lan", false), "core": map[string]any{"ipv6": yamlBoolean(raw, "ipv6", true), "unifiedDelay": yamlBoolean(raw, "unified-delay", false)}, "tun": map[string]any{"enabled": yamlNestedBoolean(raw, "tun", "enable", false), "stack": yamlNestedString(raw, "tun", "stack", "mixed"), "mtu": yamlNestedInteger(raw, "tun", "mtu", 1500), "routeExcludeAddress": yamlNestedStringList(raw, "tun", "route-exclude-address"), "autoRoute": yamlNestedBoolean(raw, "tun", "auto-route", true), "autoRedirect": yamlNestedBoolean(raw, "tun", "auto-redirect", true), "autoDetectInterface": yamlNestedBoolean(raw, "tun", "auto-detect-interface", true), "dnsHijack": yamlNestedBoolean(raw, "tun", "dns-hijack", false), "strictRoute": yamlNestedBoolean(raw, "tun", "strict-route", false)}}
+	settings := map[string]any{"controller": map[string]any{"enabled": true, "port": controllerPort}, "mixed": port("mixed-port", mixed), "socks": port("socks-port", 7898), "http": port("port", 7899), "redir": port("redir-port", 7895), "tproxy": port("tproxy-port", 7896), "allowLan": yamlBoolean(raw, "allow-lan", false), "core": map[string]any{"ipv6": yamlBoolean(raw, "ipv6", true), "unifiedDelay": yamlBoolean(raw, "unified-delay", false)}, "tun": map[string]any{"enabled": yamlNestedBoolean(raw, "tun", "enable", false), "stack": yamlNestedString(raw, "tun", "stack", ""), "congestionController": yamlNestedString(raw, "tun", "congestion-controller", ""), "mtu": yamlNestedInteger(raw, "tun", "mtu", 1500), "routeExcludeAddress": yamlNestedStringList(raw, "tun", "route-exclude-address"), "autoRoute": yamlNestedBoolean(raw, "tun", "auto-route", true), "autoRedirect": yamlNestedBoolean(raw, "tun", "auto-redirect", true), "autoDetectInterface": yamlNestedBoolean(raw, "tun", "auto-detect-interface", true), "dnsHijack": yamlNestedBoolean(raw, "tun", "dns-hijack", false), "strictRoute": yamlNestedBoolean(raw, "tun", "strict-route", false)}}
 	proc := h.primary()
 	tunDevice := fileExists("/dev/net/tun")
 	capability := resolveTunCapability(proc, tunDevice, os.Geteuid())
-	return map[string]any{"ok": true, "configPath": active["path"], "settings": settings, "offline": active["offline"] == true, "tunCapability": capability}, nil
+	binary := h.config.managedCore
+	if proc != nil {
+		binary = proc.Exe
+	}
+	features := tunVersionFeatures(readVersion(binary))
+	return map[string]any{"ok": true, "configPath": active["path"], "settings": settings, "offline": active["offline"] == true, "tunCapability": capability, "tunFeatures": features}, nil
 }
 
 func resolveTunCapability(proc *processInfo, tunDevice bool, effectiveUID int) map[string]any {

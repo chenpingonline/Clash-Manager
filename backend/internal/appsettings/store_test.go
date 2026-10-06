@@ -83,3 +83,37 @@ func TestAppUpdateNotificationsDefaultOnAndCanBeDisabled(t *testing.T) {
 		t.Fatalf("app update notification preference was not persisted: %#v", document)
 	}
 }
+
+func TestHealthcheckDefaultsAndExistingURLs(t *testing.T) {
+	for _, test := range []struct{ name, existing, expected string }{
+		{"new installation", "", "http://cp.cloudflare.com/generate_204"},
+		{"existing Google", "https://www.gstatic.com/generate_204", "https://www.gstatic.com/generate_204"},
+		{"custom", "https://example.com/check", "https://example.com/check"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			document := map[string]any{}
+			if test.existing != "" {
+				document["healthcheckUrl"] = test.existing
+			}
+			enabled := true
+			if err := Apply(document, Update{PersistSelections: &enabled}); err != nil {
+				t.Fatal(err)
+			}
+			if got := Public(document)["healthcheckUrl"]; got != test.expected {
+				t.Fatalf("URL = %v, want %s", got, test.expected)
+			}
+		})
+	}
+}
+
+func TestHealthcheckRejectsInvalidURL(t *testing.T) {
+	for _, value := range []string{"file:///tmp/test", "http://", "not-a-url"} {
+		document := map[string]any{"healthcheckUrl": "https://example.com/check"}
+		if err := Apply(document, Update{HealthcheckURL: &value}); err == nil {
+			t.Fatalf("accepted %q", value)
+		}
+		if document["healthcheckUrl"] != "https://example.com/check" {
+			t.Fatal("invalid input replaced saved URL")
+		}
+	}
+}

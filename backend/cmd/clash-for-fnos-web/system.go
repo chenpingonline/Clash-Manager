@@ -133,7 +133,7 @@ func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, reques
 		if !decodeJSONBody(w, r, &body) {
 			return true
 		}
-		result, err := g.updateCore(r.Context(), body.Restart, body.Force)
+		result, err := g.updateCore(r.Context(), body.Restart, body.Force, r.Header.Get("X-Network-Operation"))
 		if err != nil {
 			writeJSON(w, 502, map[string]string{"error": err.Error()})
 		} else {
@@ -1295,14 +1295,32 @@ func (g *gateway) installUploadedCore(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "version": expectedVersion, "filename": filepath.Base(header.Filename), "install": install, "started": started})
 }
 
-func (g *gateway) updateCore(ctx context.Context, restart, force bool) (map[string]any, error) {
+func (g *gateway) updateCore(ctx context.Context, restart, force bool, id string) (result map[string]any, err error) {
+	if !g.coreUpdateMu.TryLock() {
+		return nil, errors.New("已有内核更新正在进行")
+	}
+	defer g.coreUpdateMu.Unlock()
+	if id == "" {
+		id = newHexID(8)
+	}
+	setStage := func(stage, message string, progress *int, active bool) {
+		g.setCoreUpdateStage(id, stage, message, progress, active)
+	}
+	setStage("checking", "正在获取最新内核…", nil, true)
+	defer func() {
+		if err != nil {
+			setStage("error", "更新失败："+err.Error(), nil, false)
+		} else {
+			setStage("done", "内核更新完成", nil, false)
+		}
+	}()
 	before, err := g.coreStatus(ctx, false)
 	if err != nil {
 		return nil, err
 	}
 	release, err := fetchRelease(ctx, "MetaCubeX/mihomo")
 	if err != nil {
-		return nil, err
+		return nil, coreUpdateStageError("检查更新", err)
 	}
 	current, _ := before["currentVersion"].(string)
 	if current != "" && compareVersion(release.TagName, current) <= 0 && !force {
@@ -1313,35 +1331,38 @@ func (g *gateway) updateCore(ctx context.Context, restart, force bool) (map[stri
 		return nil, err
 	}
 	downloadURL, _ := asset["url"].(string)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
-	req.Header.Set("User-Agent", "Clash-for-fnos/v"+version)
-	response, err := (&http.Client{Timeout: 2 * time.Minute}).Do(req)
+	total, _ := asset["size"].(int64)
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	defer transport.CloseIdleConnections()
+	setStage("downloading", "正在下载 Mihomo Core…", nil, true)
+	body, err := downloadCore(ctx, &http.Client{Transport: transport}, downloadURL, total, defaultCoreDownloadPolicy, func(progress coreDownloadProgress) {
+		message := "正在下载 Mihomo Core…"
+		if progress.retrying {
+			message = fmt.Sprintf("下载中断，准备第 %d/%d 次尝试…", progress.attempt+1, progress.maxAttempts)
+		}
+		if !progress.retrying && progress.attempt > 1 {
+			message = fmt.Sprintf("正在下载 Mihomo Core（第 %d/%d 次尝试）…", progress.attempt, progress.maxAttempts)
+		}
+		g.networkOperationMu.Lock()
+		g.coreOperation = networkSaveStatus{ID: id, Active: true, Stage: "downloading", Message: message, Progress: progress.percent(), DownloadedBytes: progress.downloaded, TotalBytes: progress.total, Attempt: progress.attempt, MaxAttempts: progress.maxAttempts, Retrying: progress.retrying}
+		g.networkOperationMu.Unlock()
+	})
 	if err != nil {
 		return nil, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("下载 Mihomo Core: HTTP %d", response.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, (80<<20)+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(body) > 80<<20 {
-		return nil, errors.New("Mihomo Core 超过大小限制")
 	}
 	if err = os.MkdirAll(g.config.coreStageDir, 0o700); err != nil {
-		return nil, err
+		return nil, coreUpdateStageError("保存下载文件", err)
 	}
 	stage := filepath.Join(g.config.coreStageDir, fmt.Sprintf("%s.%d.download", filepath.Base(downloadURL), time.Now().UnixMilli()))
 	if err = writeAtomicFile(stage, body); err != nil {
-		return nil, err
+		return nil, coreUpdateStageError("保存下载文件", err)
 	}
 	defer os.Remove(stage)
 	digest := sha256.Sum256(body)
+	setStage("installing", "正在校验并安装内核…", nil, true)
 	var install map[string]any
-	if err = g.helperJSON(ctx, http.MethodPost, "/core/install", map[string]any{"stagePath": stage, "expectedVersion": release.TagName, "restart": restart}, &install, 2*time.Minute); err != nil {
-		return nil, err
+	if err = g.helperJSON(ctx, http.MethodPost, "/core/install", map[string]any{"stagePath": stage, "expectedVersion": release.TagName, "restart": restart}, &install, 3*time.Minute); err != nil {
+		return nil, coreUpdateStageError("安装内核", err)
 	}
 	txID := fmt.Sprint(install["txId"])
 	if restart {
@@ -1349,9 +1370,10 @@ func (g *gateway) updateCore(ctx context.Context, restart, force bool) (map[stri
 			_ = g.helperJSON(ctx, http.MethodPost, "/core/rollback", map[string]any{"txId": txID, "restart": true}, nil, time.Minute)
 			return nil, errors.New("内核重启失败，已尝试回滚")
 		}
+		setStage("restarting", "正在等待内核重启…", nil, true)
 		if err = g.waitController(ctx, 30*time.Second); err != nil {
 			_ = g.helperJSON(ctx, http.MethodPost, "/core/rollback", map[string]any{"txId": txID, "restart": true}, nil, time.Minute)
-			return nil, err
+			return nil, coreUpdateStageError("等待内核重启", err)
 		}
 	}
 	_ = g.helperJSON(ctx, http.MethodPost, "/core/commit", map[string]any{"txId": txID}, nil, 10*time.Second)
@@ -1359,7 +1381,15 @@ func (g *gateway) updateCore(ctx context.Context, restart, force bool) (map[stri
 }
 
 type networkSaveStatus struct {
-	ID      string `json:"id"`
-	Active  bool   `json:"active"`
-	Message string `json:"message"`
+	DownloadedBytes int64  `json:"downloadedBytes,omitempty"`
+	TotalBytes      int64  `json:"totalBytes,omitempty"`
+	Attempt         int    `json:"attempt,omitempty"`
+	MaxAttempts     int    `json:"maxAttempts,omitempty"`
+	Retrying        bool   `json:"retrying,omitempty"`
+	FailureStage    string `json:"failureStage,omitempty"`
+	Stage           string `json:"stage,omitempty"`
+	Progress        *int   `json:"progress,omitempty"`
+	ID              string `json:"id"`
+	Active          bool   `json:"active"`
+	Message         string `json:"message"`
 }

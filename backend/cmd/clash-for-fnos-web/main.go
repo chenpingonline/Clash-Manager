@@ -60,6 +60,7 @@ type config struct {
 
 type gateway struct {
 	config             config
+	coreUpdateMu       sync.Mutex
 	selectionMu        sync.Mutex
 	ruleProviderMu     sync.Mutex
 	configMu           sync.Mutex

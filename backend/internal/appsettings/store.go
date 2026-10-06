@@ -128,7 +128,7 @@ func Public(document map[string]any) map[string]any {
 	if timeout < 1000 || timeout > 30000 {
 		timeout = 5000
 	}
-	return map[string]any{"controller": stringValue(document, "controller", "http://127.0.0.1:9090"), "hasSecret": secret != "", "controllerAutoDetect": boolValue(document, "controllerAutoDetect", true), "persistSelections": boolValue(document, "persistSelections", true), "notifyAppUpdates": boolValue(document, "notifyAppUpdates", true), "healthcheckUrl": stringValue(document, "healthcheckUrl", "https://www.gstatic.com/generate_204"), "healthcheckTimeout": timeout}
+	return map[string]any{"controller": stringValue(document, "controller", "http://127.0.0.1:9090"), "hasSecret": secret != "", "controllerAutoDetect": boolValue(document, "controllerAutoDetect", true), "persistSelections": boolValue(document, "persistSelections", true), "notifyAppUpdates": boolValue(document, "notifyAppUpdates", true), "healthcheckUrl": stringValue(document, "healthcheckUrl", "http://cp.cloudflare.com/generate_204"), "healthcheckTimeout": timeout}
 }
 
 func Apply(document map[string]any, update Update) error {
@@ -161,7 +161,11 @@ func Apply(document map[string]any, update Update) error {
 	if update.HealthcheckURL != nil {
 		value := strings.TrimSpace(*update.HealthcheckURL)
 		if value == "" {
-			value = "https://www.gstatic.com/generate_204"
+			value = "http://cp.cloudflare.com/generate_204"
+		}
+		parsed, err := url.Parse(value)
+		if err != nil || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return errors.New("测速地址只支持有效的 http/https URL")
 		}
 		document["healthcheckUrl"] = value
 	}

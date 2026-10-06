@@ -6,6 +6,7 @@ import { useDelayTests } from '@/composables/useDelayTests'
 import { api, errorMessage, jsonRequest } from '@/services/api'
 import { providerUpdatedText } from '@/services/format'
 import { parseProxyGroupSortPreferences, shouldShowProxyNode, sortProxyNodeNames, type ProxyNodeSort } from '@/services/proxy-view'
+import { latencyClass } from '@/services/latency'
 import { notify } from '@/services/toast'
 import type { ProxiesResponse, ProxyNode, ProxyProvider, ProxyProvidersResponse } from '@/types/api'
 
@@ -49,7 +50,6 @@ const allExpanded = computed(() => groups.value.length > 0 && groups.value.every
 const providerEntries = computed(() => Object.entries(providers.value).sort(([a], [b]) => a.localeCompare(b)))
 const delayTestBusy = delayTests.testing
 
-function latencyClass(value: number) { return !value ? '' : value < 100 ? 'good' : value < 250 ? 'warn' : 'bad' }
 function groupFilter(name: string) { return groupFilters.get(name) || '' }
 function groupSort(name: string): ProxyNodeSort { return groupSorts.get(name) || 'default' }
 function groupShowsTimeoutNodes(name: string) { return showTimeoutNodes.get(name) !== false }

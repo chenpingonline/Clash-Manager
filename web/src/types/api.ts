@@ -302,7 +302,8 @@ export interface AppIconsResponse {
 export interface PortSetting { enabled?: boolean; port?: number }
 export interface TunSetting {
   enabled?: boolean
-  stack?: 'mixed' | 'system' | 'gvisor'
+  stack?: '' | 'mixed' | 'system' | 'gvisor' | 'mips'
+  congestionController?: '' | 'cubic' | 'reno' | 'bbr' | 'bbr3'
   mtu?: number
   routeExcludeAddress?: string[]
   autoRoute?: boolean
@@ -327,7 +328,9 @@ export interface NetworkSetting {
   allowLan?: boolean; dnsEnabled?: boolean; dnsOverrideEnabled?: boolean; dns?: DnsSetting
   core?: { ipv6?: boolean; unifiedDelay?: boolean }; tun?: TunSetting
 }
+export interface TunFeatures { coreVersion?: string; defaultStack?: '' | 'gvisor' | 'mips'; mips?: boolean; congestionController?: boolean }
 export interface NetworkSettingsResponse {
+  tunFeatures?: TunFeatures
   offline?: boolean
   error?: string
   controller?: string

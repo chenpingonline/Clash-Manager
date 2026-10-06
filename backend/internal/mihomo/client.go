@@ -51,7 +51,7 @@ func (c *Client) LoadSettings() (Settings, error) {
 	settings := Settings{
 		Controller:         defaultController,
 		PersistSelections:  true,
-		HealthcheckURL:     "https://www.gstatic.com/generate_204",
+		HealthcheckURL:     "http://cp.cloudflare.com/generate_204",
 		HealthcheckTimeout: 5000,
 	}
 	body, err := os.ReadFile(c.SettingsFile)
@@ -68,7 +68,7 @@ func (c *Client) LoadSettings() (Settings, error) {
 		settings.Controller = defaultController
 	}
 	if strings.TrimSpace(settings.HealthcheckURL) == "" {
-		settings.HealthcheckURL = "https://www.gstatic.com/generate_204"
+		settings.HealthcheckURL = "http://cp.cloudflare.com/generate_204"
 	}
 	parsed, err := url.Parse(settings.Controller)
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {

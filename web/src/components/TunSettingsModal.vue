@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import TunStackFields from '@/components/settings/TunStackFields.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import HelpPopover from '@/components/HelpPopover.vue'
 import SettingToggle from '@/components/settings/SettingToggle.vue'
 import { useOperationProgress } from '@/composables/useOperationProgress'
 import { api, errorMessage, jsonRequest } from '@/services/api'
 import { notify } from '@/services/toast'
-import type { NetworkSettingsResponse, TunSetting } from '@/types/api'
+import type { NetworkSettingsResponse, TunFeatures, TunSetting } from '@/types/api'
 
 type TunForm = Required<TunSetting>
 
 const defaultTun = (): TunForm => ({
   enabled: false,
-  stack: 'mixed',
+  stack: '',
+  congestionController: '',
   mtu: 1500,
   routeExcludeAddress: [],
   autoRoute: true,
@@ -29,6 +31,7 @@ const saving = ref(false)
 const error = ref('')
 const offline = ref(false)
 const dnsEnabled = ref(false)
+const features = ref<TunFeatures>({})
 const capability = ref<NonNullable<NetworkSettingsResponse['tunCapability']>>({ supported: false })
 const routeExcludeText = ref('')
 const form = reactive<TunForm>(defaultTun())
@@ -43,6 +46,7 @@ const capabilityText = computed(() => capability.value.message || (supported.val
 function applyResult(result: NetworkSettingsResponse) {
   hasSettings = true
   Object.assign(form, defaultTun(), result.settings?.tun || {})
+  features.value = result.tunFeatures || {}
   if (result.tunCapability) capability.value = result.tunCapability
   offline.value = result.offline === true
   dnsEnabled.value = result.settings?.dns?.enable === true
@@ -144,13 +148,7 @@ watch(() => props.open, open => {
         <p v-if="offline" class="tun-settings-disabled-hint">Core 已停止；保存后将在下次启动时生效。</p>
 
         <div class="tun-settings-main-grid">
-          <div class="field tun-settings-field">
-            <div class="field-label-row">
-              <label>TUN Stack</label>
-              <HelpPopover label="TUN Stack"><strong>协议栈决定 Mihomo 如何处理 TUN 流量</strong><span><b>mixed（推荐）</b>：TCP 使用 System，UDP 使用 gVisor，兼顾稳定性与兼容性。</span><span><b>system</b>：使用 Linux 系统协议栈，资源占用更低。</span><span><b>gVisor</b>：在用户态处理网络协议，可排查特殊网络兼容问题。</span></HelpPopover>
-            </div>
-            <select v-model="form.stack" :disabled="controlsDisabled"><option value="mixed">mixed（推荐）</option><option value="system">system</option><option value="gvisor">gVisor</option></select>
-          </div>
+          <TunStackFields v-model:stack="form.stack" v-model:congestion-controller="form.congestionController" :features="features" field-class="tun-settings-field" :disabled="controlsDisabled" />
           <div class="field tun-settings-field">
             <div class="field-label-row">
               <label>MTU</label>

@@ -13,7 +13,7 @@ type TunOperationStatus = { active?: boolean; enabled?: boolean; stage?: string;
 
 const defaultTun = (): TunForm => ({
   enabled: false,
-  stack: 'mixed',
+  stack: '', congestionController: '',
   mtu: 1500,
   routeExcludeAddress: [],
   autoRoute: true,

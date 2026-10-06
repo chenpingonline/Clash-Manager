@@ -84,3 +84,20 @@ func TestSettingsDefaultToPersistSelections(t *testing.T) {
 		t.Fatal("explicit persistSelections=false should be preserved")
 	}
 }
+
+func TestHealthcheckDefaultsPreserveSavedURL(t *testing.T) {
+	for _, saved := range []string{"", "https://www.gstatic.com/generate_204", "https://example.com/check"} {
+		client := Client{SettingsFile: writeSettings(t, Settings{HealthcheckURL: saved})}
+		settings, err := client.LoadSettings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := saved
+		if expected == "" {
+			expected = "http://cp.cloudflare.com/generate_204"
+		}
+		if settings.HealthcheckURL != expected {
+			t.Fatalf("URL = %q, want %q", settings.HealthcheckURL, expected)
+		}
+	}
+}

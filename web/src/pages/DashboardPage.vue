@@ -13,6 +13,7 @@ import { formatBytes, formatTime } from '@/services/format'
 import { parseProxyGroupSortPreferences, sortProxyNodeNames, type ProxyNodeSort } from '@/services/proxy-view'
 import { streamProfileJob } from '@/services/profile-jobs'
 import { openStatusStream } from '@/services/status-stream'
+import { latencyClass } from '@/services/latency'
 import { notify } from '@/services/toast'
 import type { CoreBootstrap, CoreHealth, CoreMode, ExitLocationResponse, ProfileItem, ProfileJob, ProfilesResponse, ProxiesResponse, ProxyEnvironmentResponse, RuntimeConfig, TrafficHistoryResponse, TrafficSample } from '@/types/api'
 
@@ -143,7 +144,7 @@ const delayClass = computed(() => {
   if (testingGroup.value) return 'testing'
   if (delayState.value === 'testing') return 'testing'
   if (delayState.value === 'timeout' || delayState.value === 'error') return 'bad'
-  return delayValue.value < 1 ? '' : delayValue.value < 100 ? 'good' : delayValue.value < 250 ? 'warn' : 'bad'
+  return latencyClass(delayValue.value)
 })
 const showCurrentNodeDelay = computed(() => delayValue.value > 0 || delayState.value !== 'idle' || testingGroup.value)
 
@@ -171,7 +172,7 @@ function nodeDelayClass(name: string) {
   const item = nodeDelays.value[name]
   if (item?.state === 'testing') return 'testing'
   if (item?.state === 'timeout' || item?.state === 'error') return 'bad'
-  return !item?.value ? '' : item.value < 100 ? 'good' : item.value < 250 ? 'warn' : 'bad'
+  return latencyClass(item?.value || 0)
 }
 
 function toggleGroupMenu() {

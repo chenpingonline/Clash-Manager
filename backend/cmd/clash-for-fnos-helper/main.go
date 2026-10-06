@@ -310,7 +310,7 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		_, err := h.ensureBootstrap(ctx, false, "")
+		_, err := h.bootstrapAfterPackageUpgrade(ctx)
 		if err != nil {
 			log.Printf("Mihomo bootstrap failed: %v", err)
 		}

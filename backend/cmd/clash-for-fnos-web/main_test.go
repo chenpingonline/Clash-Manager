@@ -386,7 +386,7 @@ func TestControllerRoutesAreServedByGo(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodGet && r.URL.Path == "/proxies/node/delay":
-			if r.URL.Query().Get("url") != "https://www.gstatic.com/generate_204" || r.URL.Query().Get("timeout") != "5000" {
+			if r.URL.Query().Get("url") != "http://cp.cloudflare.com/generate_204" || r.URL.Query().Get("timeout") != "5000" {
 				t.Fatalf("unexpected delay query: %s", r.URL.RawQuery)
 			}
 			_, _ = io.WriteString(w, `{"delay":12}`)

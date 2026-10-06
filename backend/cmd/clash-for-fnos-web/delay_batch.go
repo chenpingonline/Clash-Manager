@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
@@ -176,6 +177,9 @@ func (g *gateway) runDelayBatch(client *mihomo.Client, testURL string, timeout i
 		go func() {
 			defer workers.Done()
 			for name := range jobs {
+				if len(names) > 1 {
+					time.Sleep(time.Duration(rand.IntN(201)) * time.Millisecond)
+				}
 				results <- delayResult(context.Background(), client, name, testURL, timeout)
 			}
 		}()

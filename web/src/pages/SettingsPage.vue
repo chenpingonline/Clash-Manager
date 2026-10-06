@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import ChangelogModal from '@/components/ChangelogModal.vue'
 import PortConflictHelp from '@/components/PortConflictHelp.vue'
 import AsyncState from '@/components/AsyncState.vue'
+import TunStackFields from '@/components/settings/TunStackFields.vue'
 import HelpPopover from '@/components/HelpPopover.vue'
 import PortRow from '@/components/settings/PortRow.vue'
 import SettingToggle from '@/components/settings/SettingToggle.vue'
@@ -10,10 +11,11 @@ import { refreshCoreHealth } from '@/composables/useCoreHealth'
 import { useAutosave } from '@/composables/useAutosave'
 import { useAppUpdateNotice } from '@/composables/useAppUpdateNotice'
 import { api, APP_PREFIX, errorMessage, jsonRequest } from '@/services/api'
+import { coreUpdateFailure, type CoreUpdateProgress } from '@/services/core-update'
 import { formatBytes, formatTime } from '@/services/format'
 import { openStatusStream } from '@/services/status-stream'
 import { notify } from '@/services/toast'
-import type { AppIconsResponse, AppUpdateInfo, CoreMode, DnsMapping, DnsSetting, GeoAsset, GeoStatus, HostMapping, ManagerSettings, NetworkSetting, NetworkSettingsResponse, PortSetting, ProxyEnvironmentResponse, SystemStatus, TunSetting } from '@/types/api'
+import type { AppIconsResponse, AppUpdateInfo, CoreMode, DnsMapping, DnsSetting, GeoAsset, GeoStatus, HostMapping, ManagerSettings, NetworkSetting, NetworkSettingsResponse, PortSetting, ProxyEnvironmentResponse, SystemStatus, TunFeatures, TunSetting } from '@/types/api'
 
 type Section = 'core' | 'network' | 'dns' | 'tun' | 'advanced' | 'behavior' | 'update'
 type NetworkForm = {
@@ -29,17 +31,18 @@ const defaultDns: Required<DnsSetting> = {
 }
 const defaultNetwork = (): NetworkForm => ({
   controller: { enabled: true, port: 9090 }, mixed: { enabled: true, port: 7890 }, socks: { enabled: false, port: 7898 }, http: { enabled: false, port: 7899 }, redir: { enabled: false, port: 7895 }, tproxy: { enabled: false, port: 7896 }, allowLan: false,
-  core: { ipv6: true, unifiedDelay: false }, tun: { enabled: false, stack: 'mixed', mtu: 1500, routeExcludeAddress: [], autoRoute: true, autoRedirect: true, autoDetectInterface: true, dnsHijack: false, strictRoute: false }, dnsOverrideEnabled: false, dns: structuredClone(defaultDns),
+  core: { ipv6: true, unifiedDelay: false }, tun: { enabled: false, stack: '', congestionController: '', mtu: 1500, routeExcludeAddress: [], autoRoute: true, autoRedirect: true, autoDetectInterface: true, dnsHijack: false, strictRoute: false }, dnsOverrideEnabled: false, dns: structuredClone(defaultDns),
 })
 
 const requestedSectionValue = new URLSearchParams(location.hash.split('?')[1] || '').get('section')
 const requestedSection = (['core', 'network', 'dns', 'tun', 'advanced', 'behavior', 'update'] as Section[]).find(section => section === requestedSectionValue) || null
 const loading = ref(true), error = ref(''), open = ref<Section | null>(requestedSection), busy = ref(''), tunSwitching = ref(false)
 const tunProgress = ref('')
+const tunFeatures = ref<TunFeatures>({})
 const coreDetailsOpen = ref(false)
 const changelogOpen = ref(false), changelogLatest = ref(false)
 function showChangelog(latest = false) { changelogLatest.value = latest; changelogOpen.value = true }
-const coreTabs = [{ key: 'manage', label: '内核管理' }, { key: 'connection', label: '连接管理' }, { key: 'geo', label: 'GEO 数据' }] as const
+const coreTabs = [{ key: 'manage', label: '内核管理' }, { key: 'connection', label: '连接管理' }, { key: 'delay', label: '延迟测试' }, { key: 'geo', label: 'GEO 数据' }] as const
 const coreTab = ref<(typeof coreTabs)[number]['key']>('manage')
 const dnsTabs = [{ key: 'basic', label: '基础设置' }, { key: 'servers', label: '解析服务器' }, { key: 'fake-ip', label: 'Fake IP 与域名策略' }, { key: 'fallback', label: '回退过滤' }, { key: 'hosts', label: 'Hosts 映射' }] as const
 const dnsTab = ref<(typeof dnsTabs)[number]['key']>('basic')
@@ -73,7 +76,7 @@ const clearExternalSecret = ref(false)
 const revealedSecret = ref('')
 const secretVisible = ref(false)
 const secretLoading = ref(false)
-const system = ref<SystemStatus>({}), manager = reactive<ManagerSettings>({ notifyAppUpdates: true }), network = reactive<NetworkForm>(defaultNetwork())
+const system = ref<SystemStatus>({}), manager = reactive<ManagerSettings>({ notifyAppUpdates: true, healthcheckUrl: 'http://cp.cloudflare.com/generate_204', healthcheckTimeout: 5000 }), network = reactive<NetworkForm>(defaultNetwork())
 const tunRouteExcludeText = ref('')
 const environment = ref<ProxyEnvironmentResponse>({}), proxyForm = reactive<ProxyEnvForm>({ enabled: true, followMixedPort: true, port: 7890, noProxy: 'localhost,127.0.0.1,::1', targets: { environment: true, profile: true, bashrc: true } })
 const proxyBypassInput = ref('')
@@ -198,8 +201,38 @@ function dnsPayload() {
 }
 function saveDns(delay = 1000) { try { dnsSave.queue(dnsPayload(), delay) } catch (cause) { notify(errorMessage(cause), true) } }
 function resetDns() { Object.assign(network.dns, structuredClone(defaultDns)); syncDnsText(); saveDns(0); notify('已恢复默认值，并自动保存') }
+const healthcheckPresets = [
+  { id: 'cloudflare', label: 'Cloudflare（HTTP）', url: 'http://cp.cloudflare.com/generate_204' },
+  { id: 'gstatic', label: 'Google gstatic（HTTPS）', url: 'https://www.gstatic.com/generate_204' },
+] as const
+const healthcheckTimeoutSeconds = computed({
+  get: () => Number(manager.healthcheckTimeout || 5000) / 1000,
+  set: (value: number) => { manager.healthcheckTimeout = value * 1000 },
+})
+const customHealthcheckMode = ref(false)
+const customHealthcheckUrl = ref('')
+const healthcheckPreset = computed(() => customHealthcheckMode.value ? 'custom' : healthcheckPresets.find(item => item.url === manager.healthcheckUrl)?.id || 'custom')
+function changeHealthcheckPreset(event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  if (healthcheckPreset.value === 'custom') customHealthcheckUrl.value = manager.healthcheckUrl || ''
+  customHealthcheckMode.value = value === 'custom'
+  if (value === 'custom') {
+    manager.healthcheckUrl = customHealthcheckUrl.value || manager.healthcheckUrl
+    saveBehavior()
+    return
+  }
+  const preset = healthcheckPresets.find(item => item.id === value)
+  if (preset) { manager.healthcheckUrl = preset.url; saveBehavior() }
+}
 function behaviorPayload() { return { persistSelections: Boolean(manager.persistSelections), notifyAppUpdates: manager.notifyAppUpdates !== false, healthcheckUrl: manager.healthcheckUrl || '', healthcheckTimeout: Number(manager.healthcheckTimeout || 0) } }
-function saveBehavior(delay: number | Event = 250) { behaviorSave.queue(behaviorPayload(), numericDelay(delay, 250)) }
+function saveBehavior(delay: number | Event = 250) {
+  try {
+    const parsed = new URL((manager.healthcheckUrl || '').trim())
+    if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) throw new Error()
+    manager.healthcheckUrl = (manager.healthcheckUrl || '').trim()
+  } catch { notify('请输入有效的 HTTP 或 HTTPS 测试地址', true); return }
+  behaviorSave.queue(behaviorPayload(), numericDelay(delay, 250))
+}
 function saveAppUpdatePreference() {
   const next = manager.notifyAppUpdates !== false
   setAppUpdateNoticeEnabled(next)
@@ -238,8 +271,9 @@ async function load() {
       api<SystemStatus>('/api/system/status').catch((cause): SystemStatus => ({ available: false, error: errorMessage(cause) })), api<ManagerSettings>('/api/settings'), api<NetworkSettingsResponse>('/api/network/settings').catch((cause): NetworkSettingsResponse => ({ error: errorMessage(cause), settings: null, tunCapability: { supported: false } })), api<ProxyEnvironmentResponse>('/api/system/proxy-environment').catch((cause): ProxyEnvironmentResponse => ({ ok: false, error: errorMessage(cause) })), api<AppUpdateInfo>('/api/app/update-info').catch((cause): AppUpdateInfo => ({ error: errorMessage(cause) })), api<AppIconsResponse>('/api/app/icons').catch((cause): AppIconsResponse => ({ ok: false, error: errorMessage(cause), selected: 'cat-orbit', options: [] })),
       api<GeoStatus>('/api/geo/status').catch((cause): GeoStatus => ({ error: errorMessage(cause), canUpdate: false })),
     ])
+    tunFeatures.value = net.tunFeatures || {}
     networkOffline.value = net.offline === true
-    system.value = sys; selectedCoreMode.value = sys.coreMode === 'external' ? 'external' : 'managed'; Object.assign(manager, settings); setAppUpdateNoticeEnabled(settings.notifyAppUpdates !== false); applyNetwork(net.settings || {}, Number(sys.managedMixedPort || 7890)); environment.value = proxy; appUpdate.value = update; icons.value = iconData; selectedIcon.value = iconData.selected || iconData.defaultId || 'cat-orbit'; geo.value = geoData; Object.assign(geoForm, { autoUpdate: geoData.settings?.autoUpdate === true, updateInterval: Number(geoData.settings?.updateInterval || 24) })
+    system.value = sys; selectedCoreMode.value = sys.coreMode === 'external' ? 'external' : 'managed'; Object.assign(manager, settings, { healthcheckUrl: settings.healthcheckUrl || healthcheckPresets[0].url }); setAppUpdateNoticeEnabled(settings.notifyAppUpdates !== false); applyNetwork(net.settings || {}, Number(sys.managedMixedPort || 7890)); environment.value = proxy; appUpdate.value = update; icons.value = iconData; selectedIcon.value = iconData.selected || iconData.defaultId || 'cat-orbit'; geo.value = geoData; Object.assign(geoForm, { autoUpdate: geoData.settings?.autoUpdate === true, updateInterval: Number(geoData.settings?.updateInterval || 24) })
     const setting = proxy.management?.settings
     Object.assign(proxyForm, { enabled: setting?.enabled !== false, followMixedPort: setting?.followMixedPort !== false, port: Number(setting?.port || network.mixed.port || 7890), noProxy: setting?.noProxy || 'localhost,127.0.0.1,::1', targets: { environment: setting?.targets?.environment !== false, profile: setting?.targets?.profile !== false, bashrc: setting?.targets?.bashrc !== false } })
     tunSupported.value = net.tunCapability?.supported !== false; tunSupportText.value = net.tunCapability?.message || (tunSupported.value ? '当前 Mihomo 具备 TUN 所需权限，可直接启用' : !net.tunCapability?.tunDevice ? '当前系统没有 /dev/net/tun，暂不能启用 TUN' : '当前 Mihomo 不是 root 且没有 CAP_NET_ADMIN，暂不能启用 TUN')
@@ -333,18 +367,46 @@ function openAppUpdate() {
   if (!url) return notify('未找到可用的更新下载地址', true)
   window.open(url, '_blank', 'noopener')
 }
+type CoreUpdateInfo = { updateAvailable?: boolean; currentVersion?: string; canRestartService?: boolean; latest?: { tag?: string } }
+const coreUpdateInfo = ref<CoreUpdateInfo | null>(null)
+const coreUpdateProgress = ref<CoreUpdateProgress>({})
+const restartAfterUpdate = ref(false)
+let closeCoreUpdateStream: (() => void) | null = null
 async function checkCoreUpdate() {
-  busy.value = 'core-update'
+  if (busy.value) return
+  busy.value = 'core-check'
+  coreUpdateProgress.value = { stage: 'checking', message: '正在检查更新…' }
+  coreUpdateInfo.value = null
   try {
-    const result = await api<{ updateAvailable?: boolean; currentVersion?: string; canRestartService?: boolean; latest?: { tag?: string } }>('/api/core/check-update', { method: 'POST' })
-    if (!result.updateAvailable) return notify('当前已经是最新 Mihomo')
-    const restart = result.canRestartService === true && confirm(`发现 ${result.latest?.tag || '新版本'}。确定后将更新内核；选择“确定”会在更新后重启可安全管理的 Core，选择“取消”仅更新文件。`)
-    const proceed = restart || confirm(`仅更新 Mihomo 内核文件到 ${result.latest?.tag || '新版本'}，下次重启 Core 后生效。继续？`)
-    if (!proceed) return
-    const updated = await api<{ alreadyLatest?: boolean; release?: { tag?: string } }>('/api/core/update', jsonRequest('POST', { restart }))
-    notify(updated.alreadyLatest ? '当前已经是最新 Mihomo' : `Mihomo 已更新到 ${updated.release?.tag || '新版本'}`); await load()
-  } catch (cause) { notify(errorMessage(cause), true) }
+    const result = await api<CoreUpdateInfo>('/api/core/check-update', { method: 'POST' })
+    coreUpdateInfo.value = result
+    restartAfterUpdate.value = result.canRestartService === true
+    coreUpdateProgress.value = { message: result.updateAvailable ? `发现新版本 ${result.latest?.tag || ''}` : '当前已是最新 Mihomo Core' }
+  } catch (cause) { coreUpdateProgress.value = { stage: 'error', message: `检查失败：${errorMessage(cause)}` } }
   finally { busy.value = '' }
+}
+async function installCoreUpdate() {
+  if (busy.value || !coreUpdateInfo.value?.updateAvailable) return
+  busy.value = 'core-update'
+  coreUpdateProgress.value = { active: true, stage: 'checking', message: '正在准备更新…' }
+  const operationID = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  closeCoreUpdateStream?.()
+  closeCoreUpdateStream = openStatusStream<CoreUpdateProgress>('/api/core/operation/status', progress => {
+    if (progress.id === operationID) coreUpdateProgress.value = progress
+  })
+  try {
+    const restart = restartAfterUpdate.value && coreUpdateInfo.value.canRestartService === true
+    const updated = await api<{ alreadyLatest?: boolean; release?: { tag?: string } }>('/api/core/update', { ...jsonRequest('POST', { restart }), headers: { 'Content-Type': 'application/json', 'X-Network-Operation': operationID } })
+    closeCoreUpdateStream?.(); closeCoreUpdateStream = null
+    coreUpdateProgress.value = { stage: 'done', message: updated.alreadyLatest ? '当前已是最新 Mihomo Core' : `已更新到 ${updated.release?.tag || '新版本'}${restart ? '，内核已重启' : '，下次启动内核时生效'}` }
+    coreUpdateInfo.value = null
+    await load()
+    await refreshCoreHealth().catch(() => undefined)
+  } catch (cause) {
+    closeCoreUpdateStream?.(); closeCoreUpdateStream = null
+    const latest = await api<CoreUpdateProgress>('/api/core/operation/status').catch(() => null)
+    coreUpdateProgress.value = coreUpdateFailure(coreUpdateProgress.value, latest, operationID, errorMessage(cause))
+  } finally { busy.value = '' }
 }
 async function setCoreRunning(running: boolean) {
   if (busy.value || system.value.mode !== 'managed') return
@@ -389,6 +451,7 @@ function setGeoOperation(state: typeof geoState.value, message: string, dismiss 
   }, 3000)
 }
 onBeforeUnmount(() => {
+  closeCoreUpdateStream?.()
   closeTunProgressStream?.()
   clearGeoMessageTimer()
 })
@@ -473,10 +536,7 @@ onMounted(initialize)
             <div class="tun-capability" :class="tunSupported ? 'ok' : 'warn'"><strong>{{ tunSupported ? '可用' : '不可用' }}</strong><span>{{ tunSupportText }}</span></div>
             <p v-if="!network.tun.enabled && tunSupported" class="tun-settings-disabled-hint">当前 TUN 未开启，修改会先保存为预配置；之后开启 TUN 时生效。</p>
             <div class="tun-main-grid">
-              <div class="field">
-                <div class="field-label-row"><label>TUN Stack</label><HelpPopover label="TUN Stack"><strong>协议栈决定 Mihomo 如何处理 TUN 流量</strong><span><b>mixed（推荐）</b>：TCP 使用 System，UDP 使用 gVisor，兼顾稳定性与兼容性。</span><span><b>system</b>：使用 Linux 系统协议栈，通常更稳定、资源占用更低。</span><span><b>gVisor</b>：在用户态处理网络协议，隔离性更强，可用于排查特殊网络兼容问题。</span></HelpPopover></div>
-                <select v-model="network.tun.stack" :disabled="tunSwitching || !tunSupported" @change="saveTunSettings('stack')"><option value="mixed">mixed（推荐）</option><option value="system">system</option><option value="gvisor">gVisor</option></select>
-              </div>
+              <TunStackFields v-model:stack="network.tun.stack" v-model:congestion-controller="network.tun.congestionController" :features="tunFeatures" :disabled="tunSwitching || !tunSupported" @change="saveTunSettings" />
               <div class="field">
                 <div class="field-label-row"><label>MTU</label><HelpPopover label="MTU"><strong>单个网络数据包的最大传输尺寸</strong><span>默认值为 <b>1500</b>，与常见以太网环境一致，优先保证兼容性。</span><span>如果 VPN、PPPoE 或多层隧道下仍出现部分网站打不开或连接卡顿，可尝试调整为 <b>1400</b>。</span></HelpPopover></div>
                 <input v-model.number="network.tun.mtu" type="number" min="1280" max="65535" :disabled="tunSwitching || !tunSupported" @change="saveTunSettings('mtu')">
@@ -538,7 +598,18 @@ onMounted(initialize)
                 <button v-if="system.canRestartService !== true" class="ghost" :disabled="Boolean(busy) || system.mode !== 'managed' || system.available === false" :title="system.mode === 'external' ? '外部 Core 请通过原有服务启动' : '启动 Manager 托管的 Mihomo Core'" @click="setCoreRunning(true)">{{ busy === 'core-start' ? '正在启动…' : '启动内核' }}</button>
                 <button v-else class="ghost" :disabled="Boolean(busy) || system.mode !== 'managed'" title="停止托管 Core，管理页面保持可用" @click="setCoreRunning(false)">{{ busy === 'core-stop' ? '正在停止…' : '停止内核' }}</button>
                 <button class="ghost" :disabled="Boolean(busy) || system.mode !== 'managed' || system.canRestartService !== true" :title="system.mode === 'external' ? '外部 Core 请通过原有服务重启' : system.canRestartService !== true ? '当前没有可重启的托管 Core' : '重启 Manager 托管的 Mihomo Core'" @click="restartCore">{{ busy === 'core-restart' ? '正在重启…' : '重启内核' }}</button>
-                <button class="ghost" :disabled="Boolean(busy)" @click="checkCoreUpdate">{{ busy === 'core-update' ? '检查中…' : '检查更新' }}</button>
+                <button class="ghost" :disabled="Boolean(busy)" @click="checkCoreUpdate">{{ busy === 'core-check' ? '检查中…' : busy === 'core-update' ? '更新中…' : '检查更新' }}</button>
+              </div>
+            </div>
+
+            <div v-if="coreUpdateProgress.message" class="core-update-status" :class="coreUpdateProgress.stage" role="status" aria-live="polite">
+              <div class="core-update-status-head"><strong>{{ coreUpdateProgress.message }}</strong><span v-if="(coreUpdateProgress.stage === 'downloading' || coreUpdateProgress.stage === 'error') && coreUpdateProgress.progress != null">下载 {{ coreUpdateProgress.progress }}%</span></div>
+              <progress v-if="coreUpdateProgress.active || (coreUpdateProgress.stage === 'error' && coreUpdateProgress.progress != null)" :value="['downloading', 'error'].includes(coreUpdateProgress.stage || '') ? coreUpdateProgress.progress : undefined" max="100" aria-label="内核更新进度" />
+              <div v-if="coreUpdateProgress.downloadedBytes" class="core-download-facts">已下载 {{ formatBytes(coreUpdateProgress.downloadedBytes) }}<template v-if="coreUpdateProgress.totalBytes"> / {{ formatBytes(coreUpdateProgress.totalBytes) }}</template><span v-if="coreUpdateProgress.attempt"> · 第 {{ coreUpdateProgress.attempt }}/{{ coreUpdateProgress.maxAttempts || 3 }} 次尝试</span></div>
+              <div v-if="coreUpdateInfo?.updateAvailable && busy !== 'core-update'" class="core-update-options">
+                <label v-if="coreUpdateInfo.canRestartService" class="core-check"><input v-model="restartAfterUpdate" type="checkbox" :disabled="Boolean(busy)"> 更新后重启内核</label>
+                <span class="hint">{{ restartAfterUpdate ? '重启期间代理连接会短暂中断。' : '更新文件，下次启动内核时生效。' }}</span>
+                <button :disabled="Boolean(busy)" @click="installCoreUpdate">{{ coreUpdateProgress.stage === 'error' ? '重试更新' : '更新内核' }}</button>
               </div>
             </div>
 
@@ -563,7 +634,7 @@ onMounted(initialize)
             <div v-show="coreTab === 'connection'" id="core-panel-connection" role="tabpanel" aria-labelledby="core-tab-connection">
             <div class="settings-accordion-subsection core-connection-section">
               <div class="core-mode-row">
-                <div class="section-head"><div><div class="connection-title"><h2>连接设置</h2><span v-if="system.coreMode !== 'external'" class="auto-detected">自动管理</span></div><p>连接当前 Core 的 Controller API</p></div></div>
+                <div class="section-head"><div><div class="connection-title"><h2>连接设置</h2><span v-if="system.coreMode !== 'external'" class="auto-detected">自动管理</span></div></div></div>
                 <div class="core-mode-controls">
                   <label v-if="system.coreMode === 'external'" class="core-check"><input v-model="manager.controllerAutoDetect" type="checkbox" :disabled="Boolean(busy)" @change="enableControllerDetection"> 自动检测</label>
                   <button class="ghost" :disabled="Boolean(busy)" @click="testController">{{ busy === 'test' ? '测试中…' : '测试连接' }}</button>
@@ -582,12 +653,16 @@ onMounted(initialize)
                 <p v-if="system.coreMode === 'external'" class="hint">自动读取外部 Core 配置；无法识别时，关闭自动检测并手动填写。</p>
               </template>
             </div>
-            <div class="settings-accordion-subsection core-behavior-section">
+            </div>
+            <div v-show="coreTab === 'delay'" id="core-panel-delay" role="tabpanel" aria-labelledby="core-tab-delay">
+            <div class="settings-accordion-subsection core-healthcheck-section">
+              <div v-if="behaviorMessage" class="core-healthcheck-save-state dns-autosave-state" :class="behaviorState" role="status" aria-live="polite">{{ behaviorMessage }}</div>
               <div class="form-grid core-healthcheck-fields">
-                <div class="field"><label for="core-healthcheck-url">延迟测试 URL</label><input id="core-healthcheck-url" v-model="manager.healthcheckUrl" @change="saveBehavior"></div>
-                <div class="field"><label for="core-healthcheck-timeout">超时（毫秒）</label><input id="core-healthcheck-timeout" v-model.number="manager.healthcheckTimeout" type="number" @change="saveBehavior"></div>
+                <div class="field"><label for="core-healthcheck-preset">测试地址</label><select id="core-healthcheck-preset" :value="healthcheckPreset" @change="changeHealthcheckPreset"><option v-for="preset in healthcheckPresets" :key="preset.id" :value="preset.id">{{ preset.label }}</option><option value="custom">自定义</option></select><span v-if="healthcheckPreset !== 'custom'" class="core-healthcheck-url mono">{{ manager.healthcheckUrl }}</span></div>
+                <div class="field"><label for="core-healthcheck-timeout">超时</label><div class="core-timeout-input"><input id="core-healthcheck-timeout" v-model.number="healthcheckTimeoutSeconds" type="number" min="1" max="30" step="1" @change="saveBehavior"><span>秒</span></div><span class="core-field-help">范围 1～30 秒</span></div>
               </div>
-              <div class="dns-autosave-state" :class="behaviorState">{{ behaviorMessage }}</div>
+              <div v-if="healthcheckPreset === 'custom'" class="field core-custom-healthcheck"><label for="core-healthcheck-url">自定义测试地址</label><input id="core-healthcheck-url" v-model="manager.healthcheckUrl" @input="customHealthcheckMode = true" type="url" placeholder="https://example.com/generate_204" @change="saveBehavior"></div>
+              <p class="core-healthcheck-note">测试目标会影响延迟结果；测试超时不一定代表节点不可用。</p>
             </div>
             </div>
             <div v-show="coreTab === 'geo'" id="core-panel-geo" role="tabpanel" aria-labelledby="core-tab-geo" class="geo-update-section">
@@ -677,6 +752,16 @@ onMounted(initialize)
 </template>
 
 <style scoped>
+.core-update-status { padding: 14px 20px; border-top: 1px solid var(--line); }
+.core-update-status-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
+.core-update-status-head strong { font-weight: 550; overflow-wrap: anywhere; }
+.core-update-status.error { color: var(--danger, #dc4663); }
+.core-update-status.done { color: var(--success, #21965a); }
+.core-update-status progress { display: block; width: 100%; height: 8px; margin-top: 12px; accent-color: var(--accent); }
+.core-download-facts { margin-top: 8px; color: var(--muted); font-size: 11px; }
+.core-update-options { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 12px; }
+.core-update-options button { margin-left: auto; height: 32px; min-height: 32px; padding: 0 11px; border-radius: 8px; background: var(--accent); font-size: 11px; line-height: 32px; white-space: nowrap; }
+
 .changelog-link { padding: 2px 0; min-height: 0; background: transparent; border: 0; box-shadow: none; color: var(--accent); font-size: 12px; white-space: nowrap; }
 .changelog-link:hover { text-decoration: underline; }
 .core-mode-section .core-mode-controls button { height:32px; min-height:32px; padding:0 13px; border-radius:8px; font-size:11px; line-height:30px; }
@@ -695,19 +780,34 @@ onMounted(initialize)
 .core-connection-section .section-head { margin-bottom: 12px; }
 .core-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.5; }
 .core-check input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--accent); }
-.core-connection-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.core-connection-summary > div { min-height: 46px; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--control-bg); }
+.core-connection-summary { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; margin-top: 10px; }
+.core-connection-summary > div { min-height: 36px; display: flex; align-items: center; gap: 10px; min-width: 0; padding: 4px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--control-bg); }
 .core-connection-summary span { font-size: 12px; color: var(--muted, #68748b); }
 .core-connection-summary strong { min-width: 0; overflow: hidden; color: var(--text); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .core-controller-summary strong { flex: 1; }
 .core-port-settings-link { flex: none; color: var(--accent); font-size: 11px; font-weight: 650; text-decoration: none; white-space: nowrap; }
 .core-port-settings-link:hover { text-decoration: underline; }
-#core-panel-connection > .core-behavior-section { border-top: 0; padding-top: 6px; }
+#core-panel-delay > .core-healthcheck-section { border-top: 0; }
+.core-healthcheck-save-state { margin: 0 0 10px; min-height: 0; text-align: right; }
+.core-healthcheck-section .field label { font-size: 12px; font-weight: 600; color: var(--text); }
+.core-healthcheck-section input, .core-healthcheck-section select { min-height: 32px; height: 32px; padding: 4px 10px; font-size: 13px; }
+.core-healthcheck-url, .core-field-help { font-size: 11px; line-height: 1.5; color: var(--muted); }
+.core-healthcheck-url { overflow-wrap: anywhere; }
+.core-timeout-input { height: 32px; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 9px; background: var(--control-bg); overflow: hidden; }
+.core-timeout-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 9%, transparent); }
+.core-timeout-input input { height: 30px; min-height: 30px; min-width: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.core-timeout-input span { flex: none; padding-right: 12px; color: var(--muted); font-size: 12px; }
+.core-custom-healthcheck { max-width: 560px; margin-top: 12px; }
+.core-healthcheck-note { margin: 16px 0 0; font-size: 11px; line-height: 1.6; color: var(--muted); }
 .core-connection-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-top: 12px; }
 .core-startup-preference { margin-top: 14px; }
 .core-startup-preference > .hint { margin: 5px 0 0; }
 .core-startup-preference > .dns-autosave-state { margin-top: 4px; }
-.core-healthcheck-fields { grid-template-columns: minmax(0, 1fr) 150px; }
+.core-healthcheck-fields { grid-template-columns: minmax(0, 372px) 150px; gap: 24px; align-items: start; }
+.core-healthcheck-fields > .field { display: grid; grid-template-columns: 60px minmax(0, 1fr); align-items: center; gap: 6px 12px; }
+.core-healthcheck-fields > .field:nth-child(2) { grid-template-columns: 28px minmax(0, 1fr); }
+.core-healthcheck-fields > .field > label { white-space: nowrap; }
+.core-healthcheck-fields > .field > span { grid-column: 2; }
 .core-connection-section .hint, .core-mode-section .hint { margin: 10px 0 0; }
 @media (max-width: 680px) {
   .core-connection-summary, .core-healthcheck-fields { grid-template-columns: minmax(0, 1fr); }
