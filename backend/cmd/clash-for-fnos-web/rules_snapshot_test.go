@@ -25,7 +25,7 @@ func TestRulesEndpointUsesDiskSnapshotUntilExplicitRefresh(t *testing.T) {
 
 	root := t.TempDir()
 	snapshotFile := filepath.Join(root, "rules-snapshot.json")
-	diskPayload := []byte(`{"rules":[{"type":"DOMAIN","payload":"disk.example","proxy":"DIRECT"}]}`)
+	diskPayload := []byte(`{"scope":"managed","rules":[{"type":"DOMAIN","payload":"disk.example","proxy":"DIRECT"}]}`)
 	if err := os.WriteFile(snapshotFile, diskPayload, 0o600); err != nil {
 		t.Fatal(err)
 	}

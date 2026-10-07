@@ -412,6 +412,9 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 }
 
 func (g *gateway) handleProfileExtensionAPI(w http.ResponseWriter, r *http.Request, id, kind string) bool {
+	if strings.HasSuffix(kind, "/editor") {
+		return g.handleProfileSequenceEditorAPI(w, r, id, strings.TrimSuffix(kind, "/editor"))
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodDelete {
 		return false
 	}
@@ -766,23 +769,40 @@ func (g *gateway) activateProfileLocked(ctx context.Context, state *profileState
 		stage("applying", "准备进入安全应用流程…")
 	}
 	g.configMu.Lock()
-	var result map[string]any
-	if syncStartup {
-		result, err = g.syncStartupConfigWithStage(ctx, content, stage)
-	} else {
-		err = g.saveAndApplyConfig(ctx, content)
-	}
-	g.configMu.Unlock()
+	defer g.configMu.Unlock()
+	previousScope, err := g.currentRuleScope()
 	if err != nil {
 		return nil, err
 	}
+	// Bind any legacy global choices to the old subscription before switching.
+	if _, err := g.loadRuleState(); err != nil {
+		return nil, err
+	}
+	previousMeta, previousMetaErr := os.ReadFile(g.config.configMetaFile)
 	meta := map[string]any{}
-	if body, readErr := os.ReadFile(g.config.configMetaFile); readErr == nil {
-		_ = json.Unmarshal(body, &meta)
+	if previousMetaErr == nil {
+		if err := json.Unmarshal(previousMeta, &meta); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(previousMetaErr) {
+		return nil, previousMetaErr
 	}
 	meta["source"], meta["sourceId"], meta["sourceName"] = "profile", item.ID, item.Name
 	metaBody, _ := json.MarshalIndent(meta, "", "  ")
-	_ = writeAtomicFile(g.config.configMetaFile, metaBody)
+	if err := writeAtomicFile(g.config.configMetaFile, metaBody); err != nil {
+		return nil, err
+	}
+	var result map[string]any
+	if syncStartup {
+		result, err = g.syncStartupConfigWithStage(ctx, content, stage, previousScope != "profile:"+item.ID)
+	} else {
+		err = g.saveAndApplyConfig(ctx, content)
+	}
+	if err != nil {
+		restoreFileSnapshot(g.config.configMetaFile, previousMeta, previousMetaErr == nil)
+		return nil, err
+	}
+	g.rulesChanged()
 	current := item.ID
 	state.Current = &current
 	item.LastError = nil

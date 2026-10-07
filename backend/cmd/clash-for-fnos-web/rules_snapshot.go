@@ -87,7 +87,7 @@ func (s *rulesSnapshotStore) refresh(ctx context.Context, client *mihomo.Client)
 	return body, nil
 }
 
-func (s *rulesSnapshotStore) scheduleRefresh(settingsFile string, delay time.Duration) {
+func (s *rulesSnapshotStore) scheduleRefresh(settingsFile string, delay time.Duration, refresh ...func(context.Context, *mihomo.Client) ([]byte, error)) {
 	if s == nil || s.file == "" {
 		return
 	}
@@ -99,7 +99,11 @@ func (s *rulesSnapshotStore) scheduleRefresh(settingsFile string, delay time.Dur
 	s.timer = time.AfterFunc(delay, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		if _, err := s.refresh(ctx, &mihomo.Client{SettingsFile: settingsFile}); err != nil {
+		fetch := s.refresh
+		if len(refresh) > 0 {
+			fetch = refresh[0]
+		}
+		if _, err := fetch(ctx, &mihomo.Client{SettingsFile: settingsFile}); err != nil {
 			log.Printf("刷新规则快照失败: %v", err)
 		}
 	})
@@ -109,18 +113,26 @@ func (g *gateway) rulesChanged() {
 	if g.rulesSnapshot == nil {
 		return
 	}
-	g.rulesSnapshot.scheduleRefresh(g.config.settingsFile, 500*time.Millisecond)
+	g.rulesSnapshot.scheduleRefresh(g.config.settingsFile, 500*time.Millisecond, g.refreshRules)
 }
 
 func (g *gateway) writeRules(w http.ResponseWriter, r *http.Request, client *mihomo.Client) {
 	refresh := r.URL.Query().Get("refresh") == "1"
 	if !refresh {
-		if body, err := g.rulesSnapshot.load(); err == nil {
+		g.configMu.Lock()
+		scope, scopeErr := g.currentRuleScope()
+		body, err := g.rulesSnapshot.load()
+		var cached struct {
+			Scope string `json:"scope"`
+		}
+		valid := scopeErr == nil && err == nil && json.Unmarshal(body, &cached) == nil && cached.Scope == scope
+		g.configMu.Unlock()
+		if valid {
 			writeRawJSON(w, http.StatusOK, body, "disk")
 			return
 		}
 	}
-	body, err := g.rulesSnapshot.refresh(r.Context(), client)
+	body, err := g.refreshRules(r.Context(), client)
 	if err != nil {
 		writeMihomoError(w, err)
 		return

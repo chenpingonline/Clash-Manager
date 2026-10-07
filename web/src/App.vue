@@ -159,7 +159,7 @@ onBeforeUnmount(() => {
       <div class="topbar-title"><h1>{{ activePage.label }}</h1><div id="page-title-meta" class="page-title-meta" /></div>
       <div class="top-actions"><div id="page-actions" class="page-actions" /><button class="ghost" :disabled="pageRefreshing" :aria-busy="pageRefreshing" @click="refreshActivePage">{{ pageRefreshing ? '刷新中…' : '刷新' }}</button></div>
     </header>
-    <section class="content" :class="{ 'config-content': current === 'config', 'logs-content': current === 'logs' }" @scroll.passive="markScrollActivity">
+    <section class="content" :class="{ 'config-content': current === 'config', 'logs-content': current === 'logs', 'rules-content': current === 'rules' }" @scroll.passive="markScrollActivity">
       <component :is="activePage.component" :key="`${current}-${refreshKey}`" ref="activePageRef" />
     </section>
   </main>

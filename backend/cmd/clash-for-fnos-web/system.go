@@ -747,6 +747,9 @@ func (g *gateway) forwardHelperAndSync(w http.ResponseWriter, r *http.Request, a
 	}
 	setStage("正在同步 Controller 连接设置…", true)
 	g.syncControllerSettings(r.Context())
+	if apiPath != "/core/stop-managed" {
+		g.rulesChanged()
+	}
 	writeJSON(w, 200, result)
 }
 

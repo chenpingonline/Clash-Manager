@@ -269,9 +269,11 @@ export interface RuleItem {
   payload?: string
   proxy?: string
   size?: number
+  extra?: { disabled?: boolean }
 }
 
 export interface RulesResponse {
+  scope?: string
   rules?: RuleItem[]
 }
 

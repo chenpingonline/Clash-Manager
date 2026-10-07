@@ -16,7 +16,6 @@ const items = ref<ProfileItem[]>([]), discovery = ref<LocalDiscoveryResponse>({}
 const profileJobs = reactive<Record<string, ProfileJob>>({})
 const extensionProfile = ref<ProfileItem | null>(null), extensionKind = ref<ProfileExtensionKind | null>(null)
 const extensionGlobal = ref(false)
-const showStructuredExtensionEditors = false
 const openEditMenuId = ref('')
 const form = reactive<RemoteForm>(emptyForm()), fileName = ref('本地配置'), selectedFile = ref<File | null>(null)
 const importedPaths = computed(() => new Set(items.value.map(item => item.sourcePath).filter(Boolean)))
@@ -166,7 +165,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="card section"><div class="actions"><button class="small" @click="openRemote()">添加订阅</button><button class="ghost small" @click="modal = 'file'">从当前电脑导入 YAML</button></div></div>
+  <div class="card section"><div class="actions"><button class="small" @click="openRemote()">添加订阅</button><button class="ghost small" @click="modal = 'file'">从当前电脑导入 YAML</button></div><p class="profile-source-note">订阅可包含节点、代理组和分流规则。软件默认不会额外添加代理组或分流规则；你设置的订阅增强和全局增强也会参与生成最终配置。</p></div>
   <div class="card section">
     <div class="section-head"><div><h2>配置列表</h2></div></div>
     <AsyncState :loading="loading" :error="error">
@@ -202,11 +201,9 @@ onBeforeUnmount(() => {
                 <span>编辑</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" /></svg>
               </button>
               <div v-if="openEditMenuId === item.id" class="profile-edit-popover" role="menu">
-                <template v-if="showStructuredExtensionEditors">
-                  <button type="button" role="menuitem" @click="openExtension(item, 'rules')">编辑规则</button>
-                  <button type="button" role="menuitem" @click="openExtension(item, 'proxies')">编辑节点</button>
-                  <button type="button" role="menuitem" @click="openExtension(item, 'groups')">编辑代理组</button>
-                </template>
+                <button type="button" role="menuitem" @click="openExtension(item, 'rules')">编辑规则</button>
+                <button type="button" role="menuitem" @click="openExtension(item, 'proxies')">编辑节点</button>
+                <button type="button" role="menuitem" @click="openExtension(item, 'groups')">编辑代理组</button>
                 <button type="button" role="menuitem" @click="openExtension(item, 'override')">扩展覆写配置</button>
                 <button type="button" role="menuitem" @click="openExtension(item, 'script')">扩展脚本</button>
                 <button v-if="item.type === 'remote'" type="button" role="menuitem" class="profile-edit-secondary" @click="closeEditMenu(); openRemote(item)">订阅信息</button>

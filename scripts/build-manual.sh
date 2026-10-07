@@ -127,13 +127,15 @@ esac
 chmod 755 "$STAGE/app/server/bin/"*
 
 # app.tgz is the contents of app/, not the app directory itself.
-tar -C "$STAGE/app" -czf "$PKG/app.tgz" .
+# macOS tar otherwise emits AppleDouble metadata alongside Linux app files.
+COPYFILE_DISABLE=1 LC_ALL=C tar -C "$STAGE/app" -czf "$PKG/app.tgz" .
 CHECKSUM="$(md5sum "$PKG/app.tgz" | awk '{print $1}')"
 
 cp -a "$STAGE/cmd" "$STAGE/config" "$STAGE/wizard" "$PKG/"
 cp "$STAGE/manifest" "$PKG/manifest"
 cp "$STAGE/ICON.PNG" "$STAGE/ICON_256.PNG" "$PKG/"
-cp "$STAGE/LICENSE" "$PKG/LICENSE"
+# Keep the license in app/licenses/; a top-level LICENSE adds an agreement
+# step to the fnOS installer.
 sed -E "s/^checksum.*/checksum        = ${CHECKSUM}/" "$PKG/manifest" > "$WORK/manifest"
 cp "$WORK/manifest" "$PKG/manifest"
 
@@ -141,7 +143,7 @@ chmod 755 "$PKG/cmd" "$PKG/config" "$PKG/wizard"
 chmod 755 "$PKG/cmd/"*
 
 NAME="Clash for fnos_${VERSION}_${PACKAGE_ARCH}.fpk"
-tar -C "$PKG" -czf "$OUT/$NAME" .
+COPYFILE_DISABLE=1 LC_ALL=C tar -C "$PKG" -czf "$OUT/$NAME" .
 (
   cd "$OUT"
   sha256sum "$NAME" > "$NAME.sha256"

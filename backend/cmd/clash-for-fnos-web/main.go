@@ -54,6 +54,7 @@ type config struct {
 	trafficTotalsFile  string
 	trafficHistoryFile string
 	rulesSnapshotFile  string
+	ruleStateFile      string
 	exitLocationURL    string
 	releaseRepo        string
 }
@@ -115,6 +116,7 @@ func loadConfig() config {
 		trafficTotalsFile:  filepath.Join(env("TRIM_PKGVAR", "/tmp/clash-for-fnos-var"), "traffic-totals.json"),
 		trafficHistoryFile: filepath.Join(env("TRIM_PKGVAR", "/tmp/clash-for-fnos-var"), "traffic-history.json"),
 		rulesSnapshotFile:  filepath.Join(env("TRIM_PKGVAR", "/tmp/clash-for-fnos-var"), "rules-snapshot.json"),
+		ruleStateFile:      filepath.Join(env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc"), "rule-state.json"),
 		exitLocationURL:    env("CLASH_EXIT_LOCATION_URL", "https://ipwho.is/?lang=zh-CN&fields=success,message,ip,country,country_code,region,city,timezone"),
 		releaseRepo:        env("CLASH_FOR_FNOS_RELEASE_REPO", "chenpingonline/Clash-for-fnos"),
 	}
@@ -202,6 +204,8 @@ func (g *gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (g *gateway) handleConfigAPI(w http.ResponseWriter, r *http.Request, requestPath string) bool {
 	switch {
+	case requestPath == "/api/config/editor" && (r.Method == http.MethodGet || r.Method == http.MethodPut):
+		g.handleConfigEditor(w, r)
 	case requestPath == "/api/config/meta" && r.Method == http.MethodGet:
 		payload := map[string]any{"source": "managed", "path": nil, "importedAt": nil, "appliedAt": nil}
 		if body, err := os.ReadFile(g.config.configMetaFile); err == nil {
@@ -525,7 +529,7 @@ func (g *gateway) syncStartupConfig(ctx context.Context, raw []byte) (map[string
 	return g.syncStartupConfigWithStage(ctx, raw, nil)
 }
 
-func (g *gateway) syncStartupConfigWithStage(ctx context.Context, raw []byte, stage func(string, string)) (map[string]any, error) {
+func (g *gateway) syncStartupConfigWithStage(ctx context.Context, raw []byte, stage func(string, string), forceReload ...bool) (map[string]any, error) {
 	progress := func(name, message string) {
 		if stage != nil {
 			stage(name, message)
@@ -542,7 +546,7 @@ func (g *gateway) syncStartupConfigWithStage(ctx context.Context, raw []byte, st
 		return nil, err
 	}
 	stages["inspect"] = time.Since(activeStarted).Milliseconds()
-	if activeErr == nil && bytes.Equal(activeRaw, raw) && sameConfigFile(g.config.managedConfigFile, raw) {
+	if activeErr == nil && bytes.Equal(activeRaw, raw) && sameConfigFile(g.config.managedConfigFile, raw) && (len(forceReload) == 0 || !forceReload[0]) {
 		result := map[string]any{"target": active["path"], "validation": map[string]any{"ok": true, "method": "unchanged", "skipped": true}, "activation": map[string]any{"method": "unchanged"}, "unchanged": true, "durationMs": time.Since(started).Milliseconds(), "stages": stages}
 		log.Printf("启动配置同步跳过 result=unchanged duration=%dms", time.Since(started).Milliseconds())
 		return result, nil
@@ -860,6 +864,8 @@ func (g *gateway) handleMihomoAPI(w http.ResponseWriter, r *http.Request, reques
 		g.updateRuleProviders(w, r, client)
 	case requestPath == "/api/rules" && r.Method == http.MethodGet:
 		g.writeRules(w, r, client)
+	case requestPath == "/api/rules/disable" && r.Method == http.MethodPatch:
+		g.setRuleDisabled(w, r, client)
 	case requestPath == "/api/connections" && r.Method == http.MethodGet:
 		g.writeConnections(w, r, client)
 	case requestPath == "/api/connections" && r.Method == http.MethodDelete:
@@ -1408,7 +1414,8 @@ func run() error {
 	go gateway.trafficHistory.Run(collectorContext, mihomoClient)
 	go gateway.runStartupTasks(collectorContext)
 	go gateway.runProfileScheduler(collectorContext)
-	gateway.rulesSnapshot.scheduleRefresh(cfg.settingsFile, time.Second)
+	gateway.rulesChanged()
+	go gateway.watchRuleState(collectorContext)
 	server := &http.Server{
 		Handler:           gateway,
 		ReadHeaderTimeout: 10 * time.Second,
