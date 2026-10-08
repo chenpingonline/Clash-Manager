@@ -31,8 +31,8 @@ func configureAuth(cfg *config) error {
 		}
 		cfg.authPassword = strings.TrimRight(string(body), "\r\n")
 	}
-	if (cfg.platform == "docker" || cfg.listenAddr != "") && len(cfg.authPassword) < 12 {
-		return errors.New("HTTP/Docker 部署必须设置至少 12 字符的 APP_AUTH_PASSWORD 或 APP_AUTH_PASSWORD_FILE")
+	if (cfg.platform == "docker" || cfg.listenAddr != "") && len(cfg.authPassword) < 8 {
+		return errors.New("HTTP/Docker 部署必须设置至少 8 字符的 APP_AUTH_PASSWORD 或 APP_AUTH_PASSWORD_FILE")
 	}
 	if cfg.platform == "docker" && cfg.listenAddr == "" {
 		cfg.listenAddr = ":8080"

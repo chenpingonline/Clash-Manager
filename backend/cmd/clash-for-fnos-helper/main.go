@@ -294,6 +294,10 @@ func run() error {
 			return err
 		}
 	}
+	h := newHelper(cfg)
+	if err := h.applyDockerStartupPorts(); err != nil {
+		return err
+	}
 	if err := removeSocket(cfg.socket); err != nil {
 		return err
 	}
@@ -306,7 +310,6 @@ func run() error {
 	if err = os.Chmod(cfg.socket, 0o660); err != nil {
 		return err
 	}
-	h := newHelper(cfg)
 	// Always reconcile so a reinstall can remove orphaned blocks even when the
 	// old settings file was deleted during uninstall.
 	if _, syncErr := h.reconcileProxyEnvironmentOnStartup(); syncErr != nil {

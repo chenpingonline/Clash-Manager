@@ -54,7 +54,7 @@ onBeforeUnmount(() => window.removeEventListener('clash-auth-expired', expired))
 </template>
 
 <style scoped>
-.manager-login { width:100%; min-height:100vh; display:grid; place-items:center; padding:24px; background:var(--bg); }
+.manager-login { grid-column:1 / -1; min-width:0; width:100%; min-height:100vh; min-height:100dvh; display:grid; place-items:center; padding:24px; background:var(--bg); }
 .manager-login-card { width:min(100%,360px); display:flex; flex-direction:column; gap:12px; padding:28px; border:1px solid var(--line); border-radius:16px; background:var(--panel); }
 h1 { margin:0; font-size:22px; }
 p { margin:0; font-size:13px; line-height:1.6; }

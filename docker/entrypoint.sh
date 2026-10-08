@@ -9,7 +9,7 @@ if [ -n "${APP_AUTH_PASSWORD_FILE:-}" ]; then
 else
   auth_password="${APP_AUTH_PASSWORD:-}"
 fi
-[ "${#auth_password}" -ge 12 ] || { echo 'Set a management password of at least 12 characters' >&2; exit 1; }
+[ "${#auth_password}" -ge 8 ] || { echo 'Set a management password of at least 8 characters' >&2; exit 1; }
 unset auth_password
 
 # Helper owns Core and privileged config; Web only receives access to its state.

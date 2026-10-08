@@ -599,4 +599,4 @@ Clash for fnos 项目源码使用 [GNU General Public License v3.0](LICENSE)（`
 
 ## Docker 开发版
 
-同一套代码支持 Docker 部署，提供普通代理和 Linux 宿主 TUN 两种配置。构建、认证、数据卷及验证范围见 [Docker 部署说明](docker/README.md)。当前尚未发布镜像，真实 fnOS 宿主 TUN 仍需验收。
+同一套代码支持 Docker 部署，默认 Compose 使用 Linux Host 网络，映射 TUN 设备并添加 NET_ADMIN，启动后需在网页手动开启 TUN；普通代理使用独立的 `docker/compose.bridge.yaml`。默认使用多架构镜像 `chenpingonline/clash-for-fnos:latest`，Compose 会自动选择 amd64/arm64，也可通过 `CLASH_IMAGE` 指定其他已发布版本。部署、认证、数据卷及验证范围见 [Docker 部署说明](docker/README.md)。原生 x86 运行和真实 fnOS 宿主 TUN 仍需验收。

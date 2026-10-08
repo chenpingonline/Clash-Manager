@@ -84,6 +84,38 @@ func TestHTTPRequiresPasswordAndSupportsSecretFile(t *testing.T) {
 	}
 }
 
+func TestHTTPPasswordMinimumLength(t *testing.T) {
+	t.Setenv("APP_AUTH_PASSWORD_FILE", "")
+	for _, deployment := range []config{{platform: "docker"}, {platform: "fnos", listenAddr: ":8080"}} {
+		for _, password := range []string{"", "1234567", "12345678", "longer-test-password"} {
+			cfg := deployment
+			cfg.authPassword = password
+			err := configureAuth(&cfg)
+			if (err == nil) != (len(password) >= 8) {
+				t.Fatalf("platform=%s length=%d: %v", cfg.platform, len(password), err)
+			}
+			if err != nil && !strings.Contains(err.Error(), "至少 8 字符") {
+				t.Fatalf("outdated password validation message: %v", err)
+			}
+		}
+	}
+	// Native Unix-socket deployment still uses fnOS authentication.
+	if err := configureAuth(&config{platform: "fnos"}); err != nil {
+		t.Fatalf("native Unix-socket deployment changed: %v", err)
+	}
+	secret := filepath.Join(t.TempDir(), "password")
+	t.Setenv("APP_AUTH_PASSWORD_FILE", secret)
+	for _, password := range []string{"1234567", "12345678"} {
+		if err := os.WriteFile(secret, []byte(password+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cfg := config{platform: "docker"}
+		if err := configureAuth(&cfg); (err == nil) != (len(password) >= 8) {
+			t.Fatalf("password file length=%d: %v", len(password), err)
+		}
+	}
+}
+
 func TestNativeGatewayAndDockerRoot(t *testing.T) {
 	t.Setenv("APP_PLATFORM", "fnos")
 	t.Setenv("GATEWAY_PREFIX", "/app/clash-for-fnos")

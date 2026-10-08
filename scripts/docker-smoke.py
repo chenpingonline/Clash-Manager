@@ -16,13 +16,21 @@ parser = argparse.ArgumentParser()
 parser.add_argument('image', nargs='?', default='clash-for-fnos:local')
 parser.add_argument('--tun', action='store_true', help='test TUN in an isolated container network with NET_ADMIN')
 parser.add_argument('--keep', action='store_true', help='keep the container and volume for local UI QA')
+parser.add_argument('--controller-port', type=int, help='exercise Docker startup Controller override')
+parser.add_argument('--mixed-port', type=int, help='exercise Docker startup Mixed override')
 args = parser.parse_args()
 name = 'clash-docker-qa-' + uuid.uuid4().hex[:10]
 volume = name + '-data'
-password = 'docker-qa-password-2026'
+# Exercise the minimum accepted password through startup and HTTP login.
+password = 'qa-pass8'
 envfile = tempfile.NamedTemporaryFile(mode='w', prefix='clash-qa-', delete=False)
 envfile.write('APP_AUTH_PASSWORD=' + password + '\n')
+if args.controller_port is not None:
+    envfile.write(f'APP_CONTROLLER_PORT={args.controller_port}\n')
+if args.mixed_port is not None:
+    envfile.write(f'APP_MIXED_PORT={args.mixed_port}\n')
 envfile.close()
+mixed_port = args.mixed_port or 7890
 
 def docker(*argv):
     return subprocess.check_output(['docker', *argv], text=True).strip()
@@ -48,7 +56,7 @@ def start():
     global base
     extra = ['--cap-add', 'NET_ADMIN', '--device', '/dev/net/tun:/dev/net/tun'] if args.tun else []
     docker('run', '-d', '--init', '--name', name, '--stop-timeout', '40', '--env-file', envfile.name,
-           '-p', '127.0.0.1::8080', '-p', '127.0.0.1::7890', '-v', volume + ':/data', *extra, args.image)
+           '-p', '127.0.0.1::8080', '-p', f'127.0.0.1::{mixed_port}', '-v', volume + ':/data', *extra, args.image)
     port = docker('port', name, '8080/tcp').rsplit(':', 1)[1]
     base = 'http://127.0.0.1:' + port
     deadline = time.monotonic() + 90
@@ -84,7 +92,11 @@ try:
     network = request('/api/network/settings')
     assert network['tunCapability']['supported'] is args.tun
     assert network['settings']['tun']['enabled'] is False
-    proxy_port = int(docker('port', name, '7890/tcp').rsplit(':', 1)[1])
+    if args.controller_port is not None:
+        assert network['settings']['controller']['port'] == args.controller_port
+        assert request('/api/settings')['controller'] == f'http://127.0.0.1:{args.controller_port}'
+    assert network['settings']['mixed']['port'] == mixed_port
+    proxy_port = int(docker('port', name, f'{mixed_port}/tcp').rsplit(':', 1)[1])
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         try:
@@ -114,12 +126,26 @@ try:
         assert result['enabled'] is False
         assert routes() == original_routes, 'routes not restored after TUN disable'
         print('PASS: isolated TUN enable, route installation, disable and route restoration')
+    # Persist different ports through the UI API, then prove startup env wins
+    # when recreating against the same existing data volume.
+    changes = {}
+    if args.controller_port is not None and args.controller_port != 9090:
+        changes['controller'] = {'enabled': True, 'port': 9090}
+    if args.mixed_port is not None and args.mixed_port != 7890:
+        changes['mixed'] = {'enabled': True, 'port': 7890}
+    if changes:
+        request('/api/network/settings', 'PUT', changes)
     docker('stop', name)
     assert docker('inspect', '-f', '{{.State.ExitCode}}', name) == '0', 'unclean container stop'
     docker('rm', name)
     start()
     request('/api/auth/login', 'POST', {'username': 'admin', 'password': password})
     assert request('/api/settings')['persistSelections'] is False, 'lost persisted settings'
+    network = request('/api/network/settings')
+    if args.controller_port is not None:
+        assert network['settings']['controller']['port'] == args.controller_port, 'startup did not override saved Controller'
+    if args.mixed_port is not None:
+        assert network['settings']['mixed']['port'] == args.mixed_port, 'startup did not override saved Mixed port'
     # Every recreation must leave the Web process unprivileged.
     uid = docker('exec', name, 'sh', '-c', "for path in /proc/[0-9]*; do if [ \"$(cat $path/comm 2>/dev/null)\" = clash-web ]; then awk '/^Uid:/{print $2}' $path/status; fi; done")
     assert uid == '10001', 'Web did not drop root'

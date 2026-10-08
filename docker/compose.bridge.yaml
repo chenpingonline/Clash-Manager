@@ -1,25 +1,21 @@
-# Default Linux/fnOS deployment; enable TUN manually in the Web UI.
+# Standalone Bridge deployment for explicit HTTP/SOCKS proxy use.
 services:
   clash:
     image: ${CLASH_IMAGE:-chenpingonline/clash-for-fnos:latest}
     init: true
     restart: unless-stopped
     stop_grace_period: 40s
-    network_mode: host
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun:/dev/net/tun
     environment:
-      # Host 模式直接使用宿主端口，无需 ports 映射。
-      LISTEN_ADDR: "${LISTEN_ADDR:-:8080}"
       # 非空端口变量在内核启动前生效，已有数据目录也会应用。
       APP_CONTROLLER_PORT: "${APP_CONTROLLER_PORT:-}"
       APP_MIXED_PORT: "${APP_MIXED_PORT:-}"
       APP_AUTH_USER: ${APP_AUTH_USER:-admin}
       APP_AUTH_PASSWORD: ${APP_AUTH_PASSWORD:?Set a password of at least 8 characters in .env}
-      # 与上方 network_mode 保持一致。
-      APP_NETWORK_SCOPE: host
+      APP_NETWORK_SCOPE: container
+    ports:
+      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_PORT:-17890}:8080"
+      - "${PROXY_BIND_IP:-127.0.0.1}:${APP_MIXED_PORT:-7890}:${APP_MIXED_PORT:-7890}/tcp"
+      - "${PROXY_BIND_IP:-127.0.0.1}:${APP_MIXED_PORT:-7890}:${APP_MIXED_PORT:-7890}/udp"
     volumes:
       - "${CLASH_DATA_DIR:-./data}:/data"
     logging:
