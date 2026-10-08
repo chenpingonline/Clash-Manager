@@ -1123,3 +1123,10 @@ html[data-theme="light"] .topbar{background:rgba(248,250,253,.9)}
 .policy-select-options button.is-selected{color:var(--accent);font-weight:600}
 .policy-select-empty{margin:0;padding:8px;color:var(--muted);font-size:11px}
 @media(max-width:760px){.rule-add-bar .rule-policy-field{grid-column:1}}
+
+.sequence-provider-input > .policy-select{flex:1;min-width:0}
+.sequence-provider-input .policy-select-trigger{font-size:12px;font-weight:400;padding:6px 9px}
+
+.policy-select-panel{z-index:2000;overflow:hidden}
+.policy-select-panel input{width:100%;height:34px;flex:none;font-size:12px}
+.policy-select-panel .policy-select-options{min-height:0;flex:1}
