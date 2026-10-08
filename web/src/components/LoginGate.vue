@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import App from '@/App.vue'
 import { api, errorMessage, jsonRequest } from '@/services/api'
-import { loadRuntime } from '@/services/runtime'
+import { appDisplayName, loadRuntime } from '@/services/runtime'
 
 const ready = ref(false), loading = ref(true), busy = ref(false), required = ref(false), error = ref('')
 const username = ref('admin'), password = ref('')
@@ -38,7 +38,7 @@ onBeforeUnmount(() => window.removeEventListener('clash-auth-expired', expired))
   <App v-if="ready" />
   <div v-else class="manager-login">
     <form class="manager-login-card" @submit.prevent="login">
-      <h1>Clash 管理界面</h1>
+      <h1>{{ appDisplayName }}</h1>
       <p class="muted">{{ loading ? '正在连接…' : '登录后管理订阅、代理与网络设置' }}</p>
       <template v-if="!loading && required">
         <label for="manager-username">用户名</label>

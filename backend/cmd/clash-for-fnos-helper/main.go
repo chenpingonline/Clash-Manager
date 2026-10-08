@@ -334,7 +334,7 @@ func run() error {
 		defer cancelShutdown()
 		_ = server.Shutdown(shutdown)
 	}()
-	log.Printf("Clash for fnOS %s Go helper started on %s", version, cfg.socket)
+	log.Printf("%s %s Go helper started on %s", runtimeenv.DisplayName(runtimeenv.Platform()), version, cfg.socket)
 	err = server.Serve(listener)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil

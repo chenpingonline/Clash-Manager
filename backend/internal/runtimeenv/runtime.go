@@ -23,3 +23,11 @@ func AppDir() string {
 func AccessiblePaths() string {
 	return Value("APP_IMPORT_PATHS", os.Getenv("TRIM_DATA_ACCESSIBLE_PATHS"))
 }
+
+// DisplayName preserves the native product name while branding standalone Docker deployments.
+func DisplayName(platform string) string {
+	if platform == "docker" {
+		return "Clash Manager"
+	}
+	return "Clash for fnOS"
+}

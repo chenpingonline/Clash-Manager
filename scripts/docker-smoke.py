@@ -13,7 +13,7 @@ import urllib.request
 import uuid
 
 parser = argparse.ArgumentParser()
-parser.add_argument('image', nargs='?', default='clash-for-fnos:local')
+parser.add_argument('image', nargs='?', default='clash-manager:local')
 parser.add_argument('--tun', action='store_true', help='test TUN in an isolated container network with NET_ADMIN')
 parser.add_argument('--keep', action='store_true', help='keep the container and volume for local UI QA')
 parser.add_argument('--controller-port', type=int, help='exercise Docker startup Controller override')

@@ -24,6 +24,10 @@ RUN case "$TARGETARCH" in amd64) CORE_ARCH=x86;; arm64) CORE_ARCH=arm;; *) exit 
 FROM debian:13-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates bash curl util-linux iproute2 iptables nftables tzdata && \
     rm -rf /var/lib/apt/lists/* && groupadd -g 10001 clash && useradd -u 10001 -g clash -M -s /usr/sbin/nologin clash
+LABEL org.opencontainers.image.title="Clash Manager" \
+    org.opencontainers.image.description="Clash Manager (formerly Clash for fnOS / clash-for-fnos), a Mihomo proxy manager for Linux and fnOS" \
+    org.opencontainers.image.source="https://github.com/chenpingonline/Clash-for-fnos" \
+    org.opencontainers.image.licenses="GPL-3.0-only"
 WORKDIR /opt/clash
 COPY --from=backend /out/clash-web /out/clash-helper ./bin/
 COPY --from=backend /out/core ./core/

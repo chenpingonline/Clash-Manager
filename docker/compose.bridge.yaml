@@ -1,7 +1,7 @@
 # Standalone Bridge deployment for explicit HTTP/SOCKS proxy use.
 services:
   clash:
-    image: ${CLASH_IMAGE:-chenpingonline/clash-for-fnos:latest}
+    image: ${CLASH_IMAGE:-chenpingonline/clash-manager:latest}
     init: true
     restart: unless-stopped
     stop_grace_period: 40s

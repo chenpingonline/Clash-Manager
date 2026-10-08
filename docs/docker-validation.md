@@ -40,3 +40,13 @@
 部署步骤见 [Docker 部署说明](../docker/README.md)。
 
 - 新账号发布：`chenpingonline/clash-for-fnos:1.3.1` 是新仓库唯一标签，包含 `linux/amd64` 与 `linux/arm64`，不发布架构或修复后缀。多架构清单摘要为 `sha256:c85758baf9a7df13466b2f04e14dc9b074bab0330b67c4aae080f254fd33c50b`。当前源码交叉编译产物、前端实际文件、Core、GEO、启动器和健康检查与发布镜像逐项核对；Go 全量 race/vet、前端 134 项测试与构建通过。Docker Hub 公开 API 已确认标签、双架构和子清单摘要；两种架构分别拉取核对通过，默认拉取自动选择 ARM64，发布地址 ARM64 容器登录、代理、端口覆盖、持久化及正常停止通过，隔离 TUN 路由安装/恢复通过。三份 Compose 与示例、部署文档已同步新地址；版本通过 `CLASH_IMAGE` 选择。AMD64 原生运行和真实 fnOS Host TUN 仍待验收。
+
+
+## Docker 产品名称调整（2026-10-09）
+
+- Docker 显示名改为 Clash Manager；原生 fnOS 的应用 ID、FPK 清单、启动脚本、路径和名称保留。登录页、浏览器标题、Web/Helper 启动日志与 OCI 镜像元数据按部署模式显示名称。默认 Compose、环境示例、构建与冒烟脚本、Docker Hub Overview 均使用 `chenpingonline/clash-manager`；旧仓库作为兼容地址继续同步发布。
+- 新旧两个公开仓库的 `1.3.1` 和 `latest` 均指向 `sha256:f0466dca8cd74d228915c9f3b73b7747d917012044aa0ee40cf1196df4bef351`；AMD64 子清单为 `sha256:be68e2abfee7328d5851f421a0af64c50bb93ffa5f48c8a4be1c8c7210cb80e1`，ARM64 子清单为 `sha256:06894cf81e300724c3124f792a57fee3d3c31cb4ae40f5d2ccbd3dea84fd049e`。公开 Tags API 已核对四个标签摘要与平台；两种架构从新仓库拉取并检查实际架构与产品标签通过。
+- 当前 Go 源码分别交叉编译两个架构，前端分别执行原生默认路径构建与 Docker 根路径构建；镜像基于上一轮已验证的同架构运行层，替换 Web/Helper、前端产物及产品元数据，Core、GEO、入口、权限与系统依赖沿用该运行层。本轮未执行完整多阶段源码构建。
+- Go runtimeenv/Web/Helper 测试、前端 134 项测试、类型检查与构建、三份 Compose 配置解析通过。ARM64 容器认证、代理、启动端口、持久化、权限分离与正常停止通过；Chrome 实际操作验证 Clash Manager 登录页、浏览器标题与登录后仪表盘正常，启动日志名称正确。
+- 两个仓库的简介与 Overview 均已同步，公开 API 与本地 `docker/DOCKERHUB.md` 一致；Docker Hub 搜索接口已分别查到 `chenpingonline/clash-manager` 和 `chenpingonline/clash-for-fnos`。以后发布时应使用部署说明中的同时推送四个标签命令，两个仓库之间没有自动重定向。
+- 此轮仅涉及 Docker 名称和发布，未构建新的 FPK，未做原生 AMD64 或真实 fnOS 安装/升级、宿主 TUN 验收。

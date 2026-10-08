@@ -2,7 +2,7 @@
 # Use one configuration only; do not combine the Compose files.
 services:
   clash:
-    image: ${CLASH_IMAGE:-chenpingonline/clash-for-fnos:latest}
+    image: ${CLASH_IMAGE:-chenpingonline/clash-manager:latest}
     init: true
     restart: unless-stopped
     stop_grace_period: 40s

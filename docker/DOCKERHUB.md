@@ -1,8 +1,10 @@
-# Clash for fnOS — Docker 部署
+# Clash Manager — Docker 部署
+
+Docker 版现名 **Clash Manager**，原名 **Clash for fnOS / clash-for-fnos**。主仓库为 [chenpingonline/clash-manager](https://hub.docker.com/r/chenpingonline/clash-manager)，[chenpingonline/clash-for-fnos](https://hub.docker.com/r/chenpingonline/clash-for-fnos) 保留为兼容地址；对应版本与 `latest` 发布同一份双架构清单。旧 Compose 和 `/data` 数据目录可继续使用；迁移时只需更换镜像地址，保留服务名和数据卷。
 
 基于 Mihomo 的代理管理界面，支持订阅、代理节点、规则、连接、日志与 TUN 设置。
 
-镜像支持 **Linux AMD64 / ARM64**，Docker 自动选择架构，无需指定 `platform`。默认使用 `chenpingonline/clash-for-fnos:latest` 获取最新稳定版；已发布版本见 [Tags](https://hub.docker.com/r/chenpingonline/clash-for-fnos/tags)。
+镜像支持 **Linux AMD64 / ARM64**，Docker 自动选择架构，无需指定 `platform`。默认使用 `chenpingonline/clash-manager:latest` 获取最新稳定版；已发布版本见 [Tags](https://hub.docker.com/r/chenpingonline/clash-manager/tags)。
 
 ## 快速部署：Linux / fnOS Host 网络
 
@@ -14,7 +16,7 @@
 # Default Linux/fnOS deployment; enable TUN manually in the Web UI.
 services:
   clash:
-    image: ${CLASH_IMAGE:-chenpingonline/clash-for-fnos:latest}
+    image: ${CLASH_IMAGE:-chenpingonline/clash-manager:latest}
     init: true
     restart: unless-stopped
     stop_grace_period: 40s
@@ -62,7 +64,7 @@ APP_MIXED_PORT=17897
 # 其他设备访问代理，还需在网页开启“允许局域网连接”。
 
 # 可选：固定版本或回滚时取消注释，并填写 Tags 页中已发布的版本号。
-# CLASH_IMAGE=chenpingonline/clash-for-fnos:<版本号>
+# CLASH_IMAGE=chenpingonline/clash-manager:<版本号>
 # 可选：默认保存到 ./data，也可以使用 NAS 上的绝对目录。
 # CLASH_DATA_DIR=./data
 
@@ -73,7 +75,7 @@ APP_MIXED_PORT=17897
 # PROXY_BIND_IP=127.0.0.1
 ```
 
-默认配置使用 `latest`，无需在 `.env` 中额外指定镜像。需要固定版本或回滚时，取消 `.env` 中 `CLASH_IMAGE` 的注释，将 `<版本号>` 替换为 [Tags](https://hub.docker.com/r/chenpingonline/clash-for-fnos/tags) 中所需的已发布版本。版本标签同样支持双架构。
+默认配置使用 `latest`，无需在 `.env` 中额外指定镜像。需要固定版本或回滚时，取消 `.env` 中 `CLASH_IMAGE` 的注释，将 `<版本号>` 替换为 [Tags](https://hub.docker.com/r/chenpingonline/clash-manager/tags) 中所需的已发布版本。版本标签同样支持双架构。
 
 ### 启动
 
@@ -96,7 +98,7 @@ Host 模式直接占用宿主端口，无需 `ports` 映射。网页端口由 `L
 # Standalone Bridge deployment for explicit HTTP/SOCKS proxy use.
 services:
   clash:
-    image: ${CLASH_IMAGE:-chenpingonline/clash-for-fnos:latest}
+    image: ${CLASH_IMAGE:-chenpingonline/clash-manager:latest}
     init: true
     restart: unless-stopped
     stop_grace_period: 40s

@@ -17,7 +17,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new Error(payload?.error ?? payload?.message ?? String(data || `HTTP ${response.status}`))
   }
   if (path.startsWith('/api/') && !contentType.includes('json')) {
-    throw new Error('接口返回了非 JSON 响应，请检查 fnOS Gateway 与应用服务状态')
+    throw new Error(APP_PREFIX ? '接口返回了非 JSON 响应，请检查 fnOS Gateway 与应用服务状态' : '接口返回了非 JSON 响应，请检查反向代理与应用服务状态')
   }
   return data as T
 }

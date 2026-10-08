@@ -64,7 +64,7 @@ func (g *gateway) runtimeCapabilities() map[string]any {
 		platform = "fnos"
 	}
 	native := platform == "fnos"
-	return map[string]any{"platform": platform, "version": version, "capabilities": map[string]bool{
+	return map[string]any{"platform": platform, "displayName": runtimeenv.DisplayName(platform), "version": version, "capabilities": map[string]bool{
 		"appIcons": native, "appUpdates": native, "hostProxyEnvironment": native, "nativeFolderAuthorization": native, "externalCore": native,
 	}}
 }

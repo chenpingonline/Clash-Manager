@@ -1,6 +1,8 @@
-# Docker 部署
+# Clash Manager — Docker 部署
 
-Docker 与 fnOS FPK 共用 Vue、Go Web、Helper 和 Mihomo 管理代码。默认镜像 `chenpingonline/clash-for-fnos:latest` 支持 Linux amd64/arm64，Docker 会自动选择宿主架构，无需在 Compose 中指定 `platform`。发布统一使用 `chenpingonline/clash-for-fnos:<版本号>`，每个版本标签包含双架构清单，不附加架构或修复后缀。Docker 部署支持启动端口环境变量配置，管理密码至少 8 字符。应用版本由 `fpk/manifest` 注入，不另设版本源。
+Docker 版现名 **Clash Manager**，原名 **Clash for fnOS / clash-for-fnos**。主仓库为 [chenpingonline/clash-manager](https://hub.docker.com/r/chenpingonline/clash-manager)，[chenpingonline/clash-for-fnos](https://hub.docker.com/r/chenpingonline/clash-for-fnos) 保留为兼容地址；对应版本与 `latest` 发布同一份双架构清单。旧 Compose 和 `/data` 数据目录可继续使用；迁移时只需更换镜像地址，保留服务名和数据卷。
+
+Clash Manager 是本项目的 Docker 版名称，与 fnOS 原生版 Clash for fnOS 共用 Vue、Go Web、Helper 和 Mihomo 管理代码。默认镜像 `chenpingonline/clash-manager:latest` 支持 Linux amd64/arm64，Docker 会自动选择宿主架构，无需在 Compose 中指定 `platform`。发布统一使用 `chenpingonline/clash-manager:<版本号>`，每个版本标签包含双架构清单，不附加架构或修复后缀。Docker 部署支持启动端口环境变量配置，管理密码至少 8 字符。应用版本由 `fpk/manifest` 注入，不另设版本源。
 
 ## 默认部署：fnOS/Linux 宿主 TUN
 
@@ -78,7 +80,7 @@ docker compose up -d --force-recreate
 
 Bridge 部署在上述两个命令中都加上 `-f compose.bridge.yaml`；使用兼容 Host 入口时加上 `-f compose.host.yaml`。
 
-需要固定版本或回滚时，在 `.env` 中将 `CLASH_IMAGE` 设置为 `chenpingonline/clash-for-fnos:<版本号>`，将占位符替换为 [Docker Hub Tags](https://hub.docker.com/r/chenpingonline/clash-for-fnos/tags) 中所需的已发布版本，再执行相同命令。使用固定版本升级时需自行更换标签。镜像版本通过环境变量选择，无需修改 Compose 文件。
+需要固定版本或回滚时，在 `.env` 中将 `CLASH_IMAGE` 设置为 `chenpingonline/clash-manager:<版本号>`，将占位符替换为 [Docker Hub Tags](https://hub.docker.com/r/chenpingonline/clash-manager/tags) 中所需的已发布版本，再执行相同命令。使用固定版本升级时需自行更换标签。镜像版本通过环境变量选择，无需修改 Compose 文件。
 
 镜像内置与 FPK 相同版本的 Mihomo。更换镜像后通过既有内核升级事务对账：更高版本的内置 Core 会校验并尝试升级，失败时恢复备份；普通重启不覆盖在线升级的 Core，较低或相同版本的内置 Core 不覆盖卷内版本。镜像回退不会自动降级卷内 Core。
 
@@ -101,7 +103,7 @@ environment:
 
 | 变量 | 默认值 / 用途 |
 |---|---|
-| CLASH_IMAGE | chenpingonline/clash-for-fnos:latest；Compose 镜像地址，可覆盖为固定版本或本地镜像 |
+| CLASH_IMAGE | chenpingonline/clash-manager:latest；Compose 镜像地址，可覆盖为固定版本或本地镜像 |
 | CLASH_DATA_DIR | 数据目录，默认 ./data；更换路径时需先迁移已有数据 |
 | APP_PLATFORM | 镜像内为 docker，原生 FPK 为 fnos |
 | LISTEN_ADDR | 仅 Host 使用；未设置时为 :8080，示例 .env 为 :17890 |
@@ -127,32 +129,32 @@ environment:
 cd backend && go test ./... && go vet ./...
 # 回项目根目录
 npm --prefix web run check
-./scripts/build-docker.sh clash-for-fnos:local
-python3 scripts/docker-smoke.py clash-for-fnos:local
+./scripts/build-docker.sh clash-manager:local
+python3 scripts/docker-smoke.py clash-manager:local
 # 验证启动端口覆盖和已有数据卷重建
-python3 scripts/docker-smoke.py clash-for-fnos:local --controller-port 19090 --mixed-port 17890
+python3 scripts/docker-smoke.py clash-manager:local --controller-port 19090 --mixed-port 17890
 # 在独立的容器网络验证 TUN，不修改宿主网络
-python3 scripts/docker-smoke.py clash-for-fnos:local --tun
+python3 scripts/docker-smoke.py clash-manager:local --tun
 ```
 
 可使用本机 Node/Go 编译工具构建同一运行镜像，减少构建器镜像下载（仍需安装镜像内运行依赖）：
 
 ```sh
-./scripts/build-docker.sh --local-build clash-for-fnos:local
+./scripts/build-docker.sh --local-build clash-manager:local
 ```
 
 需要使用 Compose 运行本地镜像时，在项目根目录执行：
 
 ```sh
 # docker/.env 中仍需设置登录密码
-CLASH_IMAGE=clash-for-fnos:local docker compose -f docker/compose.bridge.yaml up -d --pull never
+CLASH_IMAGE=clash-manager:local docker compose -f docker/compose.bridge.yaml up -d --pull never
 # Linux 宿主 TUN 部署将文件名改为 docker/compose.yaml
 ```
 
 Dockerfile 位于 `docker/Dockerfile`，构建上下文保持为项目根目录，使用根目录的 `.dockerignore`。在项目根目录可以直接构建：
 
 ```sh
-docker build -f docker/Dockerfile -t clash-for-fnos:local .
+docker build -f docker/Dockerfile -t clash-manager:local .
 ```
 
 有 Buildx 时可直接构建双架构：
@@ -162,3 +164,19 @@ docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64 -t y
 ```
 
 功能在同一主分支维护；运行环境差异集中在 runtimeenv、部署入口与能力接口中。Docker 开发分支验证后合回 master，后续共用功能应同时经过 Go 测试、前端检查和容器冒烟验证。真实 fnOS 的 Host TUN、DNS、IPv6、Docker 转发共存及异常退出恢复仍需真机验收。
+
+## 新旧仓库同步发布
+
+发布时将同一份多架构构建结果同时标记为两个仓库的版本标签和 `latest`，避免兼容地址落后。版本仍从 `fpk/manifest` 读取：
+
+```sh
+VERSION=$(awk -F= '/^version[[:space:]]*=/{gsub(/[[:space:]]/,"",$2);print $2;exit}' fpk/manifest)
+docker buildx build --platform linux/amd64,linux/arm64 --push \
+  -f docker/Dockerfile \
+  -t "chenpingonline/clash-manager:$VERSION" \
+  -t chenpingonline/clash-manager:latest \
+  -t "chenpingonline/clash-for-fnos:$VERSION" \
+  -t chenpingonline/clash-for-fnos:latest .
+```
+
+Docker Hub 简介与 Overview 同时包含 Clash Manager、Clash for fnOS、clash-manager、clash-for-fnos 名称。搜索索引可能延迟，直接访问仓库地址不依赖搜索更新。

@@ -1469,7 +1469,7 @@ func run() error {
 	if cfg.listenAddr != "" {
 		address = cfg.listenAddr
 	}
-	log.Printf("Clash manager %s (%s) started on %s", version, cfg.platform, address)
+	log.Printf("%s %s (%s) started on %s", runtimeenv.DisplayName(cfg.platform), version, cfg.platform, address)
 	err = server.Serve(listener)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil

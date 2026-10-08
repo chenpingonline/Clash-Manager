@@ -5,7 +5,7 @@ DOCKERFILE="$ROOT/docker/Dockerfile"
 APP_RELEASE_VERSION="$(awk -F= '/^version[[:space:]]*=/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$ROOT/fpk/manifest")"
 LOCAL_BUILD=false
 if [ "${1:-}" = "--local-build" ]; then LOCAL_BUILD=true; shift; fi
-IMAGE="${1:-clash-for-fnos:$APP_RELEASE_VERSION}"
+IMAGE="${1:-clash-manager:$APP_RELEASE_VERSION}"
 shift "$(( $# > 0 ? 1 : 0 ))"
 if [ "$LOCAL_BUILD" = true ]; then
   case "$(docker info --format '{{.Architecture}}')" in

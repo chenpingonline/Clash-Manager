@@ -4,6 +4,6 @@ import './styles.css'
 
 const app = createApp(LoginGate)
 app.config.errorHandler = (error) => {
-  console.error('[Clash for fnOS]', error)
+  console.error(`[${document.title}]`, error)
 }
 app.mount('#app')
