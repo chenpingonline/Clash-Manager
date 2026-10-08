@@ -8,3 +8,8 @@ node_modules/
 # Local visual QA artifacts
 /artifacts/
 /design-qa.md
+
+# Docker deployment state and credentials
+/docker/data/
+/docker/.env
+/docker/secrets/

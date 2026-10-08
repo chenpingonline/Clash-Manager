@@ -1,6 +1,8 @@
 import { TrimApp } from '@trimjs/web-app'
 import { onBeforeUnmount, onMounted } from 'vue'
 
+import { runtime } from '@/services/runtime'
+
 type Theme = 'dark' | 'light'
 
 function systemTheme(): Theme {
@@ -30,7 +32,7 @@ function applyTheme(theme: Theme, mode: Theme | 'system'): void {
 
 export function useFnosTheme(): void {
   const media = matchMedia('(prefers-color-scheme: dark)')
-  const sdk = new TrimApp()
+  const sdk = runtime.value.platform === 'docker' ? null : new TrimApp()
   let disposed = false
   let hostThemeActive = false
   let subscribed = false
@@ -50,6 +52,7 @@ export function useFnosTheme(): void {
     applySystemTheme()
     media.addEventListener('change', applySystemTheme)
 
+    if (!sdk) return
     void sdk.getPlatformConfig()
       .then(async (config) => {
         if (disposed) return
@@ -71,6 +74,6 @@ export function useFnosTheme(): void {
   onBeforeUnmount(() => {
     disposed = true
     media.removeEventListener('change', applySystemTheme)
-    if (subscribed) void sdk.$off('os/theme', applyHostTheme).catch(() => undefined)
+    if (subscribed && sdk) void sdk.$off('os/theme', applyHostTheme).catch(() => undefined)
   })
 }

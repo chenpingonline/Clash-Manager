@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { runtime } from '@/services/runtime'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PortConflictHelp from '@/components/PortConflictHelp.vue'
 import AsyncState from '@/components/AsyncState.vue'
@@ -334,7 +335,7 @@ async function load() {
   try {
     const [health, proxyEnvironment] = await Promise.all([
       refreshCoreHealth(),
-      api<ProxyEnvironmentResponse>('/api/system/proxy-environment').catch(cause => ({ error: errorMessage(cause) })),
+      (runtime.value.capabilities.hostProxyEnvironment ? api<ProxyEnvironmentResponse>('/api/system/proxy-environment') : Promise.resolve<ProxyEnvironmentResponse>({})).catch(cause => ({ error: errorMessage(cause) })),
     ])
     status.value = health
     if (!coreModeEdited.value) selectedCoreMode.value = (health.system?.coreMode || health.bootstrap?.mode) === 'external' ? 'external' : 'managed'
@@ -374,7 +375,7 @@ async function refreshRuntime(refreshTraffic = false) {
   try {
     const [health, proxyEnvironment] = await Promise.all([
       refreshCoreHealth(),
-      api<ProxyEnvironmentResponse>('/api/system/proxy-environment'),
+      (runtime.value.capabilities.hostProxyEnvironment ? api<ProxyEnvironmentResponse>('/api/system/proxy-environment') : Promise.resolve<ProxyEnvironmentResponse>({})),
       runtimeControl.value?.refreshState(),
     ])
     status.value = health

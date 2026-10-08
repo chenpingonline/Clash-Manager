@@ -12,6 +12,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     : await response.text()
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined' && !path.startsWith('/api/auth/')) window.dispatchEvent(new Event('clash-auth-expired'))
     const payload = typeof data === 'object' && data !== null ? data as ApiErrorPayload : null
     throw new Error(payload?.error ?? payload?.message ?? String(data || `HTTP ${response.status}`))
   }

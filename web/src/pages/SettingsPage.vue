@@ -17,6 +17,8 @@ import { openStatusStream } from '@/services/status-stream'
 import { notify } from '@/services/toast'
 import type { AppIconsResponse, AppUpdateInfo, CoreMode, DnsMapping, DnsSetting, GeoAsset, GeoStatus, HostMapping, ManagerSettings, NetworkSetting, NetworkSettingsResponse, PortSetting, ProxyEnvironmentResponse, SystemStatus, TunFeatures, TunSetting } from '@/types/api'
 
+import { runtime } from '@/services/runtime'
+
 type Section = 'core' | 'network' | 'dns' | 'tun' | 'advanced' | 'behavior' | 'update'
 type NetworkForm = {
   controller: PortSetting; mixed: PortSetting; socks: PortSetting; http: PortSetting; redir: PortSetting; tproxy: PortSetting
@@ -98,7 +100,7 @@ let closeTunProgressStream: (() => void) | null = null
 let geoMessageTimer: ReturnType<typeof setTimeout> | null = null
 const dnsServerFields: Array<{ key: keyof Pick<typeof dnsText, 'defaultNameserver' | 'nameserver' | 'fallback' | 'proxyServerNameserver' | 'directNameserver'>; label: string }> = [{ key: 'defaultNameserver', label: '默认域名服务器' }, { key: 'nameserver', label: '域名服务器' }, { key: 'fallback', label: '回退服务器' }, { key: 'proxyServerNameserver', label: '代理节点 DNS' }, { key: 'directNameserver', label: '直连域名服务器' }]
 
-const categories: Array<{ key: Section; title: string; description: string }> = [
+const allCategories: Array<{ key: Section; title: string; description: string }> = [
   { key: 'core', title: 'Mihomo Core 设置', description: '运行方式、启动行为、内核启停与更新、Controller 及 GEO 数据' },
   { key: 'network', title: '网络与端口', description: '代理端口、IPv6、统一延迟与局域网选项' },
   { key: 'dns', title: 'DNS 与解析', description: 'Mihomo DNS、解析服务器、Fake IP、回退策略与 Hosts' },
@@ -107,6 +109,7 @@ const categories: Array<{ key: Section; title: string; description: string }> = 
   { key: 'behavior', title: '其他设置', description: '软件图标与应用外观' },
   { key: 'update', title: '更新设置', description: '应用版本、检查更新与更新提示' },
 ]
+const categories = computed(() => allCategories.filter(item => !(item.key === 'advanced' && !runtime.value.capabilities.hostProxyEnvironment || item.key === 'behavior' && !runtime.value.capabilities.appIcons)).map(item => item.key === 'update' && runtime.value.platform === 'docker' ? { ...item, description: 'Docker 镜像版本与升级方式' } : item))
 const dnsStatus = computed(() => dnsState.value === 'idle' ? (network.dnsOverrideEnabled ? '已启用 DNS 覆写' : 'DNS 覆写已关闭') : dnsMessage.value)
 const proxyAvailable = computed(() => system.value.available !== false && system.value.privileged !== false && Boolean(environment.value.management))
 const latestAppVersion = computed(() => String(appUpdate.value.latest?.tag || '--').replace(/^v/, ''))
@@ -268,7 +271,7 @@ async function load() {
   revealedSecret.value = ''
   try {
     const [sys, settings, net, proxy, update, iconData, geoData] = await Promise.all([
-      api<SystemStatus>('/api/system/status').catch((cause): SystemStatus => ({ available: false, error: errorMessage(cause) })), api<ManagerSettings>('/api/settings'), api<NetworkSettingsResponse>('/api/network/settings').catch((cause): NetworkSettingsResponse => ({ error: errorMessage(cause), settings: null, tunCapability: { supported: false } })), api<ProxyEnvironmentResponse>('/api/system/proxy-environment').catch((cause): ProxyEnvironmentResponse => ({ ok: false, error: errorMessage(cause) })), api<AppUpdateInfo>('/api/app/update-info').catch((cause): AppUpdateInfo => ({ error: errorMessage(cause) })), api<AppIconsResponse>('/api/app/icons').catch((cause): AppIconsResponse => ({ ok: false, error: errorMessage(cause), selected: 'cat-orbit', options: [] })),
+      api<SystemStatus>('/api/system/status').catch((cause): SystemStatus => ({ available: false, error: errorMessage(cause) })), api<ManagerSettings>('/api/settings'), api<NetworkSettingsResponse>('/api/network/settings').catch((cause): NetworkSettingsResponse => ({ error: errorMessage(cause), settings: null, tunCapability: { supported: false } })), (runtime.value.capabilities.hostProxyEnvironment ? api<ProxyEnvironmentResponse>('/api/system/proxy-environment') : Promise.resolve<ProxyEnvironmentResponse>({})).catch((cause): ProxyEnvironmentResponse => ({ ok: false, error: errorMessage(cause) })), api<AppUpdateInfo>('/api/app/update-info').catch((cause): AppUpdateInfo => ({ error: errorMessage(cause) })), (runtime.value.capabilities.appIcons ? api<AppIconsResponse>('/api/app/icons') : Promise.resolve<AppIconsResponse>({})).catch((cause): AppIconsResponse => ({ ok: false, error: errorMessage(cause), selected: 'cat-orbit', options: [] })),
       api<GeoStatus>('/api/geo/status').catch((cause): GeoStatus => ({ error: errorMessage(cause), canUpdate: false })),
     ])
     tunFeatures.value = net.tunFeatures || {}
@@ -529,7 +532,7 @@ onMounted(initialize)
             <div class="section-head">
               <div class="tun-section-heading">
                 <div class="tun-section-title-row"><h2>TUN 详细设置</h2><span v-if="tunSwitching" class="dashboard-tun-progress settings-tun-progress" role="status" aria-live="polite"><i aria-hidden="true" /><span>{{ tunProgress }}</span></span></div>
-                <p>接管 NAS 系统流量；首页可以快速开关，这里配置完整参数</p>
+                <p>{{ runtime.platform === 'docker' ? '接管当前部署网络范围内的流量；首页可以快速开关' : '接管 NAS 系统流量；首页可以快速开关，这里配置完整参数' }}</p>
               </div>
               <div class="tun-master"><span :class="network.tun.enabled ? 'good-text' : 'muted-text'">{{ tunSwitching ? (network.tun.enabled ? '正在开启' : '正在关闭') : network.tun.enabled ? '已开启' : '已关闭' }}</span><label class="switch large"><input v-model="network.tun.enabled" type="checkbox" :disabled="tunSwitching || netState === 'pending' || netState === 'saving' || (!tunSupported && !network.tun.enabled)" @change="toggleTunSetting"><span /></label></div>
             </div>
@@ -549,7 +552,7 @@ onMounted(initialize)
               <span class="field-note">每行一个 IPv4/IPv6 CIDR；留空表示不额外排除。</span>
             </div>
             <div v-if="network.tun.enabled && network.tun.dnsHijack && !network.dns.enable" class="tun-capability warn"><strong>DNS</strong><span>开启 DNS 劫持前建议先启用 Mihomo DNS。</span></div>
-            <div class="tun-note"><strong>注意</strong><span>TUN 会修改 fnOS 的系统路由与 DNS 流向。默认关闭；配置不可用时可能影响 NAS 访问互联网。</span></div>
+            <div class="tun-note"><strong>注意</strong><span>{{ runtime.platform === 'docker' ? 'TUN 修改所在网络命名空间的路由。Host 网络下作用于宿主；Bridge 网络下作用于容器。' : 'TUN 会修改 fnOS 的系统路由与 DNS 流向。' }}默认关闭；配置不可用时可能影响访问互联网。</span></div>
           </div>
 
           <div v-else-if="category.key === 'dns'" class="settings-accordion-panel dns-settings-panel" :class="{ 'dns-on': network.dnsOverrideEnabled }">
@@ -560,7 +563,7 @@ onMounted(initialize)
             <div class="dns-tab-panels">
               <div v-show="dnsTab === 'basic'" id="dns-panel-basic" class="dns-tab-panel" role="tabpanel" aria-labelledby="dns-tab-basic">
                 <div class="dns-field-grid"><div class="field"><label>DNS 监听地址</label><input v-model="network.dns.listen" class="mono" @change="saveDns(80)"></div><div class="field"><label>增强模式</label><select v-model="network.dns.enhancedMode" @change="saveDns(180)"><option value="fake-ip">Fake IP</option><option value="redir-host">Redir Host</option></select></div><div class="field"><label>Fake IP IPv4 范围</label><input v-model="network.dns.fakeIpRange" class="mono" @change="saveDns(80)"></div><div class="field"><label>Fake IP IPv6 范围</label><input v-model="network.dns.fakeIpRange6" class="mono" @change="saveDns(80)"></div><div class="field"><label>Fake IP 过滤模式</label><select v-model="network.dns.fakeIpFilterMode" @change="saveDns(180)"><option value="blacklist">黑名单</option><option value="whitelist">白名单</option><option value="rule">规则模式</option></select></div></div>
-                <div class="dns-toggle-grid"><SettingToggle v-model="network.dns.enable" title="启用 DNS" description="写入覆写配置时启用 Mihomo DNS" @change="saveDns(120)" /><SettingToggle v-model="network.dns.ipv6" title="IPv6 DNS 解析" description="是否返回 AAAA 记录；与全局 IPv6 开关不同" @change="saveDns(180)" /><SettingToggle v-model="network.dns.preferH3" title="优先使用 HTTP/3" description="DoH 优先尝试 HTTP/3" @change="saveDns(180)" /><SettingToggle v-model="network.dns.respectRules" title="DNS 遵循路由规则" description="需要配置代理节点 DNS，避免解析循环" @change="saveDns(180)" /><SettingToggle v-model="network.dns.useHosts" title="使用配置 Hosts" description="使用 Mihomo 配置中的 hosts 映射" @change="saveDns(180)" /><SettingToggle v-model="network.dns.useSystemHosts" title="使用系统 Hosts" description="读取 fnOS 的系统 hosts 文件" @change="saveDns(180)" /><SettingToggle v-model="network.dns.directNameserverFollowPolicy" title="直连 DNS 遵循策略" description="直连域名解析遵循 nameserver-policy" @change="saveDns(180)" /></div>
+                <div class="dns-toggle-grid"><SettingToggle v-model="network.dns.enable" title="启用 DNS" description="写入覆写配置时启用 Mihomo DNS" @change="saveDns(120)" /><SettingToggle v-model="network.dns.ipv6" title="IPv6 DNS 解析" description="是否返回 AAAA 记录；与全局 IPv6 开关不同" @change="saveDns(180)" /><SettingToggle v-model="network.dns.preferH3" title="优先使用 HTTP/3" description="DoH 优先尝试 HTTP/3" @change="saveDns(180)" /><SettingToggle v-model="network.dns.respectRules" title="DNS 遵循路由规则" description="需要配置代理节点 DNS，避免解析循环" @change="saveDns(180)" /><SettingToggle v-model="network.dns.useHosts" title="使用配置 Hosts" description="使用 Mihomo 配置中的 hosts 映射" @change="saveDns(180)" /><SettingToggle v-model="network.dns.useSystemHosts" title="使用系统 Hosts" :description="runtime.platform === 'docker' ? '读取容器内 hosts 文件' : '读取 fnOS 的系统 hosts 文件'" @change="saveDns(180)" /><SettingToggle v-model="network.dns.directNameserverFollowPolicy" title="直连 DNS 遵循策略" description="直连域名解析遵循 nameserver-policy" @change="saveDns(180)" /></div>
               </div>
               <div v-show="dnsTab === 'servers'" id="dns-panel-servers" class="dns-tab-panel dns-text-grid" role="tabpanel" aria-labelledby="dns-tab-servers"><div v-for="field in dnsServerFields" :key="field.key" class="field"><label>{{ field.label }}</label><textarea v-model="dnsText[field.key]" class="dns-list-input mono" @change="saveDns(80)" @input="saveDns(1000)" /></div></div>
               <div v-show="dnsTab === 'fake-ip'" id="dns-panel-fake-ip" class="dns-tab-panel dns-text-grid" role="tabpanel" aria-labelledby="dns-tab-fake-ip"><div class="field"><label>Fake IP 过滤</label><textarea v-model="dnsText.fakeIpFilter" class="dns-list-input mono" @change="saveDns(80)" @input="saveDns(1000)" /></div><div class="field"><label>域名服务器策略</label><textarea v-model="dnsText.nameserverPolicy" class="dns-list-input mono" placeholder="+.example.com = server1; server2" @change="saveDns(80)" @input="saveDns(1000)" /></div></div>
@@ -617,11 +620,11 @@ onMounted(initialize)
               <div class="core-mode-row">
                 <div class="section-head"><div><h2 id="core-mode-label">Core 运行方式</h2><p>切换后保存选择，下次启动时沿用。</p></div></div>
                 <div class="core-mode-controls">
-                  <select id="core-mode" v-model="selectedCoreMode" aria-labelledby="core-mode-label" :disabled="Boolean(busy)"><option value="managed">Manager 托管</option><option value="external">外部 Mihomo</option></select>
+                  <select id="core-mode" v-model="selectedCoreMode" aria-labelledby="core-mode-label" :disabled="Boolean(busy)"><option value="managed">Manager 托管</option><option v-if="runtime.capabilities.externalCore" value="external">外部 Mihomo</option></select>
                   <button :disabled="Boolean(busy) || system.available === false" @click="switchCoreMode">{{ busy === 'core-mode' ? '正在切换…' : '应用' }}</button>
                 </div>
               </div>
-            <p class="hint">托管：由应用管理内核启停。外部：连接本机已有 Mihomo，并停止托管内核。</p>
+            <p class="hint">{{ runtime.platform === 'docker' ? '由应用管理容器内 Mihomo 的启动、停止和更新。' : '托管：由应用管理内核启停。外部：连接本机已有 Mihomo，并停止托管内核。' }}</p>
             <div v-if="coreModeError || system.bootstrap?.error" class="local-warning">{{ coreModeError || system.bootstrap?.error }}</div>
             <PortConflictHelp :managed="system.mode === 'managed'" @updated="load" :error="coreModeError || system.bootstrap?.error || ''" />
             <div class="core-startup-preference">
@@ -705,7 +708,8 @@ onMounted(initialize)
           </div>
 
           <div v-else class="settings-accordion-panel update-panel">
-            <div class="update-row app-update-row">
+ <div v-if="runtime.platform === 'docker'" class="section"><h2>Docker 镜像更新</h2><p>当前版本 v{{ runtime.version }}。拉取新镜像并重新创建容器，保留数据卷即可升级。</p></div>
+            <div v-if="runtime.capabilities.appUpdates" class="update-row app-update-row">
               <div class="app-update-identity">
                 <h2>Clash for fnOS</h2>
                 <span class="update-meta">{{ platformLabel(appUpdate.platform) }}</span>
@@ -737,7 +741,7 @@ onMounted(initialize)
                 </a>
               </div>
             </div>
-            <div class="app-update-preference">
+            <div v-if="runtime.capabilities.appUpdates" class="app-update-preference">
               <span class="app-update-preference-copy"><strong>更新提示</strong><small>启动时自动检查，有新版本时显示提示</small></span>
               <label class="switch" title="启用更新提示"><input v-model="manager.notifyAppUpdates" aria-label="启用更新提示" type="checkbox" @change="saveAppUpdatePreference"><span /></label>
             </div>

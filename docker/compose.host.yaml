@@ -1,0 +1,22 @@
+# Standalone alternative; do not combine with compose.yaml.
+services:
+  clash:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: clash-for-fnos:local
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 40s
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      LISTEN_ADDR: ${LISTEN_ADDR:-:8080}
+      APP_AUTH_USER: ${APP_AUTH_USER:-admin}
+      APP_AUTH_PASSWORD: ${APP_AUTH_PASSWORD:?Set a password of at least 12 characters in .env}
+      APP_NETWORK_SCOPE: host
+    volumes:
+      - ./data:/data

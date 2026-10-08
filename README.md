@@ -596,3 +596,7 @@ Clash for fnos 项目源码使用 [GNU General Public License v3.0](LICENSE)（`
 如果这个项目对你有帮助，欢迎 Star ⭐
 
 </div>
+
+## Docker 开发版
+
+同一套代码支持 Docker 部署，提供普通代理和 Linux 宿主 TUN 两种配置。构建、认证、数据卷及验证范围见 [Docker 部署说明](docker/README.md)。当前尚未发布镜像，真实 fnOS 宿主 TUN 仍需验收。

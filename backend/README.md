@@ -51,3 +51,11 @@ fnOS Gateway -> Go web service -> Go Root Helper -> Mihomo/system
 第 6 阶段已完成：独立 Go Root Helper 已覆盖配置事务、Core 启动与更新、网络/TUN/DNS、系统代理和图标白名单接口；内核更新由 Helper 再次核对官方 Release、大小、SHA-256 与可执行版本。
 
 第 7 阶段已完成：Node 兼容服务、旧 JavaScript 后端与 `nodejs_v22` 运行依赖已移除，fnOS 生命周期只启动 Go Web 与 Go Root Helper；发布版本统一由 `fpk/manifest` 提供。
+
+## Docker 运行环境
+
+`internal/runtimeenv` 统一配置目录、状态目录、程序目录和导入目录；未设置通用变量时保留原有 fnOS 变量与默认值。Web 可通过 `LISTEN_ADDR` 使用 TCP，原生 FPK 继续使用公开 Unix Socket。
+
+Docker 的 Web 使用独立 Cookie 登录，Helper 内部 Socket 与托管内核管理仍沿用原有权限分离和事务。`GET /api/runtime` 返回部署环境与功能能力，前端据此适配宿主功能。Docker Helper 不修改代理环境文件或飞牛图标，TUN 权限读取 Core 的实际 Linux capabilities。
+
+镜像构建、部署、版本对账和验证边界见 [Docker 部署说明](../docker/README.md)。

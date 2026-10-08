@@ -10,7 +10,6 @@ import (
 	"io"
 	"log"
 	"mime"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,6 +28,7 @@ import (
 	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomo"
 	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomolog"
 	"github.com/chenpingonline/Clash-for-fnos/backend/internal/privileged"
+	"github.com/chenpingonline/Clash-for-fnos/backend/internal/runtimeenv"
 )
 
 const appName = "clash-for-fnos"
@@ -36,6 +36,11 @@ const appName = "clash-for-fnos"
 var version = "dev"
 
 type config struct {
+	platform           string
+	listenAddr         string
+	authUser           string
+	authPassword       string
+	authSecure         bool
 	socketPath         string
 	publicDir          string
 	gateway            string
@@ -60,6 +65,7 @@ type config struct {
 }
 
 type gateway struct {
+	loginLimiter       loginLimiter
 	config             config
 	coreUpdateMu       sync.Mutex
 	selectionMu        sync.Mutex
@@ -98,25 +104,30 @@ func env(name, fallback string) string {
 
 func loadConfig() config {
 	return config{
+		platform:           runtimeenv.Platform(),
+		listenAddr:         env("LISTEN_ADDR", ""),
+		authUser:           env("APP_AUTH_USER", "admin"),
+		authPassword:       os.Getenv("APP_AUTH_PASSWORD"),
+		authSecure:         os.Getenv("APP_AUTH_COOKIE_SECURE") == "1",
 		socketPath:         env("SOCKET_PATH", "/tmp/clash-for-fnos.sock"),
 		publicDir:          env("PUBLIC_DIR", "./public"),
-		gateway:            strings.TrimSuffix(env("GATEWAY_PREFIX", "/app/"+appName), "/"),
-		settingsFile:       filepath.Join(env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc"), "settings.json"),
-		selectedFile:       filepath.Join(env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc"), "selected.json"),
-		managedConfigFile:  filepath.Join(env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc"), "config.yaml"),
+		gateway:            gatewayPrefix(),
+		settingsFile:       filepath.Join(runtimeenv.EtcDir(), "settings.json"),
+		selectedFile:       filepath.Join(runtimeenv.EtcDir(), "selected.json"),
+		managedConfigFile:  filepath.Join(runtimeenv.EtcDir(), "config.yaml"),
 		privilegedSocket:   env("PRIV_SOCKET_PATH", "/tmp/clash-for-fnos-priv.sock"),
-		mihomoLogFile:      filepath.Join(env("TRIM_PKGVAR", "/tmp/clash-for-fnos-var"), "mihomo.log"),
-		configMetaFile:     filepath.Join(env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc"), "config-meta.json"),
-		backupDir:          filepath.Join(env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc"), "backups"),
-		profilesFile:       filepath.Join(env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc"), "profiles.json"),
-		profileDir:         filepath.Join(env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc"), "profiles"),
-		authorizedFile:     filepath.Join(env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc"), "authorized-paths.txt"),
-		accessiblePaths:    os.Getenv("TRIM_DATA_ACCESSIBLE_PATHS"),
-		coreStageDir:       filepath.Join(env("TRIM_PKGVAR", "/tmp/clash-for-fnos-var"), "core-stage"),
-		trafficTotalsFile:  filepath.Join(env("TRIM_PKGVAR", "/tmp/clash-for-fnos-var"), "traffic-totals.json"),
-		trafficHistoryFile: filepath.Join(env("TRIM_PKGVAR", "/tmp/clash-for-fnos-var"), "traffic-history.json"),
-		rulesSnapshotFile:  filepath.Join(env("TRIM_PKGVAR", "/tmp/clash-for-fnos-var"), "rules-snapshot.json"),
-		ruleStateFile:      filepath.Join(env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc"), "rule-state.json"),
+		mihomoLogFile:      filepath.Join(runtimeenv.VarDir(), "mihomo.log"),
+		configMetaFile:     filepath.Join(runtimeenv.EtcDir(), "config-meta.json"),
+		backupDir:          filepath.Join(runtimeenv.EtcDir(), "backups"),
+		profilesFile:       filepath.Join(runtimeenv.EtcDir(), "profiles.json"),
+		profileDir:         filepath.Join(runtimeenv.EtcDir(), "profiles"),
+		authorizedFile:     filepath.Join(runtimeenv.EtcDir(), "authorized-paths.txt"),
+		accessiblePaths:    runtimeenv.AccessiblePaths(),
+		coreStageDir:       filepath.Join(runtimeenv.VarDir(), "core-stage"),
+		trafficTotalsFile:  filepath.Join(runtimeenv.VarDir(), "traffic-totals.json"),
+		trafficHistoryFile: filepath.Join(runtimeenv.VarDir(), "traffic-history.json"),
+		rulesSnapshotFile:  filepath.Join(runtimeenv.VarDir(), "rules-snapshot.json"),
+		ruleStateFile:      filepath.Join(runtimeenv.EtcDir(), "rule-state.json"),
 		exitLocationURL:    env("CLASH_EXIT_LOCATION_URL", "https://ipwho.is/?lang=zh-CN&fields=success,message,ip,country,country_code,region,city,timezone"),
 		releaseRepo:        env("CLASH_FOR_FNOS_RELEASE_REPO", "chenpingonline/Clash-for-fnos"),
 	}
@@ -150,7 +161,7 @@ func stripPrefix(requestPath, prefix string) string {
 }
 
 func (g *gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == g.config.gateway {
+	if g.config.gateway != "" && r.URL.Path == g.config.gateway {
 		target := g.config.gateway + "/"
 		if r.URL.RawQuery != "" {
 			target += "?" + r.URL.RawQuery
@@ -165,6 +176,19 @@ func (g *gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"ok": true, "app": appName, "version": version,
 			"backend": "go",
 		})
+		return
+	}
+	if g.handleAuth(w, r, requestPath) {
+		return
+	}
+	if !g.authorize(w, r) {
+		return
+	}
+	if requestPath == "/api/runtime" && r.Method == http.MethodGet {
+		writeJSON(w, 200, g.runtimeCapabilities())
+		return
+	}
+	if g.config.platform == "docker" && g.handleUnsupportedDocker(w, r, requestPath) {
 		return
 	}
 	if g.handleLogs(w, r, requestPath) {
@@ -1392,17 +1416,16 @@ func removeStaleSocket(socketPath string) error {
 
 func run() error {
 	cfg := loadConfig()
-	if err := removeStaleSocket(cfg.socketPath); err != nil {
+	if err := configureAuth(&cfg); err != nil {
 		return err
 	}
-	listener, err := net.Listen("unix", cfg.socketPath)
+	listener, err := listenWeb(cfg)
 	if err != nil {
 		return err
 	}
 	defer listener.Close()
-	defer os.Remove(cfg.socketPath)
-	if err := os.Chmod(cfg.socketPath, 0o660); err != nil {
-		return err
+	if cfg.listenAddr == "" {
+		defer os.Remove(cfg.socketPath)
 	}
 
 	gateway := newGateway(cfg)
@@ -1442,7 +1465,11 @@ func run() error {
 		_ = server.Shutdown(shutdownContext)
 	}()
 
-	log.Printf("Clash for fnOS %s Go gateway started on %s", version, cfg.socketPath)
+	address := cfg.socketPath
+	if cfg.listenAddr != "" {
+		address = cfg.listenAddr
+	}
+	log.Printf("Clash manager %s (%s) started on %s", version, cfg.platform, address)
 	err = server.Serve(listener)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil

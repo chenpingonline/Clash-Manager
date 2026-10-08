@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  platform: 'fnos',
   beforeUnmount: undefined as (() => void) | undefined,
   mounted: undefined as (() => void) | undefined,
   getPlatformConfig: vi.fn(),
   on: vi.fn(),
   off: vi.fn(),
 }))
+
+vi.mock('@/services/runtime', () => ({ runtime: { get value() { return { platform: mocks.platform } } } }))
 
 vi.mock('vue', () => ({
   onMounted: (callback: () => void) => { mocks.mounted = callback },
@@ -37,6 +40,7 @@ describe('useFnosTheme', () => {
   }
 
   beforeEach(() => {
+    mocks.platform = 'fnos'
     mocks.beforeUnmount = undefined
     mocks.mounted = undefined
     mocks.getPlatformConfig.mockReset()
@@ -75,6 +79,16 @@ describe('useFnosTheme', () => {
 
     expect(root.dataset.theme).toBe('light')
     expect(root.dataset.fnosThemeMode).toBe('system')
+    expect(mocks.on).not.toHaveBeenCalled()
+  })
+
+  it('uses browser preferences in Docker without contacting the host SDK', () => {
+    mocks.platform = 'docker'
+    media.matches = true
+    useFnosTheme()
+    mocks.mounted?.()
+    expect(root.dataset.theme).toBe('dark')
+    expect(mocks.getPlatformConfig).not.toHaveBeenCalled()
     expect(mocks.on).not.toHaveBeenCalled()
   })
 

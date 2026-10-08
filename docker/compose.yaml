@@ -1,0 +1,19 @@
+services:
+  clash:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: clash-for-fnos:local
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 40s
+    environment:
+      APP_AUTH_USER: ${APP_AUTH_USER:-admin}
+      APP_AUTH_PASSWORD: ${APP_AUTH_PASSWORD:?Set a password of at least 12 characters in .env}
+      APP_NETWORK_SCOPE: container
+    ports:
+      - "${WEB_BIND_IP:-127.0.0.1}:8080:8080"
+      - "${PROXY_BIND_IP:-127.0.0.1}:7890:7890/tcp"
+      - "${PROXY_BIND_IP:-127.0.0.1}:7890:7890/udp"
+    volumes:
+      - ./data:/data

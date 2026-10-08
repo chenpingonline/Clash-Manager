@@ -8,6 +8,8 @@ import { openStatusStream } from '@/services/status-stream'
 import { notify } from '@/services/toast'
 import type { NetworkSettingsResponse, ProxyEnvironmentManagement, ProxyEnvironmentResponse, RuntimeConfig, RuntimeMode, TunSetting } from '@/types/api'
 
+import { runtime } from '@/services/runtime'
+
 type TunForm = Required<TunSetting>
 type TunOperationStatus = { active?: boolean; enabled?: boolean; stage?: string; message?: string }
 
@@ -60,7 +62,7 @@ const tunStatus = computed(() => {
 const tunDescription = computed(() => {
   if (tunError.value) return tunError.value
   if (!tunSupported.value && !tunEnabled.value) return tunCapability.value.message || '当前环境暂不支持 TUN'
-  return '接管 fnOS 系统流量'
+  return tunCapability.value.message || (runtime.value.platform === 'docker' ? '接管当前网络范围内的流量' : '接管 fnOS 系统流量')
 })
 async function toggle(event: Event) {
   const next = (event.target as HTMLInputElement).checked
@@ -180,7 +182,7 @@ onUnmounted(() => {
       <span v-if="tunSaving" class="dashboard-tun-progress" role="status" aria-live="polite"><i aria-hidden="true" />{{ tunProgress }}</span>
     </div>
     <div class="dashboard-runtime-controls">
-      <div class="dashboard-runtime-segment dashboard-runtime-proxy">
+      <div v-if="runtime.capabilities.hostProxyEnvironment" class="dashboard-runtime-segment dashboard-runtime-proxy">
         <div class="dashboard-runtime-toggle">
           <span class="dashboard-runtime-label"><span>系统代理</span><DashboardSettingsButton label="系统代理设置" @click="proxySettingsOpen = true" /></span>
           <label class="switch"><input type="checkbox" :checked="enabled" :disabled="saving || !management || (!online && !enabled)" aria-label="系统代理" @change="toggle"><span /></label>
@@ -202,10 +204,11 @@ onUnmounted(() => {
   </section>
   <div v-else class="runtime-control-grid">
     <div class="card section runtime-control-card system-proxy-card">
-      <div class="runtime-control-head">
+      <div v-if="runtime.capabilities.hostProxyEnvironment" class="runtime-control-head">
         <div><h2>系统代理</h2><p :class="enabled ? 'good-text' : 'muted-text'">{{ enabled ? '已开启' : '已关闭' }}</p></div>
         <label class="runtime-control-switch"><span class="switch"><input type="checkbox" :checked="enabled" :disabled="saving || !management || (!online && !enabled)" aria-label="系统代理" @change="toggle"><span /></span></label>
       </div>
+      <h2 v-if="!runtime.capabilities.hostProxyEnvironment">运行模式</h2>
       <div class="mode-row" :aria-label="`当前运行模式：${runtimeMode}`">
         <button v-for="item in modes" :key="item.key" class="mode-btn" :class="{ active: online && runtimeMode === item.key }" :disabled="saving || !online" @click="changeMode(item.key)">{{ item.label }}</button>
       </div>
@@ -220,6 +223,6 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
-  <SystemProxySettingsModal v-if="variant === 'dashboard'" :open="proxySettingsOpen" :initial-management="management" @close="proxySettingsOpen = false" @saved="proxySettingsSaved" />
+  <SystemProxySettingsModal v-if="variant === 'dashboard' && runtime.capabilities.hostProxyEnvironment" :open="proxySettingsOpen" :initial-management="management" @close="proxySettingsOpen = false" @saved="proxySettingsSaved" />
   <TunSettingsModal v-if="variant === 'dashboard'" :open="tunSettingsOpen" :initial-settings="tunSettings" @close="tunSettingsOpen = false" @saved="tunSettingsSaved" />
 </template>

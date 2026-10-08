@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/chenpingonline/Clash-for-fnos/backend/internal/configyaml"
+	"github.com/chenpingonline/Clash-for-fnos/backend/internal/runtimeenv"
 	"gopkg.in/yaml.v3"
 	"io"
 	"net"
@@ -228,7 +229,11 @@ func (h *helper) ensureManagedConfig() error {
 		return nil
 	}
 	secret := randomID()
-	content := fmt.Sprintf("mixed-port: 7890\nallow-lan: false\nmode: rule\nlog-level: info\nexternal-controller: 127.0.0.1:9090\nsecret: %q\n", secret)
+	allowLan := runtimeenv.Docker() && runtimeenv.Value("APP_NETWORK_SCOPE", "container") != "host"
+	content := fmt.Sprintf("mixed-port: 7890\nallow-lan: %t\nmode: rule\nlog-level: info\nexternal-controller: 127.0.0.1:9090\nsecret: %q\n", allowLan, secret)
+	if runtimeenv.Docker() {
+		content += "tun:\n  enable: false\n  stack: mixed\n  auto-route: true\n  auto-redirect: true\n  auto-detect-interface: true\n"
+	}
 	return atomicWrite(h.config.managedConfig, []byte(content), 0o640)
 }
 
@@ -578,6 +583,9 @@ func (h *helper) ensureBootstrapLocked(ctx context.Context, force bool, requeste
 	}
 	if external == nil {
 		external = h.externalInstallation()
+	}
+	if runtimeenv.Docker() && requested == "external" {
+		return nil, fail(409, "Docker 版仅管理容器内托管 Core，外部 Controller 可在连接设置中配置")
 	}
 	mode := requested
 	if mode == "" {
@@ -1515,6 +1523,13 @@ func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 
 func resolveTunCapability(proc *processInfo, tunDevice bool, effectiveUID int) map[string]any {
 	permission := proc != nil && (proc.Managed || effectiveUID == 0)
+	if runtimeenv.Docker() {
+		permission = false
+		if proc != nil {
+			body, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", proc.PID))
+			permission = err == nil && hasNetAdmin(string(body))
+		}
+	}
 	supported := tunDevice && permission
 	reason, message := "", "当前 Mihomo 具备 TUN 所需权限，可直接启用"
 	if !tunDevice {
@@ -1522,9 +1537,16 @@ func resolveTunCapability(proc *processInfo, tunDevice bool, effectiveUID int) m
 	} else if proc == nil {
 		reason, message = "core-not-running", "当前未检测到运行中的 Mihomo Core"
 	} else if !permission {
-		reason, message = "permission-denied", "当前 Mihomo 不是 root 且没有可管理的 TUN 权限"
+		reason, message = "permission-denied", "当前 Mihomo 缺少 TUN 权限；Docker 部署需要添加 NET_ADMIN"
 	}
-	return map[string]any{"supported": supported, "tunDevice": tunDevice, "permission": permission, "reason": reason, "message": message}
+	scope := "host"
+	if runtimeenv.Docker() {
+		scope = runtimeenv.Value("APP_NETWORK_SCOPE", "container")
+	}
+	if supported && scope != "host" {
+		message = "TUN 仅作用于容器网络；接管宿主需要使用 Host 网络部署"
+	}
+	return map[string]any{"scope": scope, "supported": supported, "tunDevice": tunDevice, "permission": permission, "reason": reason, "message": message}
 }
 
 func yamlScalarValue(raw, key string) (string, bool) {

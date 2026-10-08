@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/chenpingonline/Clash-for-fnos/backend/internal/runtimeenv"
 	"io"
 	"log"
 	"net"
@@ -80,9 +81,9 @@ func env(name, fallback string) string {
 }
 
 func loadConfig() helperConfig {
-	etcDir := env("TRIM_PKGETC", "/tmp/clash-for-fnos-etc")
-	varDir := env("TRIM_PKGVAR", "/tmp/clash-for-fnos-var")
-	appDir := env("TRIM_APPDEST", filepath.Clean(filepath.Join(filepath.Dir(os.Args[0]), "..", "..")))
+	etcDir := runtimeenv.EtcDir()
+	varDir := runtimeenv.VarDir()
+	appDir := runtimeenv.AppDir()
 	managedCoreDir := filepath.Join(varDir, "managed-core")
 	managedConfigDir := filepath.Join(etcDir, "mihomo")
 	return helperConfig{
@@ -103,6 +104,10 @@ func newHelper(cfg helperConfig) *helper {
 
 func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	if runtimeenv.Docker() && (strings.HasPrefix(path, "/system/proxy-environment") || strings.HasPrefix(path, "/app/icon/")) {
+		writeJSON(w, 409, map[string]string{"error": "此功能仅适用于 fnOS 原生应用"})
+		return
+	}
 	if r.Method == http.MethodGet {
 		var result any
 		var err error

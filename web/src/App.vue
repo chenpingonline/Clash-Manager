@@ -17,6 +17,8 @@ import { api, APP_PREFIX } from '@/services/api'
 import { isBrowserHistoryShortcut } from '@/services/navigation'
 import type { AppIconsResponse } from '@/types/api'
 
+import { runtime } from '@/services/runtime'
+
 type PageName = 'dashboard' | 'proxies' | 'profiles' | 'config' | 'rules' | 'connections' | 'logs' | 'settings'
 const pages: Array<{ name: PageName; label: string; component: Component }> = [
   { name: 'dashboard', label: '仪表盘', component: DashboardPage },
@@ -106,9 +108,14 @@ function syncIcon(iconId: string) {
   link.href = `${location.origin}${APP_PREFIX}/icons/${iconId}_64.png?v=${Date.now()}`
 }
 
+async function logout() {
+  await api('/api/auth/logout', { method: 'POST' })
+  window.dispatchEvent(new CustomEvent('clash-auth-expired', { detail: { loggedOut: true } }))
+}
+
 async function checkAppUpdateSilently() {
   try {
-    await initializeAppUpdateNotice(appUpdateController.signal)
+    if (runtime.value.capabilities.appUpdates) await initializeAppUpdateNotice(appUpdateController.signal)
   } catch {
     // 启动检查不打扰页面使用；用户仍可在设置中手动重试。
   }
@@ -123,7 +130,7 @@ onMounted(() => {
   refresh().catch(() => undefined)
   void checkAppUpdateSilently()
   timer = window.setInterval(() => refresh().catch(() => undefined), 30_000)
-  api<AppIconsResponse>('/api/app/icons').then(value => syncIcon(value.selected || value.defaultId || 'cat-orbit')).catch(() => syncIcon('cat-orbit'))
+  if (runtime.value.capabilities.appIcons) api<AppIconsResponse>('/api/app/icons').then(value => syncIcon(value.selected || value.defaultId || 'cat-orbit')).catch(() => syncIcon('cat-orbit'))
 })
 onBeforeUnmount(() => {
   window.removeEventListener('hashchange', onHashChange)
@@ -157,7 +164,7 @@ onBeforeUnmount(() => {
   <main class="main">
     <header class="topbar">
       <div class="topbar-title"><h1>{{ activePage.label }}</h1><div id="page-title-meta" class="page-title-meta" /></div>
-      <div class="top-actions"><div id="page-actions" class="page-actions" /><button class="ghost" :disabled="pageRefreshing" :aria-busy="pageRefreshing" @click="refreshActivePage">{{ pageRefreshing ? '刷新中…' : '刷新' }}</button></div>
+      <div class="top-actions"><button v-if="runtime.platform === 'docker'" class="ghost" @click="logout">退出登录</button><div id="page-actions" class="page-actions" /><button class="ghost" :disabled="pageRefreshing" :aria-busy="pageRefreshing" @click="refreshActivePage">{{ pageRefreshing ? '刷新中…' : '刷新' }}</button></div>
     </header>
     <section class="content" :class="{ 'config-content': current === 'config', 'logs-content': current === 'logs', 'rules-content': current === 'rules' }" @scroll.passive="markScrollActivity">
       <component :is="activePage.component" :key="`${current}-${refreshKey}`" ref="activePageRef" />
