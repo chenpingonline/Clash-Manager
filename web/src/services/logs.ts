@@ -1,11 +1,12 @@
+import { getLocale } from './i18n'
 import type { LogItem } from '@/types/api'
 
 export interface NormalizedLog { time: string; level: string; message: string }
 
 export function displayLogTime(value: unknown): string {
-  if (!value) return new Date().toLocaleTimeString()
+  if (!value) return new Date().toLocaleTimeString(getLocale())
   const date = new Date(value as string | number)
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleTimeString()
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleTimeString(getLocale())
 }
 
 export function normalizeLog(item: LogItem): NormalizedLog {

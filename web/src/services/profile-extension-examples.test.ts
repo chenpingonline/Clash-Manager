@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { setLanguage } from './i18n'
+import { beforeEach, afterEach, describe, expect, it } from 'vitest'
 import { runInNewContext } from 'node:vm'
 import { parseDocument } from 'yaml'
 import { extensionExamples } from './profile-extension-examples'
 import { parseSequence, sequenceEntrySummary } from './profile-sequences'
+
+beforeEach(() => setLanguage('zh-CN'))
+afterEach(() => setLanguage('system'))
 
 describe('copyable extension examples', () => {
   it('provides valid enhancement YAML for each sequence kind with the correct deletion identity', () => {
@@ -38,6 +42,10 @@ describe('node and group table summaries', () => {
   it('shows the IPv6 endpoint without credentials, UUIDs or transport URLs', () => {
     expect(sequenceEntrySummary({ name: 'Test', type: 'trojan', server: '2001:db8::1', port: 443, password: 'secret', uuid: 'private-id', 'ws-opts': { path: '/private' } }, 'proxies')).toBe('[2001:db8::1]:443')
     expect(sequenceEntrySummary({ name: 'Test', type: 'direct' }, 'proxies')).toBe('—')
+  })
+  it('preserves names in English group summaries', () => {
+    setLanguage('en-US')
+    expect(sequenceEntrySummary({ name: 'Test', type: 'select', proxies: ['规则'], use: ['我的集合'] }, 'groups')).toBe('规则, Providers: 我的集合')
   })
   it('bounds large group member summaries while retaining member/provider meaning', () => {
     expect(sequenceEntrySummary({ name: 'Test', type: 'select', proxies: ['DIRECT'], use: ['remote'] }, 'groups')).toBe('DIRECT、集合：remote')

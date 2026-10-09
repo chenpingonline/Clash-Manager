@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { runtime } from '@/services/runtime'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PortConflictHelp from '@/components/PortConflictHelp.vue'
@@ -640,34 +642,34 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AsyncState :loading="loading" :error="error">
+  <AsyncState :loading="loading" :error="t(error)">
     <template v-if="status && !status.online">
       <div class="card section bootstrap-card">
         <div class="section-head">
-          <div><h2>{{ bootstrapActive ? '正在准备 Mihomo Core' : downloadAction ? '需要下载 Mihomo Core' : status.bootstrap?.state === 'error' ? 'Mihomo Core 启用失败' : 'Mihomo Core 未连接' }}</h2><p v-if="bootstrapActive || downloadAction">{{ status.bootstrap?.message || 'Manager 正在检查本机 Mihomo' }}</p></div>
-          <select v-model="selectedCoreMode" class="bootstrap-mode-select" aria-label="Core 运行方式" :disabled="working || retryingCore" @change="coreModeEdited = true"><option value="managed">Manager 托管</option><option value="external">外部 Core</option></select>
+          <div><h2>{{ t(bootstrapActive ? '正在准备 Mihomo Core' : downloadAction ? '需要下载 Mihomo Core' : status.bootstrap?.state === 'error' ? 'Mihomo Core 启用失败' : 'Mihomo Core 未连接') }}</h2><p v-if="bootstrapActive || downloadAction">{{ t(status.bootstrap?.message || 'Manager 正在检查本机 Mihomo') }}</p></div>
+          <select v-model="selectedCoreMode" class="bootstrap-mode-select" :aria-label="t('Core 运行方式')" :disabled="working || retryingCore" @change="coreModeEdited = true"><option value="managed">{{ t("Manager 托管") }}</option><option value="external">{{ t("外部 Core") }}</option></select>
         </div>
-        <p class="hint">{{ downloadAction ? 'all 通用安装包不包含 Core。点击“下载 Core”后，Manager 将下载并校验当前设备架构匹配的官方版本，安装完成后自动启动和检测。' : '切换 Mihomo Core 管理模式后请点击“重新检测”' }}</p>
+        <p class="hint">{{ t(downloadAction ? 'all 通用安装包不包含 Core。点击“下载 Core”后，Manager 将下载并校验当前设备架构匹配的官方版本，安装完成后自动启动和检测。' : '切换 Mihomo Core 管理模式后请点击“重新检测”') }}</p>
         <template v-if="bootstrapActive">
           <div v-if="status.bootstrap?.state === 'downloading'" class="bootstrap-progress"><span :style="{ width: `${Math.max(0, Math.min(100, Number(status.bootstrap?.progress || 0)))}%` }" /></div>
-          <div class="hint">{{ status.bootstrap?.delivery === 'online' ? '当前是 all 通用安装包，Manager 会从官方 Release 下载并校验匹配的 Core。' : '当前架构安装包已内置官方 Mihomo Core，可本地校验后启用。' }}</div>
+          <div class="hint">{{ t(status.bootstrap?.delivery === 'online' ? '当前是 all 通用安装包，Manager 会从官方 Release 下载并校验匹配的 Core。' : '当前架构安装包已内置官方 Mihomo Core，可本地校验后启用。') }}</div>
         </template>
         <template v-else>
-          <div v-if="!downloadAction" class="local-warning">{{ retryCoreError || status.bootstrap?.error || (status.bootstrap?.state === 'stopped' ? status.bootstrap.message : status.error) || '未检测到可用 Core' }}</div>
-          <PortConflictHelp v-if="!downloadAction" :managed="(status.system?.coreMode || status.bootstrap?.mode) === 'managed'" @updated="load" :error="retryCoreError || status.bootstrap?.error || status.error || ''" />
+          <div v-if="!downloadAction" class="local-warning">{{ t(retryCoreError || status.bootstrap?.error || (status.bootstrap?.state === 'stopped' ? status.bootstrap.message : status.error) || '未检测到可用 Core') }}</div>
+          <PortConflictHelp v-if="!downloadAction" :managed="(status.system?.coreMode || status.bootstrap?.mode) === 'managed'" @updated="load" :error="t(retryCoreError || status.bootstrap?.error || status.error || '')" />
 
         </template>
-        <div class="actions core-mode-actions"><button class="small" :disabled="retryingCore || working" @click="retryBootstrap">{{ bootstrapActionText }}</button><button v-if="canStopCoreDownload" class="danger small" :disabled="cancelingCoreDownload" @click="stopCoreDownload">{{ cancelingCoreDownload ? '正在停止…' : '停止下载' }}</button><a class="ghost btn small" href="#settings?section=core">打开设置</a><span v-if="operationMessage" class="inline-operation-state" :class="{ 'error-text': retryCoreError }" role="status" aria-live="polite">{{ operationMessage }}</span></div>
+        <div class="actions core-mode-actions"><button class="small" :disabled="retryingCore || working" @click="retryBootstrap">{{ t(bootstrapActionText) }}</button><button v-if="canStopCoreDownload" class="danger small" :disabled="cancelingCoreDownload" @click="stopCoreDownload">{{ t(cancelingCoreDownload ? '正在停止…' : '停止下载') }}</button><a class="ghost btn small" href="#settings?section=core">{{ t("打开设置") }}</a><span v-if="operationMessage" class="inline-operation-state" :class="{ 'error-text': retryCoreError }" role="status" aria-live="polite">{{ t(operationMessage) }}</span></div>
         <div v-if="manualCoreAvailable" class="core-manual-fallback">
-          <div class="core-manual-copy"><strong>手动下载安装</strong><span>自动下载较慢或失败时，可下载当前设备架构对应的官方 `.gz` 文件，再上传安装。</span></div>
+          <div class="core-manual-copy"><strong>{{ t("手动下载安装") }}</strong><span>{{ t("自动下载较慢或失败时，可下载当前设备架构对应的官方 `.gz` 文件，再上传安装。") }}</span></div>
           <div class="actions core-manual-actions">
-            <a class="ghost btn" :href="manualCoreDownloadURL" target="_blank" rel="noopener noreferrer">{{ manualCoreLoading ? '正在获取链接…' : manualCoreInfo?.asset?.url ? '下载官方 Core' : '打开官方 Release' }}</a>
-            <button class="ghost" :disabled="uploadingCore" @click="chooseCoreFile">{{ uploadingCore ? '正在上传安装…' : '上传 Core 文件' }}</button>
+            <a class="ghost btn" :href="manualCoreDownloadURL" target="_blank" rel="noopener noreferrer">{{ t(manualCoreLoading ? '正在获取链接…' : manualCoreInfo?.asset?.url ? '下载官方 Core' : '打开官方 Release') }}</a>
+            <button class="ghost" :disabled="uploadingCore" @click="chooseCoreFile">{{ t(uploadingCore ? '正在上传安装…' : '上传 Core 文件') }}</button>
             <input ref="coreFileInput" class="hidden" type="file" accept=".gz,application/gzip,application/x-gzip" @change="uploadCoreFile">
           </div>
-          <small v-if="manualCoreInfo?.asset?.name" class="core-manual-file">当前设备：{{ manualCoreInfo.target?.arch || '未知架构' }} · 文件：{{ manualCoreInfo.asset.name }} · {{ formatBytes(manualCoreInfo.asset.size) }}</small>
-          <small v-else-if="manualCoreError" class="core-manual-file error-text">暂时无法生成直链，请从官方 Release 页面选择当前设备架构文件。{{ manualCoreError }}</small>
-          <small v-if="retryCoreError" class="core-manual-file error-text">{{ retryCoreError }}</small>
+          <small v-if="manualCoreInfo?.asset?.name" class="core-manual-file">{{ t("当前设备：") }}{{ t(manualCoreInfo.target?.arch || '未知架构') }} {{ t("· 文件：") }}{{ manualCoreInfo.asset.name }} · {{ t(formatBytes(manualCoreInfo.asset.size)) }}</small>
+          <small v-else-if="manualCoreError" class="core-manual-file error-text">{{ t("暂时无法生成直链，请从官方 Release 页面选择当前设备架构文件。") }}{{ t(manualCoreError) }}</small>
+          <small v-if="retryCoreError" class="core-manual-file error-text">{{ t(retryCoreError) }}</small>
         </div>
       </div>
     </template>
@@ -675,19 +677,19 @@ onBeforeUnmount(() => {
     <template v-else-if="status">
       <section class="card dashboard-connection-panel" aria-labelledby="connection-overview-title">
         <div class="dashboard-overview-head">
-          <h2 id="connection-overview-title"><a class="dashboard-section-link" href="#proxies"><span class="dashboard-section-title">当前连接</span><span class="dashboard-title-arrow" aria-hidden="true" /></a></h2>
-          <span class="dashboard-online"><span class="core-dot online" />已连接</span>
+          <h2 id="connection-overview-title"><a class="dashboard-section-link" href="#proxies"><span class="dashboard-section-title">{{ t("当前连接") }}</span><span class="dashboard-title-arrow" aria-hidden="true" /></a></h2>
+          <span class="dashboard-online"><span class="core-dot online" />{{ t("已连接") }}</span>
         </div>
 
         <div class="dashboard-route-grid">
           <div class="dashboard-field dashboard-inline-field">
-            <span class="dashboard-field-prefix">代理组</span>
+            <span class="dashboard-field-prefix">{{ t("代理组") }}</span>
             <div ref="groupMenu" class="dashboard-node-picker" @keydown.esc.stop="closeGroupMenu">
-              <button class="dashboard-node-trigger" type="button" :disabled="groupSelectDisabled" aria-label="当前代理组" aria-haspopup="listbox" :aria-expanded="groupMenuOpen" aria-controls="dashboard-group-menu" @click="toggleGroupMenu">
-                <span class="dashboard-node-trigger-name" :title="currentGroup?.name || ''">{{ currentGroup?.name || (proxyError ? '更新失败' : '—') }}</span>
+              <button class="dashboard-node-trigger" type="button" :disabled="groupSelectDisabled" :aria-label="t('当前代理组')" aria-haspopup="listbox" :aria-expanded="groupMenuOpen" aria-controls="dashboard-group-menu" @click="toggleGroupMenu">
+                <span class="dashboard-node-trigger-name" :title="currentGroup?.name || ''">{{ currentGroup?.name || t(proxyError ? '更新失败' : '—') }}</span>
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg>
               </button>
-              <div v-if="groupMenuOpen" id="dashboard-group-menu" class="dashboard-node-menu dashboard-group-menu" role="listbox" aria-label="选择代理组">
+              <div v-if="groupMenuOpen" id="dashboard-group-menu" class="dashboard-node-menu dashboard-group-menu" role="listbox" :aria-label="t('选择代理组')">
                 <button v-for="group in groups" :key="group.name" type="button" class="dashboard-node-option dashboard-group-option" :class="{ active: group.name === currentGroup?.name }" role="option" :aria-selected="group.name === currentGroup?.name" @click="chooseGroup(group.name)">
                   <span class="dashboard-node-option-name" :title="group.name">{{ group.name }}</span>
                 </button>
@@ -695,42 +697,42 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="dashboard-field dashboard-node-field dashboard-inline-field">
-            <span class="dashboard-field-prefix">节点</span>
+            <span class="dashboard-field-prefix">{{ t("节点") }}</span>
             <div ref="nodeMenu" class="dashboard-node-picker" @keydown.esc.stop="closeNodeMenu">
-              <button class="dashboard-node-trigger" type="button" :disabled="nodeSelectDisabled" aria-label="当前节点" aria-haspopup="listbox" :aria-expanded="nodeMenuOpen" aria-controls="dashboard-node-menu" @click="toggleNodeMenu">
-                <span class="dashboard-node-trigger-name" :title="currentNode">{{ currentNode || (proxyError ? '更新失败' : '—') }}</span>
+              <button class="dashboard-node-trigger" type="button" :disabled="nodeSelectDisabled" :aria-label="t('当前节点')" aria-haspopup="listbox" :aria-expanded="nodeMenuOpen" aria-controls="dashboard-node-menu" @click="toggleNodeMenu">
+                <span class="dashboard-node-trigger-name" :title="currentNode">{{ currentNode || t(proxyError ? '更新失败' : '—') }}</span>
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg>
               </button>
-              <div v-if="nodeMenuOpen" id="dashboard-node-menu" class="dashboard-node-menu" role="listbox" aria-label="选择节点">
+              <div v-if="nodeMenuOpen" id="dashboard-node-menu" class="dashboard-node-menu" role="listbox" :aria-label="t('选择节点')">
                 <button v-for="node in currentGroupNodes" :key="node" type="button" class="dashboard-node-option" :class="{ active: node === currentNode }" role="option" :aria-selected="node === currentNode" :disabled="nodeSelecting" @click="chooseNode(node)">
                   <span class="dashboard-node-option-name" :title="node">{{ node }}</span>
-                  <span class="dashboard-node-delay-text" :class="nodeDelayClass(node)">{{ nodeDelayText(node) }}</span>
+                  <span class="dashboard-node-delay-text" :class="nodeDelayClass(node)">{{ t(nodeDelayText(node)) }}</span>
                 </button>
               </div>
             </div>
           </div>
           <div class="dashboard-route-actions">
-            <button class="dashboard-delay" :class="delayClass" :disabled="!currentGroup || testingGroup" title="测试当前代理组全部节点延迟" @click="testCurrentGroup">{{ delayText }}</button>
-            <label class="dashboard-sort-control" title="设置当前代理组节点排序方式">
-              <span>排序</span>
-              <select :value="currentGroupSort" :disabled="!currentGroup || testingGroup" aria-label="当前代理组节点排序方式" @change="updateCurrentGroupSort">
-                <option value="default">默认</option>
-                <option value="delay">按延迟</option>
-                <option value="name">按名称</option>
+            <button class="dashboard-delay" :class="delayClass" :disabled="!currentGroup || testingGroup" :title="t('测试当前代理组全部节点延迟')" @click="testCurrentGroup">{{ t(delayText) }}</button>
+            <label class="dashboard-sort-control" :title="t('设置当前代理组节点排序方式')">
+              <span>{{ t("排序") }}</span>
+              <select :value="currentGroupSort" :disabled="!currentGroup || testingGroup" :aria-label="t('当前代理组节点排序方式')" @change="updateCurrentGroupSort">
+                <option value="default">{{ t("默认") }}</option>
+                <option value="delay">{{ t("按延迟") }}</option>
+                <option value="name">{{ t("按名称") }}</option>
               </select>
             </label>
           </div>
         </div>
 
-        <div class="dashboard-location-grid" :title="locationError || undefined">
-          <div><span title="查询服务按当前模式和规则测得的出口，不一定经过上方代理组">查询出口 IP</span><strong class="mono" :class="{ 'error-text': locationError }">{{ exitLocation?.ip || (locationError ? '更新失败' : '—') }}</strong></div>
-          <div><span>国家/地区</span><strong>{{ exitLocation?.country || '—' }}</strong></div>
+        <div class="dashboard-location-grid" :title="t(locationError || undefined)">
+          <div><span :title="t('查询服务按当前模式和规则测得的出口，不一定经过上方代理组')">{{ t("查询出口 IP") }}</span><strong class="mono" :class="{ 'error-text': locationError }">{{ t(exitLocation?.ip || (locationError ? '更新失败' : '—')) }}</strong></div>
+          <div><span>{{ t("国家/地区") }}</span><strong>{{ exitLocation?.country || '—' }}</strong></div>
           <div class="dashboard-location-detail" @mouseleave="locationTooltipVisible = false">
-            <span>位置</span>
-            <strong tabindex="0" :aria-describedby="locationTooltipVisible ? 'dashboard-location-tooltip' : undefined" @mouseenter="showLocationTooltip" @focus="showLocationTooltip" @blur="locationTooltipVisible = false" @keydown.esc="locationTooltipVisible = false">{{ locationText }}</strong>
-            <div v-if="locationTooltipVisible" id="dashboard-location-tooltip" role="tooltip" class="help-popover-panel dashboard-location-tooltip">{{ locationText }}</div>
+            <span>{{ t("位置") }}</span>
+            <strong tabindex="0" :aria-describedby="locationTooltipVisible ? 'dashboard-location-tooltip' : undefined" @mouseenter="showLocationTooltip" @focus="showLocationTooltip" @blur="locationTooltipVisible = false" @keydown.esc="locationTooltipVisible = false">{{ t(locationText) }}</strong>
+            <div v-if="locationTooltipVisible" id="dashboard-location-tooltip" role="tooltip" class="help-popover-panel dashboard-location-tooltip">{{ t(locationText) }}</div>
           </div>
-          <div><span>时区</span><strong>{{ timezoneText }}</strong></div>
+          <div><span>{{ t("时区") }}</span><strong>{{ t(timezoneText) }}</strong></div>
         </div>
       </section>
 
@@ -739,38 +741,38 @@ onBeforeUnmount(() => {
       <section class="card dashboard-subscription" :class="{ 'has-error': profileError }" aria-labelledby="dashboard-subscription-title">
         <div class="dashboard-subscription-heading">
           <div class="dashboard-subscription-heading-main">
-            <h2 id="dashboard-subscription-title"><a class="dashboard-section-link" href="#profiles"><span class="dashboard-section-title">{{ currentProfile?.type === 'remote' ? '当前订阅' : '当前配置' }}</span><span class="dashboard-title-arrow" aria-hidden="true" /></a></h2>
+            <h2 id="dashboard-subscription-title"><a class="dashboard-section-link" href="#profiles"><span class="dashboard-section-title">{{ t(currentProfile?.type === 'remote' ? '当前订阅' : '当前配置') }}</span><span class="dashboard-title-arrow" aria-hidden="true" /></a></h2>
             <div v-if="profileJob" class="dashboard-subscription-progress" :class="profileJob.state" role="status" aria-live="polite">
               <i v-if="profileJob.state === 'running'" aria-hidden="true" />
-              <span>{{ profileJob.message }}</span>
+              <span>{{ t(profileJob.message) }}</span>
             </div>
           </div>
-          <button v-if="currentProfile?.type === 'remote'" class="dashboard-update-subscription" :disabled="profileUpdating" @click="updateCurrentProfile">{{ profileUpdating ? '更新订阅并应用中…' : '更新订阅并应用' }}</button>
+          <button v-if="currentProfile?.type === 'remote'" class="dashboard-update-subscription" :disabled="profileUpdating" @click="updateCurrentProfile">{{ t(profileUpdating ? '更新订阅并应用中…' : '更新订阅并应用') }}</button>
         </div>
         <div class="subscription-identity">
-          <strong>{{ currentProfile?.name || (profileError ? '更新失败' : '未识别') }}</strong>
-          <small :title="currentProfile?.url || currentProfile?.sourcePath || ''">来自 {{ profileSource(currentProfile) }}</small>
+          <strong>{{ currentProfile?.name || t(profileError ? '更新失败' : '未识别') }}</strong>
+          <small :title="currentProfile?.url || currentProfile?.sourcePath || ''">{{ t("来自") }} {{ t(profileSource(currentProfile)) }}</small>
         </div>
-        <div class="subscription-updated"><span>更新时间</span><strong>{{ currentProfile ? formatTime(currentProfile.updatedAt) : '—' }}</strong></div>
+        <div class="subscription-updated"><span>{{ t("更新时间") }}</span><strong>{{ t(currentProfile ? formatTime(currentProfile.updatedAt) : '—') }}</strong></div>
         <div class="subscription-quota">
           <div class="subscription-quota-values">
-            <span>已用 <strong>{{ quota ? formatBytes(quota.used) : '—' }}</strong></span>
-            <span>剩余 <strong>{{ quota ? formatBytes(quota.remaining) : '—' }}</strong></span>
-            <span>总量 <strong>{{ quota?.total ? formatBytes(quota.total) : '—' }}</strong></span>
-            <b>{{ quota ? formatQuotaPercent(quota.percent) : '—' }}</b>
+            <span>{{ t("已用") }} <strong>{{ t(quota ? formatBytes(quota.used) : '—') }}</strong></span>
+            <span>{{ t("剩余") }} <strong>{{ t(quota ? formatBytes(quota.remaining) : '—') }}</strong></span>
+            <span>{{ t("总量") }} <strong>{{ t(quota?.total ? formatBytes(quota.total) : '—') }}</strong></span>
+            <b>{{ t(quota ? formatQuotaPercent(quota.percent) : '—') }}</b>
           </div>
           <div class="quota-track dashboard-quota-track"><span :style="{ width: `${quota?.percent || 0}%` }" /></div>
         </div>
       </section>
 
       <section class="card dashboard-live" aria-labelledby="dashboard-live-title">
-        <h2 id="dashboard-live-title">实时状态与实时流量</h2>
-        <div class="dashboard-metrics" aria-label="实时状态摘要">
-          <div><span>活动连接</span><strong>{{ connectionStatsFailed ? '—' : (status.connections?.count ?? 0) }}</strong></div>
-          <div><span>累计上传</span><strong class="up">{{ connectionStatsFailed ? '—' : formatBytes(status.connections?.uploadTotal) }}</strong></div>
-          <div><span>累计下载</span><strong class="down">{{ connectionStatsFailed ? '—' : formatBytes(status.connections?.downloadTotal) }}</strong></div>
-          <div><span>内核内存</span><strong>{{ memoryText }}</strong></div>
-          <div class="dashboard-ports"><span>监听端口</span><strong class="mono" :title="activePorts.join(' · ')">{{ activePorts.length ? activePorts.join(' · ') : '—' }}</strong></div>
+        <h2 id="dashboard-live-title">{{ t("实时状态与实时流量") }}</h2>
+        <div class="dashboard-metrics" :aria-label="t('实时状态摘要')">
+          <div><span>{{ t("活动连接") }}</span><strong>{{ t(connectionStatsFailed ? '—' : (status.connections?.count ?? 0)) }}</strong></div>
+          <div><span>{{ t("累计上传") }}</span><strong class="up">{{ t(connectionStatsFailed ? '—' : formatBytes(status.connections?.uploadTotal)) }}</strong></div>
+          <div><span>{{ t("累计下载") }}</span><strong class="down">{{ t(connectionStatsFailed ? '—' : formatBytes(status.connections?.downloadTotal)) }}</strong></div>
+          <div><span>{{ t("内核内存") }}</span><strong>{{ t(memoryText) }}</strong></div>
+          <div class="dashboard-ports"><span>{{ t("监听端口") }}</span><strong class="mono" :title="t(activePorts.join(' · '))">{{ t(activePorts.length ? activePorts.join(' · ') : '—') }}</strong></div>
         </div>
         <TrafficChart embedded :up="traffic.up" :down="traffic.down" :sample-time="trafficSampleTime" :failed="trafficFailed" :history="trafficHistory" />
       </section>

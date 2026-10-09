@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import AsyncState from '@/components/AsyncState.vue'
 import ConfigEditor from '@/components/ConfigEditor.vue'
@@ -133,19 +135,19 @@ onBeforeUnmount(() => { alive = false; request?.abort() })
   <Teleport defer to="#page-actions">
     <div class="config-tools">
       <div class="config-search-wrap">
-        <input v-model="query" type="search" class="config-search" placeholder="搜索配置" aria-label="搜索配置内容" @keydown="searchKeydown">
-        <span v-if="query.trim()" class="config-search-count" role="status">{{ matchCount ? `${activeMatch}/${matchCount}` : '0/0' }}</span>
+        <input v-model="query" type="search" class="config-search" :placeholder="t('搜索配置')" :aria-label="t('搜索配置内容')" @keydown="searchKeydown">
+        <span v-if="query.trim()" class="config-search-count" role="status">{{ t(matchCount ? `${activeMatch}/${matchCount}` : '0/0') }}</span>
       </div>
-      <button class="ghost config-search-nav" type="button" :disabled="!matchCount" aria-label="上一个匹配项" title="上一个匹配项（Shift + Enter）" @click="moveMatch(-1)">↑</button>
-      <button class="ghost config-search-nav" type="button" :disabled="!matchCount" aria-label="下一个匹配项" title="下一个匹配项（Enter）" @click="moveMatch(1)">↓</button>
-      <button class="ghost" type="button" @click="format = format === 'formatted' ? 'compact' : 'formatted'">{{ format === 'formatted' ? '压缩' : '格式化' }}</button>
-      <button class="ghost" type="button" :disabled="copying || !config?.content" @click="copyConfig">复制配置</button>
-      <button v-if="config?.mode === 'managed'" class="ghost" type="button" @click="editing = true">编辑配置</button>
+      <button class="ghost config-search-nav" type="button" :disabled="!matchCount" :aria-label="t('上一个匹配项')" :title="t('上一个匹配项（Shift + Enter）')" @click="moveMatch(-1)">↑</button>
+      <button class="ghost config-search-nav" type="button" :disabled="!matchCount" :aria-label="t('下一个匹配项')" :title="t('下一个匹配项（Enter）')" @click="moveMatch(1)">↓</button>
+      <button class="ghost" type="button" @click="format = format === 'formatted' ? 'compact' : 'formatted'">{{ t(format === 'formatted' ? '压缩' : '格式化') }}</button>
+      <button class="ghost" type="button" :disabled="copying || !config?.content" @click="copyConfig">{{ t("复制配置") }}</button>
+      <button v-if="config?.mode === 'managed'" class="ghost" type="button" @click="editing = true">{{ t("编辑配置") }}</button>
     </div>
   </Teleport>
-  <AsyncState :loading="loading" :error="error">
+  <AsyncState :loading="loading" :error="t(error)">
     <div v-if="config" class="config-workspace">
-      <div class="config-meta"><span class="tag">当前生效</span><span class="mono config-path" :title="config.path || config.configPath || ''">{{ config.path || config.configPath || '未检测到启动配置路径' }}</span><span v-if="config.pid" class="muted">PID {{ config.pid }}</span><span class="tag config-readonly-tag">{{ config.mode === 'managed' ? '托管配置' : '外部配置 · 只读' }}</span></div>
+      <div class="config-meta"><span class="tag">{{ t("当前生效") }}</span><span class="mono config-path" :title="config.path || config.configPath || ''">{{ config.path || config.configPath || t('未检测到启动配置路径') }}</span><span v-if="config.pid" class="muted">PID {{ t(config.pid) }}</span><span class="tag config-readonly-tag">{{ t(config.mode === 'managed' ? '托管配置' : '外部配置 · 只读') }}</span></div>
       <ConfigTextView ref="textView" :content="config.content || ''" :query="query" :format="format" @search="searchChanged" />
     </div>
   </AsyncState>

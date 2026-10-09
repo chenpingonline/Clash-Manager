@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
 import NavIcon from '@/components/NavIcon.vue'
 import ToastHost from '@/components/ToastHost.vue'
+import LanguageSelect from '@/components/LanguageSelect.vue'
 import DashboardPage from '@/pages/DashboardPage.vue'
 import ProxiesPage from '@/pages/ProxiesPage.vue'
 import ProfilesPage from '@/pages/ProfilesPage.vue'
@@ -151,20 +154,22 @@ onBeforeUnmount(() => {
 <template>
   <aside class="sidebar">
     <nav>
-      <a v-for="page in pages" :key="page.name" :href="`#${page.name}`" class="nav-item" :class="{ active: current === page.name }" :title="page.label" :aria-current="current === page.name ? 'page' : undefined" @click="navigate(page.name, $event)">
-        <span class="nav-icon" aria-hidden="true"><NavIcon :name="page.name" /></span><span class="nav-label">{{ page.label }}</span>
+      <a v-for="page in pages" :key="page.name" :href="`#${page.name}`" class="nav-item" :class="{ active: current === page.name }" :title="t(page.label)" :aria-current="current === page.name ? 'page' : undefined" @click="navigate(page.name, $event)">
+        <span class="nav-icon" aria-hidden="true"><NavIcon :name="page.name" /></span><span class="nav-label">{{ t(page.label) }}</span>
       </a>
     </nav>
     <div class="sidebar-footer">
       <div class="core-dot" :class="footer.className" />
-      <div><strong>{{ footer.state }}</strong><small>{{ footer.version }}</small></div>
-      <span v-if="appUpdateAvailable" class="sidebar-update-notice" role="status"><span class="update-notice-dot" aria-hidden="true" />有新版本</span>
+      <div><strong>{{ t(footer.state) }}</strong><small>{{ t(footer.version) }}</small></div>
+      <span v-if="appUpdateAvailable" class="sidebar-update-notice" role="status"><span class="update-notice-dot" aria-hidden="true" />{{ t("有新版本") }}</span>
     </div>
   </aside>
   <main class="main">
     <header class="topbar">
-      <div class="topbar-title"><h1>{{ activePage.label }}</h1><div id="page-title-meta" class="page-title-meta" /></div>
-      <div class="top-actions"><button v-if="runtime.platform === 'docker'" class="ghost" @click="logout">退出登录</button><div id="page-actions" class="page-actions" /><button class="ghost" :disabled="pageRefreshing" :aria-busy="pageRefreshing" @click="refreshActivePage">{{ pageRefreshing ? '刷新中…' : '刷新' }}</button></div>
+      <div class="topbar-title"><h1>{{ t(activePage.label) }}</h1><div id="page-title-meta" class="page-title-meta" /></div>
+      <div class="top-actions">
+        <LanguageSelect v-if="current === 'settings'" />
+        <button v-if="runtime.platform === 'docker'" class="ghost" @click="logout">{{ t("退出登录") }}</button><div id="page-actions" class="page-actions" /><button class="ghost" :disabled="pageRefreshing" :aria-busy="pageRefreshing" @click="refreshActivePage">{{ t(pageRefreshing ? '刷新中…' : '刷新') }}</button></div>
     </header>
     <section class="content" :class="{ 'config-content': current === 'config', 'logs-content': current === 'logs', 'rules-content': current === 'rules' }" @scroll.passive="markScrollActivity">
       <component :is="activePage.component" :key="`${current}-${refreshKey}`" ref="activePageRef" />

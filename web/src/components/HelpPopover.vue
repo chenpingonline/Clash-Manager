@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { onBeforeUnmount, ref, useId } from 'vue'
 
 defineProps<{
@@ -40,13 +42,13 @@ onBeforeUnmount(cancelClose)
     <button
       class="help-popover-trigger"
       type="button"
-      :aria-label="`${label}说明`"
+      :aria-label="t('{arg0}说明', { arg0: t(label) })"
       aria-haspopup="dialog"
       :aria-expanded="open"
       :aria-controls="panelId"
       @click="toggle"
     >?</button>
-    <span v-if="open" :id="panelId" class="help-popover-panel" role="dialog" :aria-label="`${label}说明`">
+    <span v-if="open" :id="panelId" class="help-popover-panel" role="dialog" :aria-label="t('{arg0}说明', { arg0: t(label) })">
       <slot />
     </span>
   </span>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Compartment, EditorState, Transaction } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
@@ -30,7 +32,7 @@ onMounted(() => {
   if (!host.value) return
   view = new EditorView({ parent: host.value, state: EditorState.create({ doc: props.modelValue, extensions: [
     ...yamlViewExtensions(), history(), keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-    EditorView.contentAttributes.of({ 'aria-label': '托管配置 YAML', spellcheck: 'false' }),
+    EditorView.contentAttributes.of(() => ({ 'aria-label': t('托管配置 YAML'), spellcheck: 'false' })),
     locked.of([EditorState.readOnly.of(props.disabled), EditorView.editable.of(!props.disabled)]),
     EditorView.updateListener.of(update => { if (update.docChanged) emit('update:modelValue', update.state.doc.toString()) }),
   ] }) })
@@ -61,10 +63,10 @@ onBeforeUnmount(() => { requestId++; worker?.terminate(); view?.destroy(); view 
 
 <template>
   <div class="yaml-editor-tools">
-    <button class="ghost small" type="button" :disabled="disabled || formatting" @click="format('formatted')">格式化</button>
-    <button class="ghost small" type="button" :disabled="disabled || formatting" @click="format('compact')">压缩</button>
-    <span v-if="formatting" class="muted" role="status">正在调整格式…</span>
-    <span v-else class="muted">格式调整可撤销，保存后生效</span>
+    <button class="ghost small" type="button" :disabled="disabled || formatting" @click="format('formatted')">{{ t("格式化") }}</button>
+    <button class="ghost small" type="button" :disabled="disabled || formatting" @click="format('compact')">{{ t("压缩") }}</button>
+    <span v-if="formatting" class="muted" role="status">{{ t("正在调整格式…") }}</span>
+    <span v-else class="muted">{{ t("格式调整可撤销，保存后生效") }}</span>
   </div>
   <div ref="host" class="yaml-code-editor" />
 </template>

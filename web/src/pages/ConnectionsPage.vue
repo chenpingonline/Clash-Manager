@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { countLabel, t } from '@/services/i18n'
+
 import { computed, onMounted, ref } from 'vue'
 import AsyncState from '@/components/AsyncState.vue'
 import { api, errorMessage } from '@/services/api'
@@ -34,7 +36,7 @@ async function load() {
   finally { loading.value = false }
 }
 async function close(id?: string) {
-  if (!id && !confirm('关闭所有当前连接？')) return
+  if (!id && !confirm(t('关闭所有当前连接？'))) return
   try {
     await api(id ? `/api/connections/${encodeURIComponent(id)}` : '/api/connections', { method: 'DELETE' })
     notify(id ? '连接已关闭' : '已关闭全部连接')
@@ -45,9 +47,9 @@ onMounted(load)
 </script>
 
 <template>
-  <AsyncState :loading="loading" :error="error">
-    <div class="section-head"><div><h2>{{ items.length }} 个活动连接</h2><p>累计上传 {{ formatBytes(data.uploadTotal) }} · 下载 {{ formatBytes(data.downloadTotal) }}</p></div><button class="danger small" @click="close()">关闭全部</button></div>
-    <div v-if="items.length" class="card table-wrap connections-table-wrap persistent-horizontal-scrollbar"><table class="connections-table"><thead><tr><th>目标</th><th>进程</th><th>规则</th><th>代理链</th><th>上传</th><th>下载</th><th /></tr></thead><tbody><tr v-for="item in items" :key="item.id"><td class="conn-target-cell"><div class="conn-target" :title="targetTitle(item)">{{ target(item) }}</div></td><td class="conn-process-cell"><div class="conn-process" :title="item.metadata?.process || '-'">{{ item.metadata?.process || '-' }}</div></td><td class="conn-rule-cell"><div class="conn-rule-inline"><span class="tag">{{ item.rule || '-' }}</span><span v-if="rulePayloadLabel(item)" class="muted conn-rule-payload" :title="item.rulePayload || ''">· {{ rulePayloadLabel(item) }}</span></div></td><td class="conn-chain-cell" :title="(item.chains || []).join(' → ')">{{ (item.chains || []).join(' → ') }}</td><td class="conn-bytes-cell">{{ formatBytes(item.upload) }}</td><td class="conn-bytes-cell">{{ formatBytes(item.download) }}</td><td class="conn-close-cell"><button class="iconbtn" :aria-label="`关闭 ${target(item)} 连接`" @click="close(item.id)">×</button></td></tr></tbody></table></div>
-    <div v-else class="empty">当前没有活动连接</div>
+  <AsyncState :loading="loading" :error="t(error)">
+    <div class="section-head"><div><h2>{{ countLabel(items.length, "个活动连接") }}</h2><p>{{ t("累计上传") }} {{ t(formatBytes(data.uploadTotal)) }} {{ t("· 下载") }} {{ t(formatBytes(data.downloadTotal)) }}</p></div><button class="danger small" @click="close()">{{ t("关闭全部") }}</button></div>
+    <div v-if="items.length" class="card table-wrap connections-table-wrap persistent-horizontal-scrollbar"><table class="connections-table"><thead><tr><th>{{ t("目标") }}</th><th>{{ t("进程") }}</th><th>{{ t("规则") }}</th><th>{{ t("代理链") }}</th><th>{{ t("上传") }}</th><th>{{ t("下载") }}</th><th /></tr></thead><tbody><tr v-for="item in items" :key="item.id"><td class="conn-target-cell"><div class="conn-target" :title="targetTitle(item)">{{ target(item) }}</div></td><td class="conn-process-cell"><div class="conn-process" :title="item.metadata?.process || '-'">{{ item.metadata?.process || '-' }}</div></td><td class="conn-rule-cell"><div class="conn-rule-inline"><span class="tag">{{ t(item.rule || '-') }}</span><span v-if="rulePayloadLabel(item)" class="muted conn-rule-payload" :title="item.rulePayload || ''">· {{ rulePayloadLabel(item) }}</span></div></td><td class="conn-chain-cell" :title="(item.chains || []).join(' → ')">{{ (item.chains || []).join(' → ') }}</td><td class="conn-bytes-cell">{{ t(formatBytes(item.upload)) }}</td><td class="conn-bytes-cell">{{ t(formatBytes(item.download)) }}</td><td class="conn-close-cell"><button class="iconbtn" :aria-label="t(`关闭 ${target(item)} 连接`)" @click="close(item.id)">×</button></td></tr></tbody></table></div>
+    <div v-else class="empty">{{ t("当前没有活动连接") }}</div>
   </AsyncState>
 </template>

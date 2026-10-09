@@ -83,10 +83,10 @@ describe('backend API compatibility', () => {
     expect(dashboardControl).toContain(':aria-busy="tunSaving"')
     expect(dashboardControl).toContain('class="dashboard-tun-progress"')
     expect(dashboardControl).toContain('class="dashboard-runtime-head"')
-    expect(dashboardControl).toContain('<a class="dashboard-section-link" href="#settings"><span class="dashboard-section-title">运行控制</span><span class="dashboard-title-arrow"')
-    expect(dashboardControl).toContain('<DashboardSettingsButton label="虚拟网卡(TUN)设置"')
+    expect(dashboardControl).toContain("<a class=\"dashboard-section-link\" href=\"#settings\"><span class=\"dashboard-section-title\">{{ t(\"运行控制\") }}</span><span class=\"dashboard-title-arrow\"")
+    expect(dashboardControl).toContain("<DashboardSettingsButton :label=\"t('虚拟网卡(TUN)设置')\"")
     expect(dashboardControl).toContain('<TunSettingsModal')
-    expect(dashboardControl).not.toContain('href="#settings?section=tun">详细设置</a>')
+    expect(dashboardControl).not.toContain("href=\"#settings?section=tun\">{{ t(\"详细设置\") }}</a>")
     expect(dashboardControl).toContain("openStatusStream<TunOperationStatus>('/api/network/tun/status'")
     expect(settings).toContain(':disabled="tunSwitching || netState')
     expect(settings).toContain("openStatusStream<TunOperationStatus>('/api/network/tun/status'")
@@ -96,7 +96,7 @@ describe('backend API compatibility', () => {
   it('opens dashboard system proxy settings and saves the supported environment options', () => {
     const dashboardControl = readFileSync(resolve(__dirname, '../components/SystemProxyCard.vue'), 'utf8')
     const proxySettings = readFileSync(resolve(__dirname, '../components/SystemProxySettingsModal.vue'), 'utf8')
-    expect(dashboardControl).toContain('<DashboardSettingsButton label="系统代理设置"')
+    expect(dashboardControl).toContain("<DashboardSettingsButton :label=\"t('系统代理设置')\"")
     expect(dashboardControl).toContain('<SystemProxySettingsModal')
     expect(dashboardControl).toContain(':initial-management="management"')
     expect(proxySettings).toContain("api<ProxyEnvironmentResponse>('/api/system/proxy-environment'")
@@ -108,17 +108,17 @@ describe('backend API compatibility', () => {
     expect(proxySettings).toContain('<template #header>')
     expect(proxySettings.indexOf('class="settings-modal-header-actions"')).toBeLessThan(proxySettings.indexOf('class="system-proxy-modal-scroll"'))
     expect(proxySettings).not.toContain('system-proxy-modal-actions')
-    expect(proxySettings).not.toContain('<label>代理主机</label>')
-    expect(proxySettings).not.toContain('<label>代理端口</label>')
+    expect(proxySettings).not.toContain("<label>{{ t(\"代理主机\") }}</label>")
+    expect(proxySettings).not.toContain("<label>{{ t(\"代理端口\") }}</label>")
   })
 
   it('uses the tag editor for proxy bypass settings and removes the duplicate proxy address field', () => {
     const settings = readFileSync(resolve(__dirname, '../pages/SettingsPage.vue'), 'utf8')
-    expect(settings).toContain('<label>代理绕过设置</label>')
+    expect(settings).toContain("<label>{{ t(\"代理绕过设置\") }}</label>")
     expect(settings).toContain('class="system-proxy-bypass-tag"')
     expect(settings).toContain('@keydown="proxyBypassKeydown"')
     expect(settings).toContain('updateProxyBypass')
-    expect(settings).not.toContain('<label>代理地址</label>')
+    expect(settings).not.toContain("<label>{{ t(\"代理地址\") }}</label>")
     expect(settings).not.toContain('<label>NO_PROXY</label>')
   })
 
@@ -130,7 +130,7 @@ describe('backend API compatibility', () => {
     expect(tunSettings).toContain("jsonRequest('PUT', { tun:")
     expect(tunSettings).toContain('routeExcludeAddress: [...form.routeExcludeAddress]')
     expect(tunSettings).toContain('title="Auto Redirect"')
-    expect(tunSettings).toContain('title="DNS 劫持"')
+    expect(tunSettings).toContain(":title=\"t('DNS 劫持')\"")
     expect(tunSettings).toContain('<template #header>')
     expect(tunSettings.indexOf('class="settings-modal-header-actions"')).toBeLessThan(tunSettings.indexOf('class="tun-settings-modal-scroll"'))
     expect(tunSettings).not.toContain('tun-settings-modal-actions')
@@ -144,7 +144,7 @@ describe('backend API compatibility', () => {
 
   it('uses compact dashboard title links for related pages', () => {
     const dashboard = readFileSync(resolve(__dirname, '../pages/DashboardPage.vue'), 'utf8')
-    expect(dashboard).toContain('class="dashboard-section-link" href="#proxies"><span class="dashboard-section-title">当前连接</span><span class="dashboard-title-arrow"')
+    expect(dashboard).toContain("class=\"dashboard-section-link\" href=\"#proxies\"><span class=\"dashboard-section-title\">{{ t(\"当前连接\") }}</span><span class=\"dashboard-title-arrow\"")
     expect(dashboard).toContain('class="dashboard-section-link" href="#profiles"><span class="dashboard-section-title">')
     expect(dashboard).not.toContain('打开代理节点')
   })
@@ -172,7 +172,7 @@ describe('backend API compatibility', () => {
     expect(rules).toContain('to="#page-title-meta"')
     expect(rules).toContain('class="rule-count"')
     expect(rules).not.toContain('class="rules-toolbar"')
-    expect(rules).not.toContain('<h2>生效规则</h2>')
+    expect(rules).not.toContain("<h2>{{ t(\"生效规则\") }}</h2>")
   })
 
   it('shows GEO in its own tab and places transient progress in the title', () => {

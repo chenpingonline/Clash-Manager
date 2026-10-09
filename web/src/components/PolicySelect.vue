@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 
 const props = withDefaults(defineProps<{ modelValue: string; options: string[]; disabled: boolean; label?: string; placeholder?: string; searchPlaceholder?: string; hideLabel?: boolean; allowCustom?: boolean }>(), { label: '代理策略', placeholder: '选择代理策略', searchPlaceholder: '搜索代理组或节点', hideLabel: false, allowCustom: false })
@@ -71,19 +73,19 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside, tru
 
 <template>
   <div ref="root" class="rule-policy-field policy-select" @keydown="keyboard" @focusout="focusOut">
-    <span v-if="!hideLabel" :id="`${id}-label`">{{ label }}</span>
-    <button ref="trigger" class="policy-select-trigger" type="button" :disabled="disabled" :aria-labelledby="hideLabel ? undefined : `${id}-label`" :aria-label="hideLabel ? label : undefined" aria-haspopup="listbox" :aria-expanded="open" :aria-controls="`${id}-list`" @click="open ? close() : show()">
-      <span :title="modelValue">{{ modelValue || placeholder }}</span><span aria-hidden="true">⌄</span>
+    <span v-if="!hideLabel" :id="`${id}-label`">{{ t(label) }}</span>
+    <button ref="trigger" class="policy-select-trigger" type="button" :disabled="disabled" :aria-labelledby="hideLabel ? undefined : `${id}-label`" :aria-label="t(hideLabel ? label : undefined)" aria-haspopup="listbox" :aria-expanded="open" :aria-controls="`${id}-list`" @click="open ? close() : show()">
+      <span :title="modelValue">{{ modelValue || t(placeholder) }}</span><span aria-hidden="true">⌄</span>
     </button>
     <Teleport to="body"><div v-if="open" ref="panel" class="policy-select-panel" :style="panelStyle" @keydown="keyboard" @focusout="focusOut">
-      <input ref="searchInput" v-model="search" role="combobox" :aria-label="`搜索${label}`" :placeholder="searchPlaceholder" autocomplete="off" :aria-expanded="open" :aria-controls="`${id}-list`" :aria-activedescendant="visibleOptions.length ? `${id}-option-${activeIndex}` : undefined" />
-      <div :id="`${id}-list`" class="policy-select-options" role="listbox" :aria-label="`${label}候选`">
+      <input ref="searchInput" v-model="search" role="combobox" :aria-label="t('搜索{arg0}', { arg0: t(label) })" :placeholder="t(searchPlaceholder)" autocomplete="off" :aria-expanded="open" :aria-controls="`${id}-list`" :aria-activedescendant="visibleOptions.length ? `${id}-option-${activeIndex}` : undefined" />
+      <div :id="`${id}-list`" class="policy-select-options" role="listbox" :aria-label="t('{arg0}候选', { arg0: t(label) })">
         <button v-for="(option, index) in visibleOptions" :id="`${id}-option-${index}`" :key="option" type="button" role="option" :aria-selected="option === modelValue" :class="{ 'is-active': index === activeIndex, 'is-selected': option === modelValue }" tabindex="-1" @pointerdown.prevent @click="choose(option)">
-          <span :title="option">{{ option === customOption ? `使用“${option}”` : option }}</span><span v-if="option === modelValue" aria-hidden="true">✓</span>
+          <span :title="option">{{ option === customOption ? t('使用“{arg0}”', { arg0: option }) : option }}</span><span v-if="option === modelValue" aria-hidden="true">✓</span>
         </button>
-        <p v-if="!visibleOptions.length" class="policy-select-empty">没有匹配的选项</p>
+        <p v-if="!visibleOptions.length" class="policy-select-empty">{{ t("没有匹配的选项") }}</p>
       </div>
-      <p v-if="matches.length > 100" class="policy-select-empty">显示前 100 项，请搜索缩小范围</p>
+      <p v-if="matches.length > 100" class="policy-select-empty">{{ t("显示前 100 项，请搜索缩小范围") }}</p>
     </div></Teleport>
   </div>
 </template>

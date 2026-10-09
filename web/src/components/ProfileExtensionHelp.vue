@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { computed } from 'vue'
 import HelpPopover from '@/components/HelpPopover.vue'
 import { extensionExamples } from '@/services/profile-extension-examples'
@@ -8,12 +10,12 @@ const example = computed(() => extensionExamples[props.kind])
 </script>
 
 <template>
-  <HelpPopover class="profile-extension-help" :label="example.title">
-    <strong>{{ example.title }} · {{ example.language }}</strong>
-    <span>{{ example.description }}</span>
-    <pre class="extension-example-code"><code>{{ example.content }}</code></pre>
-    <span v-for="note in example.notes" :key="note">{{ note }}</span>
-    <span v-if="kind === 'override' || kind === 'script'">顺序：全局覆写 → 全局脚本 → 对应订阅覆写 → 对应订阅脚本。</span>
+  <HelpPopover class="profile-extension-help" :label="t(example.title)">
+    <strong>{{ t(example.title) }} · {{ t(example.language) }}</strong>
+    <span>{{ t(example.description) }}</span>
+    <pre class="extension-example-code"><code>{{ t(example.content) }}</code></pre>
+    <span v-for="note in example.notes" :key="note">{{ t(note) }}</span>
+    <span v-if="kind === 'override' || kind === 'script'">{{ t("顺序：全局覆写 → 全局脚本 → 对应订阅覆写 → 对应订阅脚本。") }}</span>
   </HelpPopover>
 </template>
 

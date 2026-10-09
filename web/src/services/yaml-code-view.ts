@@ -1,3 +1,5 @@
+import { watch } from 'vue'
+import { locale, t } from './i18n'
 import { Compartment, EditorSelection, EditorState, StateEffect, StateField, type Range } from '@codemirror/state'
 import { Decoration, EditorView, MatchDecorator, ViewPlugin, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import { defaultKeymap } from '@codemirror/commands'
@@ -5,7 +7,7 @@ import { HighlightStyle, bracketMatching, indentUnit, syntaxHighlighting, syntax
 import { yaml } from '@codemirror/lang-yaml'
 import { yamlHighlightSpecs } from './yaml-syntax'
 import { yamlScalarClass } from './yaml-tokens'
-import { longLines, revealLongLine } from './yaml-long-lines'
+import { longLines, longLineLanguage, revealLongLine } from './yaml-long-lines'
 
 function scalarDecorations(editor: EditorView): DecorationSet {
   const ranges: Range<Decoration>[] = [], tree = syntaxTree(editor.state)
@@ -24,9 +26,16 @@ const scalars = ViewPlugin.fromClass(class {
   }
 }, { decorations: plugin => plugin.decorations })
 
+const editorLanguage = ViewPlugin.fromClass(class {
+  private stop: () => void
+  constructor(view: EditorView) {
+    this.stop = watch(locale, () => view.dispatch({ effects: longLineLanguage.of() }))
+  }
+  destroy() { this.stop() }
+})
 export function yamlViewExtensions() {
   return [yaml(), lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(), drawSelection(), bracketMatching(),
-    indentUnit.of('  '), EditorState.tabSize.of(2), syntaxHighlighting(HighlightStyle.define(yamlHighlightSpecs)), longLines, scalars]
+    indentUnit.of('  '), EditorState.tabSize.of(2), syntaxHighlighting(HighlightStyle.define(yamlHighlightSpecs)), longLines, editorLanguage, scalars]
 }
 
 const activeMatch = StateEffect.define<{ from: number; to: number } | null>()
@@ -59,7 +68,7 @@ function visibleMatches(query: string) {
 export function previewState(content: string, query: string) {
   return EditorState.create({ doc: content, extensions: [
     ...yamlViewExtensions(), EditorState.readOnly.of(true), EditorView.editable.of(false),
-    EditorView.contentAttributes.of({ 'aria-label': '配置内容', tabindex: '0' }),
+    EditorView.contentAttributes.of(() => ({ 'aria-label': t('配置内容'), tabindex: '0' })),
     keymap.of(defaultKeymap), queryConfig.of(visibleMatches(query)), matchField,
   ] })
 }

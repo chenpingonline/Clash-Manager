@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { computed, reactive, ref, watch } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
 import SettingToggle from '@/components/settings/SettingToggle.vue'
@@ -129,52 +131,52 @@ watch(() => props.open, open => {
 </script>
 
 <template>
-  <BaseModal :open="open" title="系统代理设置" card-class="system-proxy-modal-card" :closable="!saving" @close="close">
+  <BaseModal :open="open" :title="t('系统代理设置')" card-class="system-proxy-modal-card" :closable="!saving" @close="close">
     <template #header>
       <div class="settings-modal-header">
-        <h3>系统代理设置</h3>
+        <h3>{{ t("系统代理设置") }}</h3>
         <div class="settings-modal-header-actions">
-          <button class="ghost" type="button" :disabled="saving" @click="close">取消</button>
-          <button type="button" :disabled="loading || !available || saving" @click="save">{{ saving ? '保存中…' : '保存' }}</button>
+          <button class="ghost" type="button" :disabled="saving" @click="close">{{ t("取消") }}</button>
+          <button type="button" :disabled="loading || !available || saving" @click="save">{{ t(saving ? '保存中…' : '保存') }}</button>
         </div>
       </div>
     </template>
     <div class="system-proxy-modal-content">
-      <div v-if="loading" class="system-proxy-modal-loading">正在读取系统代理设置…</div>
+      <div v-if="loading" class="system-proxy-modal-loading">{{ t("正在读取系统代理设置…") }}</div>
       <div v-else class="system-proxy-modal-scroll">
-        <div v-if="error" class="local-warning">{{ error }}</div>
+        <div v-if="error" class="local-warning">{{ t(error) }}</div>
 
         <fieldset class="system-proxy-summary">
-          <legend>当前系统代理</legend>
-          <div><span>开启状态</span><strong :class="management?.active ? 'good-text' : 'muted-text'">{{ management?.active ? '已启用' : '未启用' }}</strong></div>
-          <div><span>服务地址</span><strong class="mono">{{ serviceAddress }}</strong></div>
+          <legend>{{ t("当前系统代理") }}</legend>
+          <div><span>{{ t("开启状态") }}</span><strong :class="management?.active ? 'good-text' : 'muted-text'">{{ t(management?.active ? '已启用' : '未启用') }}</strong></div>
+          <div><span>{{ t("服务地址") }}</span><strong class="mono">{{ t(serviceAddress) }}</strong></div>
         </fieldset>
 
         <div class="system-proxy-modal-grid">
-          <SettingToggle v-model="form.enabled" title="启用代理环境变量" description="关闭时仅移除本应用管理的配置" :disabled="!available || saving" />
-          <SettingToggle v-model="form.followMixedPort" title="自动跟随 Mixed Port" description="端口变化后自动同步系统代理" :disabled="!available || saving" />
+          <SettingToggle v-model="form.enabled" :title="t('启用代理环境变量')" :description="t('关闭时仅移除本应用管理的配置')" :disabled="!available || saving" />
+          <SettingToggle v-model="form.followMixedPort" :title="t('自动跟随 Mixed Port')" :description="t('端口变化后自动同步系统代理')" :disabled="!available || saving" />
         </div>
 
         <div class="field system-proxy-bypass-field">
-          <label>代理绕过设置</label>
+          <label>{{ t("代理绕过设置") }}</label>
           <div class="system-proxy-bypass-editor" :class="{ disabled: !available || saving }">
             <span v-for="(item, index) in bypassItems" :key="item" class="system-proxy-bypass-tag">
               {{ item }}
-              <button type="button" :aria-label="`移除 ${item}`" :disabled="!available || saving" @click="removeBypass(index)">×</button>
+              <button type="button" :aria-label="t(`移除 ${item}`)" :disabled="!available || saving" @click="removeBypass(index)">×</button>
             </span>
-            <input v-model="bypassInput" :disabled="!available || saving" aria-label="添加代理绕过地址" placeholder="输入域名、IP 或 CIDR，按回车添加" @keydown="bypassKeydown" @blur="addBypass">
+            <input v-model="bypassInput" :disabled="!available || saving" :aria-label="t('添加代理绕过地址')" :placeholder="t('输入域名、IP 或 CIDR，按回车添加')" @keydown="bypassKeydown" @blur="addBypass">
           </div>
-          <small>保存为 NO_PROXY；多个条目会以英文逗号分隔。</small>
+          <small>{{ t("保存为 NO_PROXY；多个条目会以英文逗号分隔。") }}</small>
         </div>
 
-        <div class="system-proxy-scope-title">应用范围</div>
+        <div class="system-proxy-scope-title">{{ t("应用范围") }}</div>
         <div class="system-proxy-scope-grid">
-          <SettingToggle v-model="form.targets.environment" title="系统登录环境" description="/etc/environment" :disabled="!available || saving" />
-          <SettingToggle v-model="form.targets.profile" title="登录 Shell" description="/etc/profile" :disabled="!available || saving" />
-          <SettingToggle v-model="form.targets.bashrc" title="Bash 交互环境" description="/etc/bash.bashrc" :disabled="!available || saving" />
+          <SettingToggle v-model="form.targets.environment" :title="t('系统登录环境')" description="/etc/environment" :disabled="!available || saving" />
+          <SettingToggle v-model="form.targets.profile" :title="t('登录 Shell')" description="/etc/profile" :disabled="!available || saving" />
+          <SettingToggle v-model="form.targets.bashrc" :title="t('Bash 交互环境')" description="/etc/bash.bashrc" :disabled="!available || saving" />
         </div>
 
-        <p class="system-proxy-modal-note">fnOS 使用 HTTP_PROXY、HTTPS_PROXY、ALL_PROXY 和 NO_PROXY 环境变量；修改主要对新启动的进程与新登录会话生效。</p>
+        <p class="system-proxy-modal-note">{{ t("fnOS 使用 HTTP_PROXY、HTTPS_PROXY、ALL_PROXY 和 NO_PROXY 环境变量；修改主要对新启动的进程与新登录会话生效。") }}</p>
       </div>
     </div>
   </BaseModal>

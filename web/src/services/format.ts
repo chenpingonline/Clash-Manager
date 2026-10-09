@@ -1,3 +1,4 @@
+import { getLocale } from './i18n'
 export function formatBytes(value: unknown): string {
   let bytes = Number(value || 0)
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -10,7 +11,7 @@ export function formatBytes(value: unknown): string {
 }
 
 export const formatRate = (value: unknown): string => `${formatBytes(value)}/s`
-export const formatTime = (value: unknown): string => value ? new Date(Number(value)).toLocaleString() : '从未'
+export const formatTime = (value: unknown): string => value ? new Date(Number(value)).toLocaleString(getLocale()) : '从未'
 
 export interface SubscriptionInfo {
   upload: number

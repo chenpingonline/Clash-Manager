@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t, getLocale, locale } from '@/services/i18n'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { bucketTrafficSamples, stabilizeTrafficScale, trafficCurveSegment, trafficSampleIndexAtTime, trafficScaleMaximum, trafficTooltipLeft, type TrafficScaleState } from '@/services/dashboard'
 import { formatRate } from '@/services/format'
@@ -47,7 +49,7 @@ const chartAriaLabel = computed(() => {
 })
 
 function formatTooltipTime(time: number): string {
-  return new Date(time).toLocaleTimeString([], {
+  return new Date(time).toLocaleTimeString(getLocale(), {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -125,7 +127,7 @@ function draw() {
   const showSeconds = range === 1
   for (let index = 0; index <= 5; index += 1) {
     const value = windowStart + (now - windowStart) * index / 5
-    const label = new Date(value).toLocaleTimeString([], {
+    const label = new Date(value).toLocaleTimeString(getLocale(), {
       hour: '2-digit',
       minute: '2-digit',
       ...(showSeconds ? { second: '2-digit' } : {}),
@@ -319,6 +321,7 @@ onMounted(() => {
   nextTick(draw)
 })
 
+watch(locale, () => { draw() })
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   themeObserver?.disconnect()
@@ -328,18 +331,18 @@ onBeforeUnmount(() => {
 <template>
   <section class="dashboard-traffic" :class="{ card: !embedded, embedded }" aria-labelledby="traffic-chart-title">
     <div class="dashboard-traffic-head">
-      <h2 id="traffic-chart-title">实时流量</h2>
+      <h2 id="traffic-chart-title">{{ t("实时流量") }}</h2>
       <div class="dashboard-traffic-live" aria-live="polite">
-        <div><span><i class="upload-dot" aria-hidden="true" />上传</span><strong class="up">{{ failed ? '—' : formatRate(up) }}</strong></div>
-        <div><span><i class="download-dot" aria-hidden="true" />下载</span><strong class="down">{{ failed ? '—' : formatRate(down) }}</strong></div>
+        <div><span><i class="upload-dot" aria-hidden="true" />{{ t("上传") }}</span><strong class="up">{{ t(failed ? '—' : formatRate(up)) }}</strong></div>
+        <div><span><i class="download-dot" aria-hidden="true" />{{ t("下载") }}</span><strong class="down">{{ t(failed ? '—' : formatRate(down)) }}</strong></div>
       </div>
-      <div class="traffic-range" aria-label="图表时间范围">
-        <button v-for="minutes in ([1, 5, 10] as const)" :key="minutes" type="button" :class="{ active: rangeMinutes === minutes }" :aria-pressed="rangeMinutes === minutes" @click="rangeMinutes = minutes">{{ minutes }} 分钟</button>
+      <div class="traffic-range" :aria-label="t('图表时间范围')">
+        <button v-for="minutes in ([1, 5, 10] as const)" :key="minutes" type="button" :class="{ active: rangeMinutes === minutes }" :aria-pressed="rangeMinutes === minutes" @click="rangeMinutes = minutes">{{ t(minutes) }} {{ t("分钟") }}</button>
       </div>
     </div>
     <div
       class="traffic-chart-stage"
-      :aria-label="chartAriaLabel"
+      :aria-label="t(chartAriaLabel)"
       role="img"
       tabindex="0"
       @blur="handleChartBlur"
@@ -356,9 +359,9 @@ onBeforeUnmount(() => {
         :style="{ left: `${tooltip.left}px`, top: `${tooltip.top}px` }"
         aria-hidden="true"
       >
-        <time>{{ tooltip.time }}</time>
-        <strong class="up"><span aria-hidden="true">↑</span>{{ tooltip.up }}</strong>
-        <strong class="down"><span aria-hidden="true">↓</span>{{ tooltip.down }}</strong>
+        <time>{{ t(tooltip.time) }}</time>
+        <strong class="up"><span aria-hidden="true">↑</span>{{ t(tooltip.up) }}</strong>
+        <strong class="down"><span aria-hidden="true">↓</span>{{ t(tooltip.down) }}</strong>
       </div>
     </div>
   </section>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { computed, nextTick, ref, watch } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
 import ProfileSequenceEditor from '@/components/ProfileSequenceEditor.vue'
@@ -53,7 +55,7 @@ const endpoint = computed(() => props.kind
     ? `/api/profiles/global/extensions/${props.kind}`
     : `/api/profiles/${props.profile?.id}/extensions/${props.kind}`
   : '')
-const title = computed(() => props.global ? `全局${meta.value.title}` : `${meta.value.title} · ${props.profile?.name || ''}`)
+const title = computed(() => props.global ? t('全局{arg0}', { arg0: t(meta.value.title) }) : `${t(meta.value.title)} · ${props.profile?.name || ''}`)
 
 async function load() {
   if (!props.open || !props.kind || (!props.global && !props.profile)) return
@@ -122,19 +124,19 @@ watch(() => [props.open, props.profile?.id, props.kind, props.global] as const, 
 
 <template>
   <BaseModal :open="open" :title="title" :card-class="`profile-extension-modal ${sequenceKind ? 'profile-sequence-modal' : ''} ${sequenceKind ? 'profile-table-modal' : ''} ${isRules ? 'profile-rules-modal' : ''}`" :closable="!saving && !resetting" :inert="resetting" @close="emit('close')">
-    <template #header><div class="sequence-modal-heading"><div class="sequence-modal-title"><h3>{{ title }}</h3><RuleSequenceHelp v-if="kind === 'rules' && !global" /><ProfileExtensionHelp v-else-if="kind" :kind="kind" /></div><div v-if="sequenceKind" class="sequence-modal-actions"><button class="ghost small" :disabled="loading || saving" @click="toggleAdvanced">{{ advanced ? '可视化' : '高级' }}</button></div></div></template>
-    <div v-if="loading" class="profile-extension-loading">正在读取…</div>
+    <template #header><div class="sequence-modal-heading"><div class="sequence-modal-title"><h3>{{ title }}</h3><RuleSequenceHelp v-if="kind === 'rules' && !global" /><ProfileExtensionHelp v-else-if="kind" :kind="kind" /></div><div v-if="sequenceKind" class="sequence-modal-actions"><button class="ghost small" :disabled="loading || saving" @click="toggleAdvanced">{{ t(advanced ? '可视化' : '高级') }}</button></div></div></template>
+    <div v-if="loading" class="profile-extension-loading">{{ t("正在读取…") }}</div>
     <ProfileSequenceEditor v-else-if="sequenceKind && sequenceData && !advanced" :kind="sequenceKind" :model-value="sequenceModel" :data="sequenceData" :disabled="saving" @update:model-value="updateSequence" @advanced="advanced = true" />
-    <template v-else><p v-if="visualError" class="sequence-error" role="alert">{{ visualError }}</p><textarea v-model="content" class="editor profile-extension-editor" spellcheck="false" :aria-label="meta.title" :disabled="saving" /></template>
+    <template v-else><p v-if="visualError" class="sequence-error" role="alert">{{ t(visualError) }}</p><textarea v-model="content" class="editor profile-extension-editor" spellcheck="false" :aria-label="t(meta.title)" :disabled="saving" /></template>
     <div class="actions profile-extension-actions" :class="{ 'rule-editor-footer': !!sequenceKind }">
-      <span v-if="sequenceKind" class="muted rule-footer-note">修改仅作用于当前订阅，更新订阅后保留。</span>
-      <button ref="saveButton" class="small" :disabled="loading || saving || (!!sequenceKind && !dirty)" @click="save">{{ saving ? (applyMessage || '保存并应用中…') : '保存并应用' }}</button>
-      <button v-if="sequenceKind || customized" ref="resetButton" class="danger small" :disabled="loading || saving || (!!sequenceKind && !hasSequenceChanges)" @click="sequenceKind ? resetting = true : reset()">{{ sequenceKind ? '重置本订阅增强' : '恢复默认' }}</button>
-      <button ref="cancelButton" class="ghost small" :disabled="saving" @click="emit('close')">取消</button>
+      <span v-if="sequenceKind" class="muted rule-footer-note">{{ t("修改仅作用于当前订阅，更新订阅后保留。") }}</span>
+      <button ref="saveButton" class="small" :disabled="loading || saving || (!!sequenceKind && !dirty)" @click="save">{{ t(saving ? (applyMessage || '保存并应用中…') : '保存并应用') }}</button>
+      <button v-if="sequenceKind || customized" ref="resetButton" class="danger small" :disabled="loading || saving || (!!sequenceKind && !hasSequenceChanges)" @click="sequenceKind ? resetting = true : reset()">{{ t(sequenceKind ? '重置本订阅增强' : '恢复默认') }}</button>
+      <button ref="cancelButton" class="ghost small" :disabled="saving" @click="emit('close')">{{ t("取消") }}</button>
     </div>
   </BaseModal>
-  <BaseModal :open="open && resetting" :title="resetTitle" card-class="config-discard-modal" @close="cancelReset">
-    <div @keydown="resetKeydown"><p class="muted">将清除此编辑器中的前置、后置条目与排除记录。保存并应用后生效；其他增强保持不变。</p><div class="actions config-editor-actions"><button ref="keepButton" type="button" class="ghost small" @click="cancelReset">继续编辑</button><button ref="confirmResetButton" type="button" class="danger small" @click="confirmReset">重置当前增强</button></div></div>
+  <BaseModal :open="open && resetting" :title="t(resetTitle)" card-class="config-discard-modal" @close="cancelReset">
+    <div @keydown="resetKeydown"><p class="muted">{{ t("将清除此编辑器中的前置、后置条目与排除记录。保存并应用后生效；其他增强保持不变。") }}</p><div class="actions config-editor-actions"><button ref="keepButton" type="button" class="ghost small" @click="cancelReset">{{ t("继续编辑") }}</button><button ref="confirmResetButton" type="button" class="danger small" @click="confirmReset">{{ t("重置当前增强") }}</button></div></div>
   </BaseModal>
 </template>
 

@@ -1,5 +1,7 @@
 # Go 后端架构
 
+简体中文 | [English](README.en.md)
+
 `cmd/clash-for-fnos-web` 是 fnOS 当前对外的主服务。它以应用专用用户运行并监听公开 Unix Socket，现阶段负责：
 
 - fnOS Gateway 路径归一化与入口重定向

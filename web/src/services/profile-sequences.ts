@@ -1,3 +1,4 @@
+import { t, getLocale } from './i18n'
 import { parseDocument, stringify } from 'yaml'
 
 export type SequenceKind = 'rules' | 'proxies' | 'groups'
@@ -97,8 +98,8 @@ export function sequenceEntrySummary(item: SequenceEntry, kind: SequenceKind): s
   }
   const entries = [
     ...(Array.isArray(item.proxies) ? item.proxies.filter((entry): entry is string => typeof entry === 'string') : []),
-    ...(Array.isArray(item.use) ? item.use.filter((entry): entry is string => typeof entry === 'string').map(entry => `集合：${entry}`) : []),
+    ...(Array.isArray(item.use) ? item.use.filter((entry): entry is string => typeof entry === 'string').map(entry => t('集合：{arg0}', { arg0: entry })) : []),
   ]
-  if (item['include-all'] === true) entries.unshift('全部节点与集合')
-  return entries.length ? entries.slice(0, 3).join('、') + (entries.length > 3 ? ` 等 ${entries.length} 项` : '') : '未配置成员'
+  if (item['include-all'] === true) entries.unshift(t('全部节点与集合'))
+  return entries.length ? entries.slice(0, 3).join(getLocale() === 'en-US' ? ', ' : '、') + (entries.length > 3 ? ` ${t('等 {arg0} 项', { arg0: entries.length })}` : '') : t('未配置成员')
 }

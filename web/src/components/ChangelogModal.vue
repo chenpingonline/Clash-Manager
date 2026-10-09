@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
 import bundledChangelog from '../../../CHANGELOG.md?raw'
@@ -50,18 +52,18 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKey))
 </script>
 
 <template>
-  <BaseModal :open="open" :title="title" @close="emit('close')">
+  <BaseModal :open="open" :title="t(title)" @close="emit('close')">
     <template #header>
       <div class="changelog-header">
-        <h3>{{ title }}</h3>
-        <button ref="closeButton" type="button" class="changelog-close" aria-label="关闭" @click="emit('close')">
+        <h3>{{ t(title) }}</h3>
+        <button ref="closeButton" type="button" class="changelog-close" :aria-label="t('关闭')" @click="emit('close')">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
         </button>
       </div>
     </template>
-    <p v-if="latest?.publishedAt" class="hint">发布时间：{{ latest.publishedAt.slice(0, 10) }}</p>
-    <p v-if="!latest && currentEntry" class="hint">v{{ currentEntry.version }}{{ currentEntry.date ? ` · ${currentEntry.date}` : '' }}</p>
-    <div ref="body" class="changelog-body" tabindex="0" aria-label="更新日志内容">
+    <p v-if="latest?.publishedAt" class="hint">{{ t("发布时间：") }}{{ t(latest.publishedAt.slice(0, 10)) }}</p>
+    <p v-if="!latest && currentEntry" class="hint">v{{ t(currentEntry.version) }}{{ t(currentEntry.date ? ` · ${currentEntry.date}` : '') }}</p>
+    <div ref="body" class="changelog-body" tabindex="0" :aria-label="t('更新日志内容')">
       <template v-for="(line, index) in lines" :key="index">
         <h4 v-if="line.kind === 'version'">{{ line.text }}</h4>
         <h5 v-else-if="line.kind === 'heading'">{{ line.text }}</h5>
@@ -69,7 +71,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKey))
         <p v-else-if="line.text.trim()">{{ line.text }}</p>
       </template>
     </div>
-    <div class="changelog-footer"><a ref="historyLink" href="https://github.com/chenpingonline/Clash-for-fnos/blob/master/CHANGELOG.md" target="_blank" rel="noopener noreferrer">查看历史日志 ↗</a></div>
+    <div class="changelog-footer"><a ref="historyLink" href="https://github.com/chenpingonline/Clash-for-fnos/blob/master/CHANGELOG.md" target="_blank" rel="noopener noreferrer">{{ t("查看历史日志 ↗") }}</a></div>
   </BaseModal>
 </template>
 

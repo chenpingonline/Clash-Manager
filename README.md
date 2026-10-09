@@ -4,6 +4,8 @@
 
 # Clash for fnos
 
+简体中文 | [English](README.en.md)
+
 **运行在 fnOS 上的原生 Mihomo / Clash 管理器**
 
 通过 fnOS 桌面直接管理 Mihomo Core、代理节点、订阅配置、规则、连接、日志、TUN 与系统代理环境变量。
@@ -39,6 +41,10 @@ Clash for fnos 是为 **飞牛 fnOS** 设计的 Mihomo 管理应用，目标是�
 > Clash for fnos 是 Mihomo 的管理工具，**不提供代理节点、订阅服务或任何网络线路**。请自行准备合法可用的 Mihomo 配置或订阅。
 
 ---
+
+## 界面语言
+
+支持 **简体中文 / English / 跟随系统**。在设置页右上角的「界面语言」中可即时切换，选择保存在当前浏览器中；跟随系统按浏览器语言选择，中文使用简体中文，其余使用英文。节点名、订阅名、YAML、地址、路径和原始日志保持原样，日期按所选界面语言显示。fnOS 与 Docker 共用语言包。翻译维护说明见 [多语言指南](docs/i18n.md)。
 
 ## 功能
 
@@ -247,7 +253,7 @@ sha256sum
 
 - 所有打包入口会自动同步前端 npm 包版本；Vite 使用内容哈希生成前端资源名，FPK 文件名读取 manifest。
 - 两个 Go 二进制通过链接参数读取 manifest 版本，后端健康检查、更新检查和版本显示不再维护硬编码版本。
-- `npm run check` 只执行前端类型检查、测试和构建，不同步应用版本。修改 manifest 版本后，运行 `./scripts/sync-version.sh`；打包脚本也会先执行该同步步骤。
+- `npm run check` 只执行语言包检查、前端类型检查、测试和构建，不同步应用版本。修改 manifest 版本后，运行 `./scripts/sync-version.sh`；打包脚本也会先执行该同步步骤。
 - 前端的 `package.json`、`package-lock.json` 应用版本均为自动生成值，无需手动修改。Mihomo Core 和第三方依赖版本独立管理。
 
 打包不会自动递增版本；需要升级已有安装时，先修改 manifest 版本。打包会同步源码中的前端 `package.json` / `package-lock.json` 并生成 `web/dist`，架构、Core 资源和 checksum 的差异在临时 Stage 中处理。

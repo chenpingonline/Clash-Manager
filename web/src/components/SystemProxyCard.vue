@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t, modeLabel } from '@/services/i18n'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import DashboardSettingsButton from '@/components/DashboardSettingsButton.vue'
 import SystemProxySettingsModal from '@/components/SystemProxySettingsModal.vue'
@@ -100,7 +102,7 @@ async function changeMode(mode: RuntimeMode) {
     const result = await api<{ mode: RuntimeMode }>('/api/runtime-config', jsonRequest('PATCH', { mode }))
     if (result.mode !== mode) throw new Error('未能确认运行模式')
     runtimeMode.value = result.mode
-    notify(`已切换到 ${{ rule: '规则', global: '全局', direct: '直连' }[mode]}`)
+    notify({ rule: '已切换到规则模式', global: '已切换到全局模式', direct: '已切换到直连模式' }[mode])
     emit('updated')
   } catch (error) {
     notify(errorMessage(error), true)
@@ -178,26 +180,26 @@ onUnmounted(() => {
 <template>
   <section v-if="variant === 'dashboard'" class="card dashboard-runtime-panel" aria-labelledby="dashboard-runtime-title">
     <div class="dashboard-runtime-head">
-      <h2 id="dashboard-runtime-title"><a class="dashboard-section-link" href="#settings"><span class="dashboard-section-title">运行控制</span><span class="dashboard-title-arrow" aria-hidden="true" /></a></h2>
-      <span v-if="tunSaving" class="dashboard-tun-progress" role="status" aria-live="polite"><i aria-hidden="true" />{{ tunProgress }}</span>
+      <h2 id="dashboard-runtime-title"><a class="dashboard-section-link" href="#settings"><span class="dashboard-section-title">{{ t("运行控制") }}</span><span class="dashboard-title-arrow" aria-hidden="true" /></a></h2>
+      <span v-if="tunSaving" class="dashboard-tun-progress" role="status" aria-live="polite"><i aria-hidden="true" />{{ t(tunProgress) }}</span>
     </div>
     <div class="dashboard-runtime-controls">
       <div v-if="runtime.capabilities.hostProxyEnvironment" class="dashboard-runtime-segment dashboard-runtime-proxy">
         <div class="dashboard-runtime-toggle">
-          <span class="dashboard-runtime-label"><span>系统代理</span><DashboardSettingsButton label="系统代理设置" @click="proxySettingsOpen = true" /></span>
-          <label class="switch"><input type="checkbox" :checked="enabled" :disabled="saving || !management || (!online && !enabled)" aria-label="系统代理" @change="toggle"><span /></label>
+          <span class="dashboard-runtime-label"><span>{{ t("系统代理") }}</span><DashboardSettingsButton :label="t('系统代理设置')" @click="proxySettingsOpen = true" /></span>
+          <label class="switch"><input type="checkbox" :checked="enabled" :disabled="saving || !management || (!online && !enabled)" :aria-label="t('系统代理')" @change="toggle"><span /></label>
         </div>
       </div>
       <div class="dashboard-runtime-segment dashboard-runtime-tun">
         <div class="dashboard-runtime-toggle">
-          <span class="dashboard-runtime-label"><span>虚拟网卡(TUN)模式</span><DashboardSettingsButton label="虚拟网卡(TUN)设置" @click="tunSettingsOpen = true" /></span>
-          <label class="switch" :class="{ switching: tunSaving }"><input type="checkbox" :checked="tunDisplayedEnabled" :disabled="tunLoading || tunSaving || Boolean(tunError) || (!tunSupported && !tunEnabled)" :aria-busy="tunSaving" aria-label="虚拟网卡(TUN)模式" @change="toggleTun"><span /></label>
+          <span class="dashboard-runtime-label"><span>{{ t("虚拟网卡(TUN)模式") }}</span><DashboardSettingsButton :label="t('虚拟网卡(TUN)设置')" @click="tunSettingsOpen = true" /></span>
+          <label class="switch" :class="{ switching: tunSaving }"><input type="checkbox" :checked="tunDisplayedEnabled" :disabled="tunLoading || tunSaving || Boolean(tunError) || (!tunSupported && !tunEnabled)" :aria-busy="tunSaving" :aria-label="t('虚拟网卡(TUN)模式')" @change="toggleTun"><span /></label>
         </div>
       </div>
       <div class="dashboard-runtime-segment dashboard-runtime-mode">
-        <span class="dashboard-mode-label">运行模式</span>
-        <div class="mode-row dashboard-mode-row" :aria-label="`当前运行模式：${runtimeMode}`">
-          <button v-for="item in modes" :key="item.key" class="mode-btn" :class="{ active: online && runtimeMode === item.key }" :aria-pressed="online && runtimeMode === item.key" :disabled="saving || !online" @click="changeMode(item.key)">{{ item.label }}</button>
+        <span class="dashboard-mode-label">{{ t("运行模式") }}</span>
+        <div class="mode-row dashboard-mode-row" :aria-label="t('当前运行模式：{arg0}', { arg0: modeLabel(runtimeMode) })">
+          <button v-for="item in modes" :key="item.key" class="mode-btn" :class="{ active: online && runtimeMode === item.key }" :aria-pressed="online && runtimeMode === item.key" :disabled="saving || !online" @click="changeMode(item.key)">{{ modeLabel(item.key) }}</button>
         </div>
       </div>
     </div>
@@ -205,21 +207,21 @@ onUnmounted(() => {
   <div v-else class="runtime-control-grid">
     <div class="card section runtime-control-card system-proxy-card">
       <div v-if="runtime.capabilities.hostProxyEnvironment" class="runtime-control-head">
-        <div><h2>系统代理</h2><p :class="enabled ? 'good-text' : 'muted-text'">{{ enabled ? '已开启' : '已关闭' }}</p></div>
-        <label class="runtime-control-switch"><span class="switch"><input type="checkbox" :checked="enabled" :disabled="saving || !management || (!online && !enabled)" aria-label="系统代理" @change="toggle"><span /></span></label>
+        <div><h2>{{ t("系统代理") }}</h2><p :class="enabled ? 'good-text' : 'muted-text'">{{ t(enabled ? '已开启' : '已关闭') }}</p></div>
+        <label class="runtime-control-switch"><span class="switch"><input type="checkbox" :checked="enabled" :disabled="saving || !management || (!online && !enabled)" :aria-label="t('系统代理')" @change="toggle"><span /></span></label>
       </div>
-      <h2 v-if="!runtime.capabilities.hostProxyEnvironment">运行模式</h2>
-      <div class="mode-row" :aria-label="`当前运行模式：${runtimeMode}`">
-        <button v-for="item in modes" :key="item.key" class="mode-btn" :class="{ active: online && runtimeMode === item.key }" :disabled="saving || !online" @click="changeMode(item.key)">{{ item.label }}</button>
+      <h2 v-if="!runtime.capabilities.hostProxyEnvironment">{{ t("运行模式") }}</h2>
+      <div class="mode-row" :aria-label="t('当前运行模式：{arg0}', { arg0: modeLabel(runtimeMode) })">
+        <button v-for="item in modes" :key="item.key" class="mode-btn" :class="{ active: online && runtimeMode === item.key }" :disabled="saving || !online" @click="changeMode(item.key)">{{ modeLabel(item.key) }}</button>
       </div>
     </div>
     <div class="card section runtime-control-card tun-quick-card" :class="{ 'tun-on': tunEnabled }">
       <div class="runtime-control-head">
-        <div><h2>虚拟网卡(TUN)模式</h2><p :class="tunEnabled ? 'good-text' : tunSupported ? 'muted-text' : 'warn-text'">{{ tunStatus }}</p></div>
-        <label class="runtime-control-switch"><span class="switch" :class="{ switching: tunSaving }"><input type="checkbox" :checked="tunDisplayedEnabled" :disabled="tunLoading || tunSaving || Boolean(tunError) || (!tunSupported && !tunEnabled)" :aria-busy="tunSaving" aria-label="虚拟网卡(TUN)模式" @change="toggleTun"><span /></span></label>
+        <div><h2>{{ t("虚拟网卡(TUN)模式") }}</h2><p :class="tunEnabled ? 'good-text' : tunSupported ? 'muted-text' : 'warn-text'">{{ t(tunStatus) }}</p></div>
+        <label class="runtime-control-switch"><span class="switch" :class="{ switching: tunSaving }"><input type="checkbox" :checked="tunDisplayedEnabled" :disabled="tunLoading || tunSaving || Boolean(tunError) || (!tunSupported && !tunEnabled)" :aria-busy="tunSaving" :aria-label="t('虚拟网卡(TUN)模式')" @change="toggleTun"><span /></span></label>
       </div>
       <div class="tun-quick-footer">
-        <span :class="{ 'warn-text': !tunSupported && !tunEnabled }">{{ tunDescription }}</span>
+        <span :class="{ 'warn-text': !tunSupported && !tunEnabled }">{{ t(tunDescription) }}</span>
       </div>
     </div>
   </div>

@@ -1,8 +1,10 @@
+import { getLocale, t } from './i18n'
 import { EditorSelection, MapMode, StateEffect, StateField, type EditorState, type Range, type Text } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 
 export const LONG_LINE_LIMIT = 2_000
 export const LONG_LINE_PREFIX = 120
+export const longLineLanguage = StateEffect.define<void>()
 export const toggleLongLine = StateEffect.define<{ from: number; expanded: boolean }>()
 
 function prefixLength(text: string) {
@@ -15,15 +17,15 @@ export function hiddenLineSize(bytes: number) {
 }
 
 class LongLineToggle extends WidgetType {
-  constructor(readonly from: number, readonly bytes: number, readonly expanded: boolean) { super() }
-  eq(other: LongLineToggle) { return this.from === other.from && this.bytes === other.bytes && this.expanded === other.expanded }
+  constructor(readonly from: number, readonly bytes: number, readonly expanded: boolean, readonly language = getLocale()) { super() }
+  eq(other: LongLineToggle) { return this.from === other.from && this.bytes === other.bytes && this.expanded === other.expanded && this.language === other.language }
   toDOM(view: EditorView) {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'yaml-long-line-toggle'
-    button.textContent = this.expanded ? '收起超长行' : `展开更多（${hiddenLineSize(this.bytes)}）`
+    button.textContent = this.expanded ? t('收起超长行') : t('展开更多（{arg0}）', { arg0: hiddenLineSize(this.bytes) })
     button.setAttribute('aria-expanded', String(this.expanded))
-    button.title = this.expanded ? '收起此行，仅显示开头；配置内容保持完整' : '为保持流畅，超长行暂只显示开头；点击显示此行的完整内容'
+    button.title = t(this.expanded ? '收起此行，仅显示开头；配置内容保持完整' : '为保持流畅，超长行暂只显示开头；点击显示此行的完整内容')
     button.addEventListener('click', event => {
       event.preventDefault(); event.stopPropagation()
       const line = view.state.doc.lineAt(this.from)
@@ -85,7 +87,7 @@ export const longLines = StateField.define<LongLines>({
         expanded.add(line.from); toggled = true
       }
     }
-    if (!changed && !toggled) return value
+    if (!changed && !toggled && !transaction.effects.some(effect => effect.is(longLineLanguage))) return value
     return { expanded, decorations: decorations(transaction.newDoc, expanded) }
   },
   provide: field => EditorView.decorations.from(field, value => value.decorations),

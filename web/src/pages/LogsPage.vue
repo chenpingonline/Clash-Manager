@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import HighlightText from '@/components/HighlightText.vue'
 import { api, APP_PREFIX, errorMessage, isAbortError } from '@/services/api'
@@ -39,7 +41,7 @@ onBeforeUnmount(() => { controller?.abort(); stopStream(); cancelAnimationFrame(
 </script>
 
 <template>
-  <Teleport to="#page-actions"><div class="log-tools"><input v-model="query" type="search" class="log-search" placeholder="搜索日志" aria-label="搜索日志"><select v-model.number="limit" class="log-limit-select" aria-label="显示行数"><option v-for="value in [100, 200, 500, 800, 2000]" :key="value" :value="value">{{ value }} 行</option></select><select v-model="level" class="log-level-select" aria-label="日志级别" @change="load"><option v-for="value in ['debug', 'info', 'warning', 'error']" :key="value">{{ value }}</option></select><button class="ghost" @click="clear">清空</button><button @click="toggle">{{ running ? '停止' : '继续' }}</button></div></Teleport>
-  <div class="log-summary"><span class="muted">{{ loading ? '正在读取历史日志…' : error ? `读取失败：${error}` : `显示 ${visible.length} / ${filtered.length} 条${query ? '匹配日志' : ''} · 最近 ${items.length} 条日志中筛选` }}</span><label class="log-wrap-control"><span>自动换行</span><span class="switch quick-switch"><input v-model="wrapLines" type="checkbox"><span /></span></label></div>
-  <div ref="box" class="logs logs-full persistent-horizontal-scrollbar" :class="{ 'wrap-lines': wrapLines }"><div v-for="(item, index) in visible" :key="`${index}-${item.time}`" class="log-line" :class="`log-${item.level}`"><span><HighlightText :text="item.time" :query="query" /></span><span><HighlightText :text="item.level" :query="query" /></span><span><HighlightText :text="item.message" :query="query" /></span></div><div v-if="!visible.length && !loading" class="empty">{{ query ? '没有匹配的日志' : '暂无日志' }}</div></div>
+  <Teleport to="#page-actions"><div class="log-tools"><input v-model="query" type="search" class="log-search" :placeholder="t('搜索日志')" :aria-label="t('搜索日志')"><select v-model.number="limit" class="log-limit-select" :aria-label="t('显示行数')"><option v-for="value in [100, 200, 500, 800, 2000]" :key="value" :value="value">{{ t(value) }} {{ t("行") }}</option></select><select v-model="level" class="log-level-select" :aria-label="t('日志级别')" @change="load"><option v-for="value in ['debug', 'info', 'warning', 'error']" :key="value">{{ t(value) }}</option></select><button class="ghost" @click="clear">{{ t("清空") }}</button><button @click="toggle">{{ t(running ? '停止' : '继续') }}</button></div></Teleport>
+  <div class="log-summary"><span class="muted">{{ t(loading ? '正在读取历史日志…' : error ? `读取失败：${error}` : `显示 ${visible.length} / ${filtered.length} 条${query ? '匹配日志' : ''} · 最近 ${items.length} 条日志中筛选`) }}</span><label class="log-wrap-control"><span>{{ t("自动换行") }}</span><span class="switch quick-switch"><input v-model="wrapLines" type="checkbox"><span /></span></label></div>
+  <div ref="box" class="logs logs-full persistent-horizontal-scrollbar" :class="{ 'wrap-lines': wrapLines }"><div v-for="(item, index) in visible" :key="`${index}-${item.time}`" class="log-line" :class="`log-${item.level}`"><span><HighlightText :text="t(item.time)" :query="query" /></span><span><HighlightText :text="t(item.level)" :query="query" /></span><span><HighlightText :text="item.message" :query="query" /></span></div><div v-if="!visible.length && !loading" class="empty">{{ t(query ? '没有匹配的日志' : '暂无日志') }}</div></div>
 </template>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { EditorView } from '@codemirror/view'
 import { configMatchRange, configSearchIndex, configTextDocument, type ConfigSearchIndex, type ConfigTextDocument } from '@/services/config-text'
@@ -99,6 +101,6 @@ onBeforeUnmount(() => { alive = false; renderId++; worker?.terminate(); viewer?.
 <template>
   <div class="config-viewer">
     <div ref="host" v-show="ready" class="yaml-code-editor config-code-preview" />
-    <div v-if="!ready" class="empty">正在准备配置预览…</div>
+    <div v-if="!ready" class="empty">{{ t("正在准备配置预览…") }}</div>
   </div>
 </template>

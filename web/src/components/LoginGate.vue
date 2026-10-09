@@ -1,54 +1,34 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import App from '@/App.vue'
-import { api, errorMessage, jsonRequest } from '@/services/api'
-import { appDisplayName, loadRuntime } from '@/services/runtime'
+import { t } from '@/services/i18n'
 
-const ready = ref(false), loading = ref(true), busy = ref(false), required = ref(false), error = ref('')
-const username = ref('admin'), password = ref('')
-async function initialize() {
-  loading.value = true; error.value = ''
-  try {
-    const session = await api<{ required: boolean; authenticated: boolean }>('/api/auth/session')
-    required.value = session.required
-    if (session.authenticated) { await loadRuntime(); ready.value = true }
-  } catch (cause) { error.value = errorMessage(cause) }
-  finally { loading.value = false }
-}
-async function login() {
-  if (busy.value) return
-  busy.value = true; error.value = ''
-  try {
-    await api('/api/auth/login', jsonRequest('POST', { username: username.value, password: password.value }))
-    password.value = ''; await loadRuntime(); ready.value = true
-  } catch (cause) { error.value = errorMessage(cause) }
-  finally { busy.value = false }
-}
+import { onBeforeUnmount, onMounted } from 'vue'
+import App from '@/App.vue'
+import { appDisplayName } from '@/services/runtime'
+import { useStartupSession } from '@/composables/useStartupSession'
+
+const { ready, loading, busy, required, error, username, password, initialize, login, expire, dispose } = useStartupSession()
 function expired(event: Event) {
-  const wasReady = ready.value
-  ready.value = false; required.value = true
-  if (event instanceof CustomEvent && event.detail?.loggedOut) error.value = ''
-  else if (wasReady) error.value = '登录已过期，请重新登录'
+  expire(event instanceof CustomEvent && Boolean(event.detail?.loggedOut))
 }
 onMounted(() => { window.addEventListener('clash-auth-expired', expired); void initialize() })
-onBeforeUnmount(() => window.removeEventListener('clash-auth-expired', expired))
+onBeforeUnmount(() => { dispose(); window.removeEventListener('clash-auth-expired', expired) })
 </script>
 
 <template>
   <App v-if="ready" />
   <div v-else class="manager-login">
     <form class="manager-login-card" @submit.prevent="login">
-      <h1>{{ appDisplayName }}</h1>
-      <p class="muted">{{ loading ? '正在连接…' : '登录后管理订阅、代理与网络设置' }}</p>
+      <h1>{{ t(appDisplayName) }}</h1>
+      <p class="muted">{{ t(loading ? '正在连接…' : error && !required ? '连接失败，请检查服务状态后重试' : '登录后管理订阅、代理与网络设置') }}</p>
       <template v-if="!loading && required">
-        <label for="manager-username">用户名</label>
+        <label for="manager-username">{{ t("用户名") }}</label>
         <input id="manager-username" v-model="username" autocomplete="username" required :disabled="busy" />
-        <label for="manager-password">密码</label>
+        <label for="manager-password">{{ t("密码") }}</label>
         <input id="manager-password" v-model="password" type="password" autocomplete="current-password" required :disabled="busy" />
-        <button type="submit" :disabled="busy">{{ busy ? '正在登录…' : '登录' }}</button>
+        <button type="submit" :disabled="busy">{{ t(busy ? '正在登录…' : '登录') }}</button>
       </template>
-      <p v-if="error" class="warn-text" role="alert">{{ error }}</p>
-      <button v-if="!loading && !required" type="button" @click="initialize">重新连接</button>
+      <p v-if="error" class="warn-text" role="alert">{{ t(error) }}</p>
+      <button v-if="!loading && (!required || error)" type="button" :disabled="busy" @click="initialize">{{ t("重新连接") }}</button>
     </form>
   </div>
 </template>

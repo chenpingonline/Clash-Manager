@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { countLabel, t } from '@/services/i18n'
+
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import AsyncState from '@/components/AsyncState.vue'
 import BaseModal from '@/components/BaseModal.vue'
@@ -187,62 +189,62 @@ onMounted(() => { void delayTests.restore(); void load() })
     <div class="proxy-topbar-tools">
       <div class="proxy-search">
         <span aria-hidden="true">⌕</span>
-        <input v-model="query" placeholder="搜索代理组或节点" aria-label="搜索代理组或节点" autocomplete="off">
-        <button v-if="query" type="button" class="search-clear" aria-label="清空搜索" @click="query = ''">×</button>
+        <input v-model="query" :placeholder="t('搜索代理组或节点')" :aria-label="t('搜索代理组或节点')" autocomplete="off">
+        <button v-if="query" type="button" class="search-clear" :aria-label="t('清空搜索')" @click="query = ''">×</button>
       </div>
-      <span class="search-result">{{ query ? `${filtered.length} 组 · ${visibleNodeCount} 个节点` : '' }}</span>
-      <button class="ghost rule-provider-trigger" @click="openProviderManager">策略组 <span v-if="providersLoaded">{{ providerEntries.length }}</span></button>
-      <button class="ghost" :disabled="loading || !groups.length" @click="toggleAll">{{ allExpanded ? '全部收起' : '全部展开' }}</button>
-      <button class="ghost" :disabled="loading || !groups.length || delayTestBusy" @click="testMany(groups.flatMap(item => item.proxy.all || []), '全部节点测速完成')">{{ delayTestBusy ? '测试中…' : '延迟测试' }}</button>
+      <span class="search-result">{{ t(query ? `${filtered.length} 组 · ${visibleNodeCount} 个节点` : '') }}</span>
+      <button class="ghost rule-provider-trigger" @click="openProviderManager">{{ t("策略组") }} <span v-if="providersLoaded">{{ t(providerEntries.length) }}</span></button>
+      <button class="ghost" :disabled="loading || !groups.length" @click="toggleAll">{{ t(allExpanded ? '全部收起' : '全部展开') }}</button>
+      <button class="ghost" :disabled="loading || !groups.length || delayTestBusy" @click="testMany(groups.flatMap(item => item.proxy.all || []), '全部节点测速完成')">{{ t(delayTestBusy ? '测试中…' : '延迟测试') }}</button>
     </div>
   </Teleport>
 
-  <AsyncState :loading="loading" :error="error">
+  <AsyncState :loading="loading" :error="t(error)">
     <div class="proxy-groups">
       <section v-for="group in filtered" :key="group.name" class="card proxy-card" :class="{ expanded: expanded.has(group.name), 'search-expanded': query }" :data-group-name="group.name">
         <div class="proxy-card-head" @click="expanded.has(group.name) ? expanded.delete(group.name) : expanded.add(group.name)">
-          <div class="proxy-summary"><div class="proxy-name-row"><h3>{{ group.name }}</h3><span class="tag">{{ group.proxy.type || 'Selector' }}</span></div><div class="proxy-current"><span>当前</span><strong>{{ group.proxy.now || '-' }}</strong><span v-if="snapshot(group.proxy.now || '').text !== '--'" class="current-delay" :class="snapshot(group.proxy.now || '').className">{{ snapshot(group.proxy.now || '').text }}</span></div></div>
+          <div class="proxy-summary"><div class="proxy-name-row"><h3>{{ group.name }}</h3><span class="tag">{{ t(group.proxy.type || 'Selector') }}</span></div><div class="proxy-current"><span>{{ t("当前") }}</span><strong>{{ group.proxy.now || '-' }}</strong><span v-if="snapshot(group.proxy.now || '').text !== '--'" class="current-delay" :class="snapshot(group.proxy.now || '').className">{{ t(snapshot(group.proxy.now || '').text) }}</span></div></div>
           <div class="proxy-head-actions">
-            <button class="proxy-group-tool proxy-locate ghost small" :disabled="!group.proxy.now" aria-label="定位当前节点" title="定位当前节点" @click.stop="locateCurrent(group)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" /></svg></button>
-            <button class="proxy-group-tool proxy-latency-test ghost small" :disabled="delayTestBusy" title="测试本组全部可测速节点" @click.stop="testGroup(group)">{{ groupTesting(group.name) ? '测试中…' : '延迟测试' }}</button>
-            <label class="proxy-sort-control" title="设置本组节点排序方式" @click.stop>
-              <span>排序</span>
-              <select :value="groupSort(group.name)" :aria-label="`${group.name} 排序方式`" @click.stop @change.stop="updateGroupSort(group.name, $event)">
-                <option value="default">默认</option>
-                <option value="delay">按延迟</option>
-                <option value="name">按名称</option>
+            <button class="proxy-group-tool proxy-locate ghost small" :disabled="!group.proxy.now" :aria-label="t('定位当前节点')" :title="t('定位当前节点')" @click.stop="locateCurrent(group)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" /></svg></button>
+            <button class="proxy-group-tool proxy-latency-test ghost small" :disabled="delayTestBusy" :title="t('测试本组全部可测速节点')" @click.stop="testGroup(group)">{{ t(groupTesting(group.name) ? '测试中…' : '延迟测试') }}</button>
+            <label class="proxy-sort-control" :title="t('设置本组节点排序方式')" @click.stop>
+              <span>{{ t("排序") }}</span>
+              <select :value="groupSort(group.name)" :aria-label="t(`${group.name} 排序方式`)" @click.stop @change.stop="updateGroupSort(group.name, $event)">
+                <option value="default">{{ t("默认") }}</option>
+                <option value="delay">{{ t("按延迟") }}</option>
+                <option value="name">{{ t("按名称") }}</option>
               </select>
             </label>
-            <span class="node-count" :title="`${group.proxy.all?.length || 0} 个节点`">{{ group.proxy.all?.length || 0 }}</span>
+            <span class="node-count" :title="countLabel(group.proxy.all?.length || 0, '个节点')">{{ t(group.proxy.all?.length || 0) }}</span>
             <span class="proxy-chevron" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg></span>
           </div>
         </div>
         <div class="proxy-body">
           <div class="proxy-group-filter">
-            <label class="proxy-filter-search"><span>筛选</span><input :value="groupFilter(group.name)" :aria-label="`${group.name} 筛选节点`" placeholder="输入节点名称" @input="updateGroupFilter(group.name, $event)"></label>
-            <button v-if="groupFilter(group.name)" class="ghost small" @click="groupFilters.delete(group.name)">清除</button>
-            <label class="proxy-timeout-toggle" title="关闭后隐藏测速结果为超时的节点"><input type="checkbox" :checked="groupShowsTimeoutNodes(group.name)" @change="updateTimeoutVisibility(group.name, $event)"><span>显示超时节点</span></label>
-            <span>{{ group.nodes.length }} / {{ group.proxy.all?.length || 0 }} 个节点</span>
+            <label class="proxy-filter-search"><span>{{ t("筛选") }}</span><input :value="groupFilter(group.name)" :aria-label="t(`${group.name} 筛选节点`)" :placeholder="t('输入节点名称')" @input="updateGroupFilter(group.name, $event)"></label>
+            <button v-if="groupFilter(group.name)" class="ghost small" @click="groupFilters.delete(group.name)">{{ t("清除") }}</button>
+            <label class="proxy-timeout-toggle" :title="t('关闭后隐藏测速结果为超时的节点')"><input type="checkbox" :checked="groupShowsTimeoutNodes(group.name)" @change="updateTimeoutVisibility(group.name, $event)"><span>{{ t("显示超时节点") }}</span></label>
+            <span>{{ t(group.nodes.length) }} / {{ t(group.proxy.all?.length || 0) }} {{ t("个节点") }}</span>
           </div>
-          <div v-if="group.nodes.length" class="node-list"><div v-for="name in group.nodes" :key="name" class="node-row" :class="{ active: group.proxy.now === name }" :data-node-name="name"><button class="node-select" @click="select(group, name)"><span class="node-copy"><span class="node-name" :title="name">{{ name }}</span><span v-if="rawProxies[name]?.type" class="node-type">{{ rawProxies[name]?.type }}</span></span></button><button class="node-delay" :class="snapshot(name).className" :disabled="delayTestBusy" title="单独测试该节点延迟" @click="testOne(name)">{{ snapshot(name).text }}</button></div></div>
-          <div v-else class="proxy-group-empty">没有匹配的节点</div>
+          <div v-if="group.nodes.length" class="node-list"><div v-for="name in group.nodes" :key="name" class="node-row" :class="{ active: group.proxy.now === name }" :data-node-name="name"><button class="node-select" @click="select(group, name)"><span class="node-copy"><span class="node-name" :title="name">{{ name }}</span><span v-if="rawProxies[name]?.type" class="node-type">{{ rawProxies[name]?.type }}</span></span></button><button class="node-delay" :class="snapshot(name).className" :disabled="delayTestBusy" :title="t('单独测试该节点延迟')" @click="testOne(name)">{{ t(snapshot(name).text) }}</button></div></div>
+          <div v-else class="proxy-group-empty">{{ t("没有匹配的节点") }}</div>
         </div>
       </section>
     </div>
   </AsyncState>
 
-  <BaseModal :open="providerOpen" :title="`代理组 · ${providerEntries.length}`" @close="providerOpen = false">
-    <div class="provider-modal-head"><p>管理当前配置中的 Proxy Providers，可单独更新或执行健康检查。</p><button v-if="providerEntries.length" class="ghost small" :disabled="updatingProviders.size > 0" @click="updateAllProviders">{{ updatingProviders.size ? '更新中…' : '全部更新' }}</button></div>
-    <AsyncState :loading="providerLoading" :error="providerError">
+  <BaseModal :open="providerOpen" :title="t(`代理组 · ${providerEntries.length}`)" @close="providerOpen = false">
+    <div class="provider-modal-head"><p>{{ t("管理当前配置中的 Proxy Providers，可单独更新或执行健康检查。") }}</p><button v-if="providerEntries.length" class="ghost small" :disabled="updatingProviders.size > 0" @click="updateAllProviders">{{ t(updatingProviders.size ? '更新中…' : '全部更新') }}</button></div>
+    <AsyncState :loading="providerLoading" :error="t(providerError)">
       <div v-if="providerEntries.length" class="rule-provider-list">
         <div v-for="[name, provider] in providerEntries" :key="name" class="rule-provider-row proxy-provider-row">
-          <div class="rule-provider-main"><strong :title="name">{{ name }}</strong><span>{{ provider.vehicleType || provider.type || 'Proxy Provider' }} · {{ provider.proxies?.length || 0 }} 个节点</span></div>
-          <span class="rule-provider-updated">{{ providerUpdatedText(provider.updatedAt) }}</span>
-          <div class="proxy-provider-actions"><button class="ghost small" :disabled="checkingProviders.has(name) || updatingProviders.has(name)" @click="healthcheckProvider(name)">{{ checkingProviders.has(name) ? '检测中…' : '健康检查' }}</button><button class="ghost small" :disabled="updatingProviders.has(name) || checkingProviders.has(name)" @click="updateProvider(name)">{{ updatingProviders.has(name) ? '更新中…' : '更新' }}</button></div>
+          <div class="rule-provider-main"><strong :title="name">{{ name }}</strong><span>{{ t(provider.vehicleType || provider.type || 'Proxy Provider') }} · {{ countLabel(provider.proxies?.length || 0, "个节点") }}</span></div>
+          <span class="rule-provider-updated">{{ t(providerUpdatedText(provider.updatedAt)) }}</span>
+          <div class="proxy-provider-actions"><button class="ghost small" :disabled="checkingProviders.has(name) || updatingProviders.has(name)" @click="healthcheckProvider(name)">{{ t(checkingProviders.has(name) ? '检测中…' : '健康检查') }}</button><button class="ghost small" :disabled="updatingProviders.has(name) || checkingProviders.has(name)" @click="updateProvider(name)">{{ t(updatingProviders.has(name) ? '更新中…' : '更新') }}</button></div>
         </div>
       </div>
-      <div v-else class="empty compact">当前配置没有 Proxy Provider</div>
+      <div v-else class="empty compact">{{ t("当前配置没有 Proxy Provider") }}</div>
     </AsyncState>
-    <div class="actions provider-modal-actions"><button class="ghost" @click="providerOpen = false">关闭</button></div>
+    <div class="actions provider-modal-actions"><button class="ghost" @click="providerOpen = false">{{ t("关闭") }}</button></div>
   </BaseModal>
 </template>

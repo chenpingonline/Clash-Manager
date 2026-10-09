@@ -1,0 +1,96 @@
+import { computed, nextTick } from 'vue'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import english from '@/locales/en-US.json'
+import chinese from '@/locales/zh-CN.json'
+
+const key = 'clash-manager.language.v1'
+let storage: Map<string, string>, browser: EventTarget
+beforeEach(() => {
+  vi.resetModules()
+  storage = new Map()
+  browser = new EventTarget()
+  vi.stubGlobal('localStorage', { getItem: (name: string) => storage.get(name) ?? null, setItem: (name: string, value: string) => storage.set(name, value) })
+  vi.stubGlobal('navigator', { language: 'zh-CN' })
+  vi.stubGlobal('window', browser)
+  vi.stubGlobal('document', { documentElement: { lang: '' } })
+})
+afterEach(() => { vi.unstubAllGlobals() })
+
+describe('interface languages', () => {
+  it('uses the system language on first render without saving an inferred preference', async () => {
+    vi.stubGlobal('navigator', { language: 'en-GB' })
+    const { languagePreference, locale, t } = await import('./i18n')
+    expect(languagePreference.value).toBe('system')
+    expect(locale.value).toBe('en-US')
+    expect(t('订阅配置')).toBe('Profiles')
+    expect(document.documentElement.lang).toBe('en-US')
+    expect(storage.has(key)).toBe(false)
+  })
+  it('uses singular and plural counts without changing Chinese counters', async () => {
+    const { countLabel, setLanguage } = await import('./i18n')
+    expect(countLabel(1, '条规则')).toBe('1 条规则')
+    setLanguage('en-US')
+    expect(countLabel(1, '条规则')).toBe('1 rule')
+    expect(countLabel(0, '条规则')).toBe('0 rules')
+    expect(countLabel(2, '个节点')).toBe('2 proxies')
+    expect(countLabel(1, '个代理组')).toBe('1 proxy group')
+  })
+  it('follows browser language, updates live, and sets the document language', async () => {
+    const { locale, t, setLanguage } = await import('./i18n')
+    const label = computed(() => t('订阅配置'))
+    expect(label.value).toBe('订阅配置')
+    setLanguage('en-US'); await nextTick()
+    expect(label.value).toBe('Profiles')
+    expect(document.documentElement.lang).toBe('en-US')
+    expect(storage.get(key)).toBe('en-US')
+    setLanguage('system'); await nextTick()
+    expect(locale.value).toBe('zh-CN')
+    vi.stubGlobal('navigator', { language: 'en-GB' })
+    browser.dispatchEvent(new Event('languagechange')); await nextTick()
+    expect(label.value).toBe('Profiles')
+    vi.stubGlobal('navigator', { language: 'zh-TW' })
+    browser.dispatchEvent(new Event('languagechange')); await nextTick()
+    expect(label.value).toBe('订阅配置')
+  })
+  it('retains the explicit preference on reload and syncs another tab', async () => {
+    storage.set(key, 'en-US')
+    const { locale, languagePreference, t } = await import('./i18n')
+    expect(locale.value).toBe('en-US')
+    expect(languagePreference.value).toBe('en-US')
+    expect(t('订阅配置')).toBe('Profiles')
+    expect(document.documentElement.lang).toBe('en-US')
+    storage.set(key, 'zh-CN')
+    const event = new Event('storage'); Object.defineProperty(event, 'key', { value: key })
+    browser.dispatchEvent(event)
+    expect(locale.value).toBe('zh-CN')
+  })
+  it('continues when browser storage is unavailable', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => { throw new Error('disabled') }, setItem: () => { throw new Error('disabled') } })
+    const { setLanguage, t } = await import('./i18n')
+    expect(() => setLanguage('en-US')).not.toThrow()
+    expect(t('登录')).toBe('Log in')
+  })
+  it('preserves user names and opaque diagnostic details in parameters', async () => {
+    const { setLanguage, t, modeLabel } = await import('./i18n'); setLanguage('en-US')
+    expect(modeLabel('rule')).toBe('Rule')
+    expect(t('规则')).toBe('Rules')
+    const name = '规则'
+    expect(t('编辑 {arg0}', { arg0: name })).toBe('Edit 规则')
+    expect(t('已切换到 自定义节点')).toBe('Switched to 自定义节点')
+    expect(t('保存失败：用户名或密码错误')).toBe('Save failed: Incorrect username or password')
+    expect(t('托管 Core 端口占用：Controller (tcp 127.0.0.1:9090): bind: address already in use'))
+      .toBe('Managed Core port in use: Controller (tcp 127.0.0.1:9090): bind: address already in use')
+    expect(t('第 3 条规则已禁用并保存')).toBe('Rule 3 disabled and saved')
+    expect(t('未知的上游诊断')).toBe('未知的上游诊断')
+    expect(t('上游报告的未知名称')).toBe('上游报告的未知名称')
+    expect(t('上游报告的未知来源')).toBe('上游报告的未知来源')
+    expect(t('constructor')).toBe('constructor')
+    expect(t('toString')).toBe('toString')
+    expect(t('proxies:\n  - name: 我的节点')).toBe('proxies:\n  - name: 我的节点')
+  })
+  it('keeps complete catalogs and parameter parity', () => {
+    expect(Object.keys(english).sort()).toEqual(Object.keys(chinese).sort())
+    const placeholders = (value: string) => [...value.matchAll(/\{arg\d+\}/g)].map(match => match[0]).sort()
+    for (const [message, translated] of Object.entries(english)) expect(placeholders(translated), message).toEqual(placeholders(message))
+  })
+})

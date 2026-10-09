@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { computed, ref } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
 import { useOperationProgress } from '@/composables/useOperationProgress'
@@ -80,30 +82,30 @@ async function copy(command: string) {
 </script>
 
 <template>
-  <section v-if="conflict" class="port-conflict-help" aria-label="端口占用解决方法">
-    <h3>{{ conflict.port }} / {{ conflict.protocol.toUpperCase() }} 端口被占用</h3>
-    <p class="hint">可直接修改托管 Core 的启动端口，保留原有服务。保存时备份并校验配置，启动后自动验证连接。</p>
-    <button v-if="managed" type="button" @click="editPort">修改端口</button>
-    <p v-else class="hint">外部 Core 请通过原服务修改配置，或在 Core 设置中切换为托管模式。</p>
-    <details><summary>高级排查（SSH 命令）</summary>
+  <section v-if="conflict" class="port-conflict-help" :aria-label="t('端口占用解决方法')">
+    <h3>{{ t(conflict.port) }} / {{ t(conflict.protocol.toUpperCase()) }} {{ t("端口被占用") }}</h3>
+    <p class="hint">{{ t("可直接修改托管 Core 的启动端口，保留原有服务。保存时备份并校验配置，启动后自动验证连接。") }}</p>
+    <button v-if="managed" type="button" @click="editPort">{{ t("修改端口") }}</button>
+    <p v-else class="hint">{{ t("外部 Core 请通过原服务修改配置，或在 Core 设置中切换为托管模式。") }}</p>
+    <details><summary>{{ t("高级排查（SSH 命令）") }}</summary>
     <div v-for="step in steps" :key="step.title" class="port-conflict-step">
-      <strong>{{ step.title }}</strong><p class="hint">{{ step.note }}</p>
-      <div class="port-conflict-command"><code>{{ step.command }}</code><button class="ghost small" type="button" :aria-label="`复制${step.title.slice(3)}命令`" @click="copy(step.command)">复制</button></div>
+      <strong>{{ t(step.title) }}</strong><p class="hint">{{ t(step.note) }}</p>
+      <div class="port-conflict-command"><code>{{ t(step.command) }}</code><button class="ghost small" type="button" :aria-label="t(`复制${step.title.slice(3)}命令`)" @click="copy(step.command)">{{ t("复制") }}</button></div>
     </div>
-    <p class="hint">如果占用者是 Docker 容器，请在飞牛 Docker 页面停止对应容器或修改端口映射，不要直接结束 docker-proxy。受服务管理器控制的进程可能自动重启，应通过原服务停止。</p>
-    <details><summary>进程仍未退出时</summary><p class="hint">先重新查询并核对 PID，确认仍是同一进程后才强制结束；强制结束不会执行正常清理。</p><div class="port-conflict-command"><code>sudo kill -KILL PID</code><button class="ghost small" type="button" aria-label="复制强制结束命令" @click="copy('sudo kill -KILL PID')">复制</button></div></details>
-    <details><summary>系统没有 ss 命令时</summary><p class="hint">可用 netstat 查看监听列表，找到本地地址末尾为 :{{ conflict.port }} 的行及其 PID/程序名。</p><div class="port-conflict-command"><code>sudo netstat -tulnp</code><button class="ghost small" type="button" aria-label="复制备用排查命令" @click="copy('sudo netstat -tulnp')">复制</button></div></details>
+    <p class="hint">{{ t("如果占用者是 Docker 容器，请在飞牛 Docker 页面停止对应容器或修改端口映射，不要直接结束 docker-proxy。受服务管理器控制的进程可能自动重启，应通过原服务停止。") }}</p>
+    <details><summary>{{ t("进程仍未退出时") }}</summary><p class="hint">{{ t("先重新查询并核对 PID，确认仍是同一进程后才强制结束；强制结束不会执行正常清理。") }}</p><div class="port-conflict-command"><code>sudo kill -KILL PID</code><button class="ghost small" type="button" :aria-label="t('复制强制结束命令')" @click="copy('sudo kill -KILL PID')">{{ t("复制") }}</button></div></details>
+    <details><summary>{{ t("系统没有 ss 命令时") }}</summary><p class="hint">{{ t("可用 netstat 查看监听列表，找到本地地址末尾为 :") }}{{ t(conflict.port) }} {{ t("的行及其 PID/程序名。") }}</p><div class="port-conflict-command"><code>sudo netstat -tulnp</code><button class="ghost small" type="button" :aria-label="t('复制备用排查命令')" @click="copy('sudo netstat -tulnp')">{{ t("复制") }}</button></div></details>
     </details>
-    <BaseModal :open="dialog" title="修改启动端口" :closable="!busy" @close="dialog = false">
-      <p class="hint">Core 停止时也可修改两个启动端口。保存前统一检查冲突，启动时自动连接新的 Controller 地址。</p>
+    <BaseModal :open="dialog" :title="t('修改启动端口')" :closable="!busy" @close="dialog = false">
+      <p class="hint">{{ t("Core 停止时也可修改两个启动端口。保存前统一检查冲突，启动时自动连接新的 Controller 地址。") }}</p>
       <div class="recovery-port-grid">
         <div v-for="field in portFields" :key="field.key" class="field">
-          <label :for="`recovery-${field.key}`">{{ field.label }} <span v-if="field.conflict" class="error-text">原端口 {{ conflict.port }} 冲突</span><span v-else-if="!field.enabled" class="hint">（未启用）</span></label>
+          <label :for="`recovery-${field.key}`">{{ t(field.label) }} <span v-if="field.conflict" class="error-text">{{ t("原端口") }} {{ t(conflict.port) }} {{ t("冲突") }}</span><span v-else-if="!field.enabled" class="hint">{{ t("（未启用）") }}</span></label>
           <input :id="`recovery-${field.key}`" v-model="field.port" type="number" min="1" max="65535" step="1" :disabled="busy">
         </div>
       </div>
-      <div v-if="dialogError && !operationMessage" class="local-warning" role="alert">{{ dialogError }}</div>
-      <div class="actions"><button class="ghost" :disabled="busy" @click="dialog = false">取消</button><button class="ghost" :disabled="busy || !loaded" @click="savePort(false)">保存</button><button :disabled="busy || !loaded" @click="savePort(true)">{{ busy ? '处理中…' : '保存并启动' }}</button><span v-if="operationMessage" class="inline-operation-state" :class="{ 'error-text': dialogError }" role="status" aria-live="polite">{{ operationMessage }}</span></div>
+      <div v-if="dialogError && !operationMessage" class="local-warning" role="alert">{{ t(dialogError) }}</div>
+      <div class="actions"><button class="ghost" :disabled="busy" @click="dialog = false">{{ t("取消") }}</button><button class="ghost" :disabled="busy || !loaded" @click="savePort(false)">{{ t("保存") }}</button><button :disabled="busy || !loaded" @click="savePort(true)">{{ t(busy ? '处理中…' : '保存并启动') }}</button><span v-if="operationMessage" class="inline-operation-state" :class="{ 'error-text': dialogError }" role="status" aria-live="polite">{{ t(operationMessage) }}</span></div>
     </BaseModal>
   </section>
 </template>

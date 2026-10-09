@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
 import { api, errorMessage, jsonRequest } from '@/services/api'
@@ -88,23 +90,23 @@ watch(() => props.open, load, { immediate: true })
 </script>
 
 <template>
-  <BaseModal :open="open" title="编辑托管配置" :show-header="false" card-class="profile-extension-modal config-editor-modal" :closable="!saving && !discarding" :inert="discarding" @close="close">
-    <p class="config-editor-note">修改当前启动 YAML。保存时会校验、备份并应用；订阅更新并应用后可能覆盖这些修改，长期修改请使用订阅增强。Controller 地址与 Secret 会保留当前连接设置。</p>
+  <BaseModal :open="open" :title="t('编辑托管配置')" :show-header="false" card-class="profile-extension-modal config-editor-modal" :closable="!saving && !discarding" :inert="discarding" @close="close">
+    <p class="config-editor-note">{{ t("修改当前启动 YAML。保存时会校验、备份并应用；订阅更新并应用后可能覆盖这些修改，长期修改请使用订阅增强。Controller 地址与 Secret 会保留当前连接设置。") }}</p>
     <div v-if="path && revision" class="config-editor-path mono" :title="path">{{ path }}</div>
-    <div v-if="loading" class="profile-extension-loading">正在读取配置…</div>
+    <div v-if="loading" class="profile-extension-loading">{{ t("正在读取配置…") }}</div>
     <YamlEditor v-else-if="revision" v-model="content" :disabled="saving" @busy="formatting = $event" @error="error = $event" />
-    <p v-if="error" class="config-editor-error" role="alert">{{ error }}</p>
+    <p v-if="error" class="config-editor-error" role="alert">{{ t(error) }}</p>
     <div class="actions profile-extension-actions config-editor-actions">
-      <button class="small" :disabled="loading || saving || formatting || !revision || !dirty || !content.trim()" @click="save">{{ saving ? '正在校验并应用…' : '保存并应用' }}</button>
-      <button ref="closeButton" class="ghost small" :disabled="saving" @click="close">{{ dirty ? '放弃修改' : '关闭' }}</button>
+      <button class="small" :disabled="loading || saving || formatting || !revision || !dirty || !content.trim()" @click="save">{{ t(saving ? '正在校验并应用…' : '保存并应用') }}</button>
+      <button ref="closeButton" class="ghost small" :disabled="saving" @click="close">{{ t(dirty ? '放弃修改' : '关闭') }}</button>
     </div>
   </BaseModal>
-  <BaseModal :open="open && discarding" title="放弃修改？" card-class="config-discard-modal" @close="cancelDiscard">
+  <BaseModal :open="open && discarding" :title="t('放弃修改？')" card-class="config-discard-modal" @close="cancelDiscard">
     <div @keydown="discardKeydown">
-      <p class="muted">尚未保存的配置修改将丢失，是否放弃？</p>
+      <p class="muted">{{ t("尚未保存的配置修改将丢失，是否放弃？") }}</p>
       <div class="actions config-editor-actions">
-        <button ref="continueButton" class="ghost small" type="button" @click="cancelDiscard">继续编辑</button>
-        <button ref="discardButton" class="danger small" type="button" @click="discardChanges">放弃修改</button>
+        <button ref="continueButton" class="ghost small" type="button" @click="cancelDiscard">{{ t("继续编辑") }}</button>
+        <button ref="discardButton" class="danger small" type="button" @click="discardChanges">{{ t("放弃修改") }}</button>
       </div>
     </div>
   </BaseModal>

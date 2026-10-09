@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+
 import { toasts } from '@/services/toast'
 </script>
 
@@ -9,7 +11,7 @@ import { toasts } from '@/services/toast'
         <path v-if="item.bad" d="M5 5l10 10M15 5L5 15" />
         <path v-else d="M4 10l4 4 8-8" />
       </svg>
-      <span class="toast-message">{{ item.text }}</span>
+      <span class="toast-message">{{ t(item.text) }}</span>
     </div>
   </div>
 </template>

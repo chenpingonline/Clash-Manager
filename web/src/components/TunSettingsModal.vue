@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { t } from '@/services/i18n'
+import { runtime } from '@/services/runtime'
+
 import { computed, reactive, ref, watch } from 'vue'
 import TunStackFields from '@/components/settings/TunStackFields.vue'
 import BaseModal from '@/components/BaseModal.vue'
@@ -41,7 +44,7 @@ let hasSettings = false
 
 const supported = computed(() => capability.value.supported === true)
 const controlsDisabled = computed(() => loading.value || saving.value || !supported.value)
-const capabilityText = computed(() => capability.value.message || (supported.value ? '当前 fnOS 环境支持 TUN。' : '当前环境暂不支持 TUN。'))
+const capabilityText = computed(() => capability.value.message || (supported.value ? '当前环境支持 TUN。' : '当前环境暂不支持 TUN。'))
 
 function applyResult(result: NetworkSettingsResponse) {
   hasSettings = true
@@ -122,61 +125,61 @@ watch(() => props.open, open => {
 </script>
 
 <template>
-  <BaseModal :open="open" title="虚拟网卡(TUN)设置" card-class="tun-settings-modal-card" :closable="!saving" @close="close">
+  <BaseModal :open="open" :title="t('虚拟网卡(TUN)设置')" card-class="tun-settings-modal-card" :closable="!saving" @close="close">
     <template #header>
       <div class="settings-modal-header">
         <div class="settings-modal-heading">
-          <h3>虚拟网卡(TUN)设置</h3>
-          <span v-if="saving" class="tun-settings-save-progress" role="status" aria-live="polite">{{ operation.message }}</span>
+          <h3>{{ t("虚拟网卡(TUN)设置") }}</h3>
+          <span v-if="saving" class="tun-settings-save-progress" role="status" aria-live="polite">{{ t(operation.message) }}</span>
         </div>
         <div class="settings-modal-header-actions">
-          <button class="ghost" type="button" :disabled="saving" @click="close">取消</button>
-          <button type="button" :disabled="loading || saving || !supported" @click="save">{{ saving ? '保存中…' : '保存' }}</button>
+          <button class="ghost" type="button" :disabled="saving" @click="close">{{ t("取消") }}</button>
+          <button type="button" :disabled="loading || saving || !supported" @click="save">{{ t(saving ? '保存中…' : '保存') }}</button>
         </div>
       </div>
     </template>
     <div class="tun-settings-modal-content">
-      <div v-if="loading" class="tun-settings-modal-loading">正在读取 TUN 设置…</div>
+      <div v-if="loading" class="tun-settings-modal-loading">{{ t("正在读取 TUN 设置…") }}</div>
       <div v-else class="tun-settings-modal-scroll">
-        <div v-if="error" class="local-warning">{{ error }}</div>
+        <div v-if="error" class="local-warning">{{ t(error) }}</div>
 
         <div class="tun-capability" :class="supported ? 'ok' : 'warn'">
-          <strong>{{ supported ? (form.enabled ? '已开启' : '已关闭') : '不可用' }}</strong>
-          <span>{{ capabilityText }}</span>
+          <strong>{{ t(supported ? (form.enabled ? '已开启' : '已关闭') : '不可用') }}</strong>
+          <span>{{ t(capabilityText) }}</span>
         </div>
-        <p v-if="!form.enabled && supported" class="tun-settings-disabled-hint">当前 TUN 未开启，修改会先保存为预配置；之后开启 TUN 时生效。</p>
-        <p v-if="offline" class="tun-settings-disabled-hint">Core 已停止；保存后将在下次启动时生效。</p>
+        <p v-if="!form.enabled && supported" class="tun-settings-disabled-hint">{{ t("当前 TUN 未开启，修改会先保存为预配置；之后开启 TUN 时生效。") }}</p>
+        <p v-if="offline" class="tun-settings-disabled-hint">{{ t("Core 已停止；保存后将在下次启动时生效。") }}</p>
 
         <div class="tun-settings-main-grid">
           <TunStackFields v-model:stack="form.stack" v-model:congestion-controller="form.congestionController" :features="features" field-class="tun-settings-field" :disabled="controlsDisabled" />
           <div class="field tun-settings-field">
             <div class="field-label-row">
               <label>MTU</label>
-              <HelpPopover label="MTU"><strong>单个网络数据包的最大传输尺寸</strong><span>默认值为 <b>1500</b>。VPN、PPPoE 或多层隧道环境异常时，可尝试 <b>1400</b>。</span></HelpPopover>
+              <HelpPopover label="MTU"><strong>{{ t("单个网络数据包的最大传输尺寸") }}</strong><span>{{ t("默认值为") }} <b>1500</b>{{ t("。VPN、PPPoE 或多层隧道环境异常时，可尝试") }} <b>1400</b>。</span></HelpPopover>
             </div>
             <input v-model.number="form.mtu" type="number" min="1280" max="65535" :disabled="controlsDisabled" aria-label="TUN MTU">
           </div>
         </div>
 
         <div class="tun-settings-option-grid">
-          <SettingToggle v-model="form.autoRoute" title="自动路由" description="自动把系统流量路由到 TUN" :disabled="controlsDisabled" />
-          <SettingToggle v-model="form.autoRedirect" title="Auto Redirect" description="Linux 自动配置 nftables/iptables TCP 重定向" :disabled="controlsDisabled || !form.autoRoute" />
-          <SettingToggle v-model="form.autoDetectInterface" title="自动检测出口网卡" description="自动选择实际的外网出口接口" :disabled="controlsDisabled" />
-          <SettingToggle v-model="form.dnsHijack" title="DNS 劫持" description="劫持 UDP/TCP 53 到 Mihomo DNS 模块" :disabled="controlsDisabled" />
-          <SettingToggle v-model="form.strictRoute" title="严格路由" description="减少流量/DNS 泄漏；复杂网络可能影响其他虚拟网卡" :disabled="controlsDisabled" />
+          <SettingToggle v-model="form.autoRoute" :title="t('自动路由')" :description="t('自动把系统流量路由到 TUN')" :disabled="controlsDisabled" />
+          <SettingToggle v-model="form.autoRedirect" title="Auto Redirect" :description="t('Linux 自动配置 nftables/iptables TCP 重定向')" :disabled="controlsDisabled || !form.autoRoute" />
+          <SettingToggle v-model="form.autoDetectInterface" :title="t('自动检测出口网卡')" :description="t('自动选择实际的外网出口接口')" :disabled="controlsDisabled" />
+          <SettingToggle v-model="form.dnsHijack" :title="t('DNS 劫持')" :description="t('劫持 UDP/TCP 53 到 Mihomo DNS 模块')" :disabled="controlsDisabled" />
+          <SettingToggle v-model="form.strictRoute" :title="t('严格路由')" :description="t('减少流量/DNS 泄漏；复杂网络可能影响其他虚拟网卡')" :disabled="controlsDisabled" />
         </div>
 
         <div class="field tun-settings-route-exclude">
           <div class="field-label-row">
-            <label>排除自定义网段</label>
-            <HelpPopover label="排除自定义网段"><strong>让指定目标网段绕过 TUN 自动路由</strong><span>仅在开启“自动路由”时生效。支持 IPv4/IPv6 CIDR，每行填写一个。</span></HelpPopover>
+            <label>{{ t("排除自定义网段") }}</label>
+            <HelpPopover :label="t('排除自定义网段')"><strong>{{ t("让指定目标网段绕过 TUN 自动路由") }}</strong><span>{{ t("仅在开启“自动路由”时生效。支持 IPv4/IPv6 CIDR，每行填写一个。") }}</span></HelpPopover>
           </div>
           <textarea v-model="routeExcludeText" placeholder="192.168.0.0/16&#10;10.0.0.0/8&#10;fc00::/7" :disabled="controlsDisabled || !form.autoRoute" />
-          <span class="field-note">每行一个 IPv4/IPv6 CIDR；留空表示不额外排除。</span>
+          <span class="field-note">{{ t("每行一个 IPv4/IPv6 CIDR；留空表示不额外排除。") }}</span>
         </div>
 
-        <div v-if="form.enabled && form.dnsHijack && !dnsEnabled" class="tun-capability warn"><strong>DNS</strong><span>开启 DNS 劫持前建议先启用 Mihomo DNS。</span></div>
-        <div class="tun-note"><strong>注意</strong><span>TUN 会修改 fnOS 的系统路由与 DNS 流向。默认关闭；配置不可用时可能影响 NAS 访问互联网。</span></div>
+        <div v-if="form.enabled && form.dnsHijack && !dnsEnabled" class="tun-capability warn"><strong>DNS</strong><span>{{ t("开启 DNS 劫持前建议先启用 Mihomo DNS。") }}</span></div>
+        <div class="tun-note"><strong>{{ t("注意") }}</strong><span>{{ t(runtime.platform === 'docker' ? 'TUN 修改所在网络命名空间的路由。Host 网络下作用于宿主；Bridge 网络下作用于容器。' : 'TUN 会修改 fnOS 的系统路由与 DNS 流向。') }} {{ t('默认关闭；配置不可用时可能影响访问互联网。') }}</span></div>
       </div>
     </div>
   </BaseModal>
