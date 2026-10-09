@@ -1428,11 +1428,12 @@
   "HTTP 部署必须设置至少 8 字符的 APP_AUTH_PASSWORD 或 APP_AUTH_PASSWORD_FILE": "HTTP deployments require APP_AUTH_PASSWORD or APP_AUTH_PASSWORD_FILE with at least 8 characters.",
   "APP_PLATFORM 必须为 fnos、docker 或 linux": "APP_PLATFORM must be fnos, docker or linux",
   "副本": "Copy",
-  "复制代理组 {arg0}": "Copy proxy group {arg0}",
+  "以此新建": "Create from this",
+  "以代理组 {arg0} 为模板新建": "Create a new group from {arg0}",
+  "将此组配置填入上方，修改后添加为新代理组": "Fill the form above with this group’s settings, then edit and add it as a new proxy group.",
   "排除全部原始规则": "Exclude all original rules",
   "恢复全部原始规则": "Restore all original rules",
-  "原始规则已排除 {arg0} / {arg1} 条": "Original rules excluded: {arg0} / {arg1}",
-  "操作覆盖当前订阅全部原始规则，不受筛选影响；保存并应用后生效。订阅更新后新增的规则仍会出现。": "Applies to all original rules in this profile regardless of filters. Save and apply to activate. New rules from subscription updates will still appear.",
+  "已排除 {arg0} 条": "{arg0} entries excluded",
   "全部代理集合": "All proxy providers",
   "全部节点": "All proxies",
   "查看代理组 {arg0} 的全部成员与集合": "View all members and providers of group {arg0}",
@@ -1484,10 +1485,8 @@
   "搜索规则说明或类型代码": "Search rule description or type code",
   "全部排除": "Exclude all",
   "全部恢复": "Restore all",
-  "排除当前订阅的全部原始节点（不受筛选影响）": "Exclude all original proxies in this subscription, regardless of filters",
-  "恢复当前订阅的全部原始节点（不受筛选影响）": "Restore all original proxies in this subscription, regardless of filters",
   "排除全部": "Exclude all",
   "恢复全部": "Restore all",
-  "排除当前订阅的全部原始代理组（不受筛选影响）": "Exclude all original proxy groups in this subscription, regardless of filters",
-  "恢复当前订阅的全部原始代理组（不受筛选影响）": "Restore all original proxy groups in this subscription, regardless of filters"
+  "排除筛选结果中的原始{arg0}": "Exclude original {arg0} matching the current filters",
+  "恢复筛选结果中的原始{arg0}": "Restore original {arg0} matching the current filters"
 }

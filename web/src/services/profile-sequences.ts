@@ -38,7 +38,7 @@ export function copyGroup(item: NamedEntry, unavailable: Iterable<string>, suffi
   while (occupied.has(name)) name = `${stem}-${number++}`
   return { ...JSON.parse(JSON.stringify(item)) as NamedEntry, name }
 }
-// Batch actions apply to the downloaded originals, independently of table filters.
+// Update only the supplied originals; retain unrelated exclusions and custom additions.
 export function setOriginalExclusions(model: SequenceExtension, base: SequenceEntry[], excluded: boolean): SequenceExtension {
   const identities = new Set(base.map(entryIdentity))
   return { ...model, delete: excluded ? [...new Set([...model.delete, ...identities])] : model.delete.filter(identity => !identities.has(identity)) }

@@ -15,10 +15,7 @@ function remove(index: number) {
 </script>
 
 <template>
-  <div v-if="modelValue.length" class="selected-members-preview">
-    <span v-for="(item, index) in modelValue.slice(0, 2)" :key="index" class="selected-member-preview" :title="item">{{ item }}</span>
-    <button type="button" class="rule-text-action" aria-haspopup="dialog" :aria-label="`${title} (${modelValue.length})`" @click="open = true">{{ t('查看全部（{arg0}）', { arg0: modelValue.length }) }}</button>
-  </div>
+  <button v-if="modelValue.length" type="button" class="selected-member-count" aria-haspopup="dialog" :aria-label="`${title} (${modelValue.length})`" :title="t('查看全部（{arg0}）', { arg0: modelValue.length })" @click="open = true">{{ modelValue.length }}</button>
   <SequenceFormDialog :open="open" :title="title" :subtitle="t('已引入 {arg0} 项', { arg0: modelValue.length })" @close="open = false">
     <input v-model="search" class="selected-member-search" :aria-label="t('搜索已引入的成员或集合')" :placeholder="t('搜索已引入的成员或集合')" />
     <ol v-if="filtered.length" class="selected-member-list" role="list">
@@ -29,9 +26,9 @@ function remove(index: number) {
 </template>
 
 <style scoped>
-.selected-members-preview{display:flex;align-items:center;gap:5px;min-width:0;height:24px}
-.selected-member-preview{flex:1;min-width:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 6px;border:1px solid var(--line);border-radius:5px;background:var(--surface-inset);font-size:11px}
-.selected-members-preview>button{flex:none;font-size:11px;padding:2px 3px;white-space:nowrap}
+.selected-member-count{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:20px;padding:0 6px;border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));border-radius:10px;background:color-mix(in srgb,var(--accent) 7%,var(--panel));color:var(--accent);font-size:11px;font-weight:600;line-height:18px;white-space:nowrap}
+.selected-member-count:hover{background:color-mix(in srgb,var(--accent) 15%,var(--panel))}
+.selected-member-count:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .selected-member-search{position:sticky;top:0;z-index:1;background:var(--panel);font-size:12px;margin-bottom:10px}
 .selected-member-list{padding:0;margin:0;list-style:none;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .selected-member-list li{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;font-size:12px}

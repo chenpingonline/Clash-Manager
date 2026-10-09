@@ -6,7 +6,7 @@ import BaseModal from '@/components/BaseModal.vue'
 import ProfileSequenceEditor from '@/components/ProfileSequenceEditor.vue'
 import RuleSequenceHelp from '@/components/RuleSequenceHelp.vue'
 import ProfileExtensionHelp from '@/components/ProfileExtensionHelp.vue'
-import { emptySequence, parseSequence, serializeSequence } from '@/services/profile-sequences'
+import { baseEntries, emptySequence, entryIdentity, parseSequence, serializeSequence } from '@/services/profile-sequences'
 import type { SequenceEditorData, SequenceExtension, SequenceKind } from '@/services/profile-sequences'
 import { api, errorMessage, jsonRequest } from '@/services/api'
 import { streamProfileJob } from '@/services/profile-jobs'
@@ -32,6 +32,14 @@ watch(resetting, async value => { if (value) { await nextTick(); keepButton.valu
 const advanced = ref(false), visualError = ref('')
 const sequenceData = ref<SequenceEditorData | null>(null), sequenceModel = ref<SequenceExtension>(emptySequence())
 const sequenceKind = computed(() => !props.global && ['rules', 'proxies', 'groups'].includes(props.kind || '') ? props.kind as SequenceKind : null)
+const excludedEntryCount = computed(() => {
+  const kind = sequenceKind.value
+  if (!kind || loading.value || !sequenceData.value) return null
+  try {
+    const excluded = new Set(parseSequence(content.value, kind).delete)
+    return baseEntries(sequenceData.value.base, kind).filter(item => excluded.has(entryIdentity(item))).length
+  } catch { return null }
+})
 let loadGeneration = 0
 function updateSequence(value: SequenceExtension) { sequenceModel.value = value; content.value = serializeSequence(value) }
 function toggleAdvanced() {
@@ -130,6 +138,7 @@ watch(() => [props.open, props.profile?.id, props.kind, props.global] as const, 
     <template v-else><p v-if="visualError" class="sequence-error" role="alert">{{ t(visualError) }}</p><textarea v-model="content" class="editor profile-extension-editor" spellcheck="false" :aria-label="t(meta.title)" :disabled="saving" /></template>
     <div class="actions profile-extension-actions" :class="{ 'rule-editor-footer': !!sequenceKind }">
       <span v-if="sequenceKind" class="muted rule-footer-note">{{ t("修改仅作用于当前订阅，更新订阅后保留。") }}</span>
+      <span v-if="excludedEntryCount !== null" class="rule-footer-excluded" role="status">{{ t('已排除 {arg0} 条', { arg0: excludedEntryCount }) }}</span>
       <button ref="saveButton" class="small" :disabled="loading || saving || (!!sequenceKind && !dirty)" @click="save">{{ t(saving ? (applyMessage || '保存并应用中…') : '保存并应用') }}</button>
       <button v-if="sequenceKind || customized" ref="resetButton" class="danger small" :disabled="loading || saving || (!!sequenceKind && !hasSequenceChanges)" @click="sequenceKind ? resetting = true : reset()">{{ t(sequenceKind ? '重置本订阅增强' : '恢复默认') }}</button>
       <button ref="cancelButton" class="ghost small" :disabled="saving" @click="emit('close')">{{ t("取消") }}</button>
