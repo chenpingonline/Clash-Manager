@@ -63,7 +63,7 @@ export function ruleParts(rule: string): string[] {
   }
   result.push(rule.slice(start)); return result
 }
-export const ruleTypes = ['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'DOMAIN-REGEX', 'GEOSITE', 'GEOIP', 'SRC-GEOIP', 'IP-ASN', 'SRC-IP-ASN', 'IP-CIDR', 'IP-CIDR6', 'SRC-IP-CIDR', 'IP-SUFFIX', 'SRC-IP-SUFFIX', 'SRC-PORT', 'DST-PORT', 'IN-PORT', 'DSCP', 'PROCESS-NAME', 'PROCESS-PATH', 'PROCESS-NAME-REGEX', 'PROCESS-PATH-REGEX', 'NETWORK', 'UID', 'IN-TYPE', 'IN-USER', 'IN-NAME', 'RULE-SET', 'SUB-RULE', 'AND', 'OR', 'NOT', 'MATCH']
+export const ruleTypes = ['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'DOMAIN-REGEX', 'GEOSITE', 'GEOIP', 'SRC-GEOIP', 'IP-ASN', 'SRC-IP-ASN', 'IP-CIDR', 'IP-CIDR6', 'SRC-IP-CIDR', 'IP-SUFFIX', 'SRC-IP-SUFFIX', 'SRC-PORT', 'DST-PORT', 'IN-PORT', 'DSCP', 'PROCESS-NAME', 'PROCESS-PATH', 'PROCESS-NAME-REGEX', 'PROCESS-PATH-REGEX', 'NETWORK', 'UID', 'IN-TYPE', 'IN-USER', 'IN-NAME', 'SUB-RULE', 'RULE-SET', 'AND', 'OR', 'NOT', 'MATCH']
 export function makeRule(type: string, payload: string, policy: string, noResolve = false): string {
   payload = payload.trim(); policy = policy.trim()
   if (!ruleTypes.includes(type) || !policy || policy.includes(',')) throw new Error('请选择规则类型和有效的代理策略')
@@ -98,7 +98,39 @@ export function filterSequenceRows(rows: SequenceRow[], search: string, source: 
   return rows.filter(row => (source === 'all' || (source === 'deleted' ? row.deleted : row.side === source)) && (!term || (typeof row.item === 'string' ? row.item : `${row.item.name} ${row.item.type}`).toLocaleLowerCase().includes(term)))
 }
 export const ruleTypeLabels: Record<string, string> = {
-  DOMAIN: '完整域名', 'DOMAIN-SUFFIX': '域名后缀', 'DOMAIN-KEYWORD': '域名关键词', 'DOMAIN-REGEX': '域名正则', GEOSITE: '域名分类', GEOIP: '目标 IP 国家', 'SRC-GEOIP': '来源 IP 国家', 'IP-ASN': '目标 ASN', 'SRC-IP-ASN': '来源 ASN', 'IP-CIDR': '目标 IP 网段', 'IP-CIDR6': '目标 IPv6 网段', 'SRC-IP-CIDR': '来源 IP 网段', 'IP-SUFFIX': '目标 IP 后缀', 'SRC-IP-SUFFIX': '来源 IP 后缀', 'SRC-PORT': '来源端口', 'DST-PORT': '目标端口', 'IN-PORT': '入站端口', DSCP: 'DSCP 标记', 'PROCESS-NAME': '进程名称', 'PROCESS-PATH': '进程路径', 'PROCESS-NAME-REGEX': '进程名称正则', 'PROCESS-PATH-REGEX': '进程路径正则', NETWORK: '网络类型', UID: '用户 ID', 'IN-TYPE': '入站类型', 'IN-USER': '入站用户', 'IN-NAME': '入站名称', 'RULE-SET': '规则集', 'SUB-RULE': '子规则', AND: '同时满足', OR: '任一满足', NOT: '不满足', MATCH: '所有其他流量',
+  "DOMAIN": "匹配完整域名",
+  "DOMAIN-SUFFIX": "匹配域名后缀",
+  "DOMAIN-KEYWORD": "匹配域名关键字",
+  "DOMAIN-REGEX": "匹配域名正则表达式",
+  "GEOSITE": "匹配 GeoSite 内的域名",
+  "GEOIP": "匹配 IP 所属国家代码",
+  "SRC-GEOIP": "匹配来源 IP 所属国家代码",
+  "IP-ASN": "匹配 IP 所属 ASN",
+  "SRC-IP-ASN": "匹配来源 IP 所属 ASN",
+  "IP-CIDR": "匹配 IP 地址范围",
+  "IP-CIDR6": "匹配 IP 地址范围",
+  "SRC-IP-CIDR": "匹配来源 IP 地址范围",
+  "IP-SUFFIX": "匹配 IP 后缀范围",
+  "SRC-IP-SUFFIX": "匹配来源 IP 后缀范围",
+  "SRC-PORT": "匹配请求来源端口范围",
+  "DST-PORT": "匹配请求目标端口范围",
+  "IN-PORT": "匹配入站端口",
+  "DSCP": "匹配 DSCP 标记",
+  "PROCESS-NAME": "匹配进程名称",
+  "PROCESS-PATH": "匹配完整进程路径",
+  "PROCESS-NAME-REGEX": "正则匹配完整进程名称",
+  "PROCESS-PATH-REGEX": "正则匹配完整进程路径",
+  "NETWORK": "匹配 TCP/UDP",
+  "UID": "匹配 Linux USER ID",
+  "IN-TYPE": "匹配入站类型",
+  "IN-USER": "匹配入站用户名",
+  "IN-NAME": "匹配入站名称",
+  "SUB-RULE": "匹配至子规则",
+  "RULE-SET": "引用规则集合",
+  "AND": "逻辑与",
+  "OR": "逻辑或",
+  "NOT": "逻辑非",
+  "MATCH": "匹配所有请求",
 }
 
 // Table summaries expose routing metadata, never node credentials or full URIs.
@@ -109,6 +141,12 @@ export function sequenceEntrySummary(item: SequenceEntry, kind: SequenceKind): s
     const port = typeof item.port === 'number' || typeof item.port === 'string' ? String(item.port) : ''
     return server ? `${server.includes(':') && !server.startsWith('[') ? `[${server}]` : server}${port ? `:${port}` : ''}` : '—'
   }
+  const entries = groupMemberEntries(item)
+  return entries.length ? entries.slice(0, 3).join(getLocale() === 'en-US' ? ', ' : '、') + (entries.length > 3 ? ` ${t('等 {arg0} 项', { arg0: entries.length })}` : '') : t('未配置成员')
+}
+
+// The detail list and compact summary share the same configured references and inclusion flags.
+export function groupMemberEntries(item: NamedEntry): string[] {
   const entries = [
     ...(Array.isArray(item.proxies) ? item.proxies.filter((entry): entry is string => typeof entry === 'string') : []),
     ...(Array.isArray(item.use) ? item.use.filter((entry): entry is string => typeof entry === 'string').map(entry => t('集合：{arg0}', { arg0: entry })) : []),
@@ -118,5 +156,5 @@ export function sequenceEntrySummary(item: SequenceEntry, kind: SequenceKind): s
     if (item['include-all-providers'] === true) entries.unshift(t('全部代理集合'))
     if (item['include-all-proxies'] === true) entries.unshift(t('全部节点'))
   }
-  return entries.length ? entries.slice(0, 3).join(getLocale() === 'en-US' ? ', ' : '、') + (entries.length > 3 ? ` ${t('等 {arg0} 项', { arg0: entries.length })}` : '') : t('未配置成员')
+  return entries
 }

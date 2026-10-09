@@ -2,15 +2,21 @@
 import { countLabel, t } from '@/services/i18n'
 
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { baseEntries, copyGroup, effectiveEntries, emptySequence, entryIdentity, makeRule, moveEntry, parseSequence, ruleParts, ruleTypes, ruleTypeLabels, sequenceRows, filterSequenceRows, sequenceEntrySummary, setOriginalExclusions } from '@/services/profile-sequences'
+import { baseEntries, copyGroup, effectiveEntries, emptySequence, entryIdentity, makeRule, moveEntry, parseSequence, ruleParts, sequenceRows, filterSequenceRows, sequenceEntrySummary, setOriginalExclusions } from '@/services/profile-sequences'
 import type { NamedEntry, SequenceEditorData, SequenceEntry, SequenceExtension, SequenceKind, SequenceRow, SequenceSourceFilter } from '@/services/profile-sequences'
 import { parseProxyInput } from '@/services/proxy-uri'
 import { errorMessage } from '@/services/api'
 import PolicySelect from './PolicySelect.vue'
+import GroupMembersModal from './GroupMembersModal.vue'
+import SelectedGroupMembers from './SelectedGroupMembers.vue'
+import SequenceFormDialog from './SequenceFormDialog.vue'
+import HelpPopover from './HelpPopover.vue'
+import RuleTypeSelect from './RuleTypeSelect.vue'
 
 const props = defineProps<{ kind: SequenceKind; modelValue: SequenceExtension; data: SequenceEditorData; disabled: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: SequenceExtension]; advanced: [] }>()
 const search = ref(''), error = ref(''), input = ref('')
+const nodePlaceholder = computed(() => `${t('每行一条 URI，也可粘贴 Base64 编码的节点列表')}\n${t('示例：')}trojan://password@example.com:443#Trojan\nsocks5://user:password@example.com:1080#SOCKS5`)
 const addSide = ref<'prepend' | 'append'>('prepend'), sourceFilter = ref<SequenceSourceFilter>('all')
 const sourceOptions: { value: SequenceSourceFilter; label: string }[] = [{ value: 'all', label: '全部' }, { value: 'prepend', label: '前置' }, { value: 'base', label: '订阅原始' }, { value: 'append', label: '后置' }, { value: 'deleted', label: '已排除' }]
 const ruleType = ref('DOMAIN'), payload = ref(''), policy = ref('DIRECT'), noResolve = ref(false)
@@ -19,6 +25,7 @@ const url = ref('https://www.gstatic.com/generate_204'), interval = ref(300), ti
 const groupExtra = ref(false), filter = ref(''), excludeFilter = ref(''), includeAll = ref(false), hidden = ref(false)
 const editIndex = ref<number | null>(null), editSide = ref<'prepend' | 'append'>('prepend'), originalObject = ref<NamedEntry | null>(null)
 const groupNameInput = ref<HTMLInputElement | null>(null)
+const inspectedGroup = ref<NamedEntry | null>(null)
 const originals = computed(() => baseEntries(props.data.base, props.kind))
 const noun = computed(() => props.kind === 'rules' ? '规则' : props.kind === 'proxies' ? '节点' : '代理组')
 function sequence(kind: SequenceKind) {
@@ -95,13 +102,13 @@ async function duplicate(row: Row) {
   cancelEdit()
   loadGroup(copyGroup(row.item, unavailable, t('副本')))
   addSide.value = row.side === 'append' ? 'append' : 'prepend'
-  groupExtra.value = true
+  groupExtra.value = false
   await nextTick()
   groupNameInput.value?.scrollIntoView({ block: 'nearest' })
   groupNameInput.value?.focus({ preventScroll: true })
 }
 function batchExclude(excluded: boolean) {
-  if (props.disabled || props.kind !== 'rules') return
+  if (props.disabled) return
   emit('update:modelValue', setOriginalExclusions(props.modelValue, originals.value, excluded))
 }
 function edit(row: Row) {
@@ -170,35 +177,50 @@ function reorder(row: Row, delta: number) {
       <template v-if="kind === 'rules'">
         <h4 class="rule-form-title">{{ t(editIndex !== null ? '编辑自定义规则' : '添加规则') }}</h4>
         <div class="rule-add-bar">
-          <label>{{ t("规则类型") }}<select v-model="ruleType"><option v-for="type in ruleTypes" :key="type" :value="type">{{ t(ruleTypeLabels[type]) }} · {{ t(type) }}</option></select></label>
+          <RuleTypeSelect v-model="ruleType" :disabled="disabled" />
           <label>{{ t("规则内容") }}<input v-model="payload" :disabled="ruleType === 'MATCH'" :list="ruleType === 'RULE-SET' ? 'sequence-rule-providers' : ruleType === 'SUB-RULE' ? 'sequence-sub-rules' : undefined" :placeholder="t(ruleType === 'MATCH' ? '无需填写匹配内容' : rulePlaceholder)" @keydown.enter.prevent="add(addSide)" /></label>
           <PolicySelect v-model="policy" :options="availableProxies" :disabled="disabled" />
-          <div class="rule-position-field"><span id="rule-position-label">{{ t("添加位置") }}</span><div class="rule-position" role="group" aria-labelledby="rule-position-label"><button type="button" :aria-pressed="addSide === 'prepend'" :class="{ active: addSide === 'prepend' }" @click="addSide = 'prepend'">{{ t("前置") }}</button><button type="button" :aria-pressed="addSide === 'append'" :class="{ active: addSide === 'append' }" @click="addSide = 'append'">{{ t("后置") }}</button></div></div>
+          <div class="rule-position-field"><div class="rule-position-heading"><span id="rule-position-label">{{ t("添加位置") }}</span><HelpPopover class="rule-position-help" :label="t('添加位置')"><span>{{ t('前置优先匹配，后置在订阅规则后。') }}</span></HelpPopover></div><div class="rule-position" role="group" aria-labelledby="rule-position-label"><button type="button" :aria-pressed="addSide === 'prepend'" :class="{ active: addSide === 'prepend' }" @click="addSide = 'prepend'">{{ t("前置") }}</button><button type="button" :aria-pressed="addSide === 'append'" :class="{ active: addSide === 'append' }" @click="addSide = 'append'">{{ t("后置") }}</button></div></div>
           <button class="small rule-add-submit" type="button" @click="add(addSide)">{{ t(editIndex !== null ? '更新规则' : '添加规则') }}</button>
         </div>
         <datalist id="sequence-rule-providers"><option v-for="item in ruleProviderNames" :key="item" :value="item" /></datalist>
         <datalist id="sequence-sub-rules"><option v-for="item in subRuleNames" :key="item" :value="item" /></datalist>
-        <div class="rule-add-help"><span class="muted">{{ t("前置优先匹配，后置在订阅规则后。") }}</span><label v-if="canNoResolve" class="sequence-check"><input v-model="noResolve" type="checkbox" />{{ t("不解析域名（no-resolve）") }}</label><button v-if="editIndex !== null" type="button" class="rule-text-action" @click="cancelEdit">{{ t("取消条目编辑") }}</button></div>
+        <div v-if="canNoResolve || editIndex !== null" class="rule-add-help"><label v-if="canNoResolve" class="sequence-check"><input v-model="noResolve" type="checkbox" />{{ t("不解析域名（no-resolve）") }}</label><button v-if="editIndex !== null" type="button" class="rule-text-action" @click="cancelEdit">{{ t("取消条目编辑") }}</button></div>
         <p v-if="appendWarning" class="rule-order-warning">{{ t("已有 MATCH 兜底规则，后置规则可能无法匹配；建议使用前置。") }}</p>
         <p v-if="error" class="sequence-error" role="alert">{{ t(error) }}</p>
       </template>
       <template v-else-if="kind === 'proxies'">
-        <h4 class="rule-form-title">{{ t("添加节点") }}</h4>
-        <div class="sequence-node-add"><label>{{ t("节点链接") }}<textarea v-model="input" spellcheck="false" :placeholder="t('每行一条 URI，也可粘贴 Base64 编码的节点列表')" /></label><div class="sequence-entry-actions"><div class="rule-position-field"><span id="node-position-label">{{ t("添加位置") }}</span><div class="rule-position" role="group" aria-labelledby="node-position-label"><button type="button" :aria-pressed="addSide === 'prepend'" :class="{ active: addSide === 'prepend' }" @click="addSide = 'prepend'">{{ t("前置") }}</button><button type="button" :aria-pressed="addSide === 'append'" :class="{ active: addSide === 'append' }" @click="addSide = 'append'">{{ t("后置") }}</button></div></div><button type="button" class="small rule-add-submit" @click="add(addSide)">{{ t("添加节点") }}</button></div></div>
+        <div class="sequence-node-add"><label>{{ t("节点链接") }}<textarea v-model="input" spellcheck="false" :placeholder="nodePlaceholder" /></label><div class="sequence-entry-actions"><div class="rule-position-field"><span id="node-position-label">{{ t("添加位置") }}</span><div class="rule-position" role="group" aria-labelledby="node-position-label"><button type="button" :aria-pressed="addSide === 'prepend'" :class="{ active: addSide === 'prepend' }" @click="addSide = 'prepend'">{{ t("前置") }}</button><button type="button" :aria-pressed="addSide === 'append'" :class="{ active: addSide === 'append' }" @click="addSide = 'append'">{{ t("后置") }}</button></div></div><button type="button" class="small rule-add-submit" @click="add(addSide)">{{ t("添加节点") }}</button></div></div>
         <p class="sequence-node-hint muted">{{ t("支持 SS、VMess、VLESS、Trojan、AnyTLS、Hysteria2、TUIC、HTTP 和 SOCKS5；其他节点参数可在高级 YAML 中编辑。") }}</p>
       </template>
       <template v-else>
-        <div class="sequence-group-heading"><h4 class="rule-form-title">{{ t(editIndex !== null ? '编辑自定义代理组' : '添加代理组') }}</h4><button type="button" class="ghost small" :aria-expanded="groupExtra" aria-controls="sequence-group-options" @click="groupExtra = !groupExtra">{{ t(groupExtra ? '收起更多设置' : '更多设置') }}</button></div>
+        <div class="sequence-group-heading"><h4 class="rule-form-title">{{ t(editIndex !== null ? '编辑自定义代理组' : '添加代理组') }}</h4><button type="button" class="ghost small" aria-haspopup="dialog" @click="groupExtra = true">{{ t('更多设置') }}</button></div>
         <div class="sequence-group-fields">
           <label>{{ t("代理组类型") }}<select v-model="groupType"><option v-if="!['select', 'url-test', 'fallback', 'load-balance'].includes(groupType)" :value="groupType">{{ groupType }}</option><option value="select">{{ t("手动选择 · select") }}</option><option value="url-test">{{ t("自动选择 · url-test") }}</option><option value="fallback">{{ t("故障转移 · fallback") }}</option><option value="load-balance">{{ t("负载均衡 · load-balance") }}</option></select></label>
           <label>{{ t("代理组名称") }}<input ref="groupNameInput" v-model="name" :placeholder="t('我的代理组')" /></label>
-          <div class="sequence-member-field"><span>{{ t("引入代理") }}</span><div class="sequence-provider-input"><PolicySelect v-model="memberInput" :options="availableProxies.filter(item => item !== name.trim())" :disabled="disabled" :label="t('引入代理')" :placeholder="t('选择或输入名称')" :search-placeholder="t('搜索代理组、节点或输入名称')" hide-label allow-custom /><button type="button" class="ghost small" @click="addMember">{{ t("引入代理") }}</button></div><div class="sequence-member-chips"><span v-if="!members.length" class="muted">{{ t("尚未引入代理") }}</span><span v-for="item in members" :key="item" class="sequence-member-chip"><span :title="item">{{ item }}</span><button type="button" :aria-label="t(`移除代理 ${item}`)" @click="members = members.filter(value => value !== item)">×</button></span></div></div>
-          <div class="sequence-member-field"><span>{{ t("引入代理集合") }}</span><div class="sequence-provider-input"><PolicySelect v-model="providerInput" :options="providerNames" :disabled="disabled" :label="t('引入代理集合')" :placeholder="t('选择或输入集合名称')" :search-placeholder="t('搜索集合或输入名称')" hide-label allow-custom /><button type="button" class="ghost small" @click="addProvider">{{ t("引入集合") }}</button></div><div class="sequence-member-chips"><span v-if="!providers.length" class="muted">{{ t("尚未引入集合") }}</span><span v-for="item in providers" :key="item" class="sequence-member-chip"><span :title="item">{{ item }}</span><button type="button" :aria-label="t(`移除集合 ${item}`)" @click="providers = providers.filter(value => value !== item)">×</button></span></div></div>
+          <div class="sequence-member-field"><span>{{ t("引入代理") }}</span><div class="sequence-provider-input"><PolicySelect v-model="memberInput" :options="availableProxies.filter(item => item !== name.trim())" :disabled="disabled" :label="t('引入代理')" :placeholder="t('选择或输入名称')" :search-placeholder="t('搜索代理组、节点或输入名称')" hide-label allow-custom /><button type="button" class="ghost small" @click="addMember">{{ t("引入代理") }}</button></div><SelectedGroupMembers v-model="members" :disabled="disabled" /></div>
+          <div class="sequence-member-field"><span>{{ t("引入代理集合") }}</span><div class="sequence-provider-input"><PolicySelect v-model="providerInput" :options="providerNames" :disabled="disabled" :label="t('引入代理集合')" :placeholder="t('选择或输入集合名称')" :search-placeholder="t('搜索集合或输入名称')" hide-label allow-custom /><button type="button" class="ghost small" @click="addProvider">{{ t("引入集合") }}</button></div><SelectedGroupMembers v-model="providers" :disabled="disabled" provider /></div>
         </div>
-        <div v-if="groupExtra" id="sequence-group-options" class="sequence-group-options">
-          <label>{{ t("代理组图标") }}<input v-model="icon" :placeholder="t('图标 URL（可选）')" /></label><label>{{ t("健康检查地址") }}<input v-model="url" type="url" /></label><label>{{ t("期望状态码") }}<input v-model="expectedStatus" :placeholder="t('* 或 200 / 204')" /></label><label>{{ t("检查间隔（秒）") }}<input v-model.number="interval" type="number" min="0" /></label><label>{{ t("超时（毫秒）") }}<input v-model.number="timeout" type="number" min="1" /></label>
-          <label v-if="groupType === 'url-test'">{{ t("切换容差（毫秒）") }}<input v-model.number="tolerance" type="number" min="0" /></label><label v-if="groupType === 'load-balance'">{{ t("负载均衡策略") }}<select v-model="strategy"><option>consistent-hashing</option><option>round-robin</option><option>sticky-sessions</option></select></label><label>{{ t("节点过滤") }}<input v-model="filter" :placeholder="t('正则表达式')" /></label><label>{{ t("排除节点") }}<input v-model="excludeFilter" :placeholder="t('正则表达式')" /></label><label class="sequence-check"><input v-model="lazy" type="checkbox" />{{ t("仅在使用时检查") }}</label><label class="sequence-check"><input v-model="includeAll" type="checkbox" />{{ t("包含所有节点与代理集合") }}</label><label class="sequence-check"><input v-model="hidden" type="checkbox" />{{ t("隐藏代理组") }}</label>
-        </div>
+        <SequenceFormDialog :open="groupExtra" :title="t('代理组更多设置')" :subtitle="name || t('我的代理组')" @close="groupExtra = false">
+          <fieldset class="group-options-form" :disabled="disabled">
+            <section class="group-options-section"><h4>{{ t('健康检查') }}</h4><div class="group-options-grid">
+              <label class="group-options-wide">{{ t('健康检查地址') }}<input v-model="url" type="url" /></label>
+              <label>{{ t('检查间隔（秒）') }}<input v-model.number="interval" type="number" min="0" /></label><label>{{ t('超时（毫秒）') }}<input v-model.number="timeout" type="number" min="1" /></label>
+              <label>{{ t('期望状态码') }}<input v-model="expectedStatus" :placeholder="t('* 或 200 / 204')" /></label>
+              <label v-if="groupType === 'url-test'">{{ t('切换容差（毫秒）') }}<input v-model.number="tolerance" type="number" min="0" /></label>
+              <label v-if="groupType === 'load-balance'">{{ t('负载均衡策略') }}<select v-model="strategy"><option>consistent-hashing</option><option>round-robin</option><option>sticky-sessions</option></select></label>
+              <label class="sequence-check group-options-wide"><input v-model="lazy" type="checkbox" />{{ t('仅在使用时检查') }}</label>
+            </div></section>
+            <section class="group-options-section"><h4>{{ t('成员筛选') }}</h4><div class="group-options-grid">
+              <label>{{ t('节点过滤') }}<input v-model="filter" :placeholder="t('正则表达式')" /></label><label>{{ t('排除节点') }}<input v-model="excludeFilter" :placeholder="t('正则表达式')" /></label>
+              <label class="sequence-check group-options-wide"><input v-model="includeAll" type="checkbox" />{{ t('包含所有节点与代理集合') }}</label>
+            </div></section>
+            <section class="group-options-section"><h4>{{ t('显示设置') }}</h4><div class="group-options-grid">
+              <label class="group-options-wide">{{ t('代理组图标') }}<input v-model="icon" :placeholder="t('图标 URL（可选）')" /></label>
+              <label class="sequence-check group-options-wide"><input v-model="hidden" type="checkbox" />{{ t('隐藏代理组') }}</label>
+            </div></section>
+          </fieldset>
+        </SequenceFormDialog>
         <div class="sequence-entry-actions sequence-group-actions"><span class="muted">{{ t("成员可多次引入，前置 / 后置决定列表顺序。") }}</span><div class="rule-position-field"><span id="group-position-label">{{ t("添加位置") }}</span><div class="rule-position" role="group" aria-labelledby="group-position-label"><button type="button" :aria-pressed="addSide === 'prepend'" :class="{ active: addSide === 'prepend' }" @click="addSide = 'prepend'">{{ t("前置") }}</button><button type="button" :aria-pressed="addSide === 'append'" :class="{ active: addSide === 'append' }" @click="addSide = 'append'">{{ t("后置") }}</button></div></div><button type="button" class="small rule-add-submit" @click="add(addSide)">{{ t(editIndex !== null ? '更新代理组' : '添加代理组') }}</button><button v-if="editIndex !== null" type="button" class="ghost small" @click="cancelEdit">{{ t("取消条目编辑") }}</button></div>
       </template>
       <p v-if="kind !== 'rules' && error" class="sequence-error" role="alert">{{ t(error) }}</p>
@@ -210,19 +232,19 @@ function reorder(row: Row, delta: number) {
         <span class="sequence-count muted">{{ countLabel(rows.length, kind === 'rules' ? '条规则' : kind === 'proxies' ? '个节点' : '个代理组') }}</span>
       </div>
       <div v-if="kind === 'rules'" class="sequence-batch-actions">
+        <span class="muted" role="status">{{ t('原始规则已排除 {arg0} / {arg1} 条', { arg0: excludedOriginalCount, arg1: originals.length }) }}</span>
         <button type="button" class="ghost small" :disabled="disabled || excludedOriginalCount === originals.length" @click="batchExclude(true)">{{ t('排除全部原始规则') }}</button>
         <button type="button" class="ghost small" :disabled="disabled || !excludedOriginalCount" @click="batchExclude(false)">{{ t('恢复全部原始规则') }}</button>
-        <span class="muted" role="status">{{ t('原始规则已排除 {arg0} / {arg1} 条', { arg0: excludedOriginalCount, arg1: originals.length }) }}</span>
         <p class="muted">{{ t('操作覆盖当前订阅全部原始规则，不受筛选影响；保存并应用后生效。订阅更新后新增的规则仍会出现。') }}</p>
       </div>
       <div v-if="data.warning" class="muted">{{ t(data.warning) }}</div>
       <div class="sequence-table-shell" role="table" :aria-label="t(`订阅${noun}`)" :aria-rowcount="rows.length + 1">
-        <div class="rule-table-heading rule-table-grid" :class="{ 'sequence-named-grid': kind !== 'rules' }" role="row" aria-rowindex="1"><span role="columnheader">{{ t("序号") }}</span><span role="columnheader">{{ kind === 'rules' ? t('规则内容') : t('{arg0}名称', { arg0: t(noun) }) }}</span><span role="columnheader">{{ t("类型") }}</span><span role="columnheader">{{ t(kind === 'rules' ? '策略' : kind === 'proxies' ? '服务器' : '成员 / 集合') }}</span><span role="columnheader">{{ t("来源") }}</span><span role="columnheader">{{ t("操作") }}</span></div>
+        <div class="rule-table-heading rule-table-grid" :class="{ 'sequence-named-grid': kind !== 'rules' }" role="row" aria-rowindex="1"><span role="columnheader">{{ t("序号") }}</span><span role="columnheader">{{ kind === 'rules' ? t('规则内容') : t('{arg0}名称', { arg0: t(noun) }) }}</span><span role="columnheader">{{ t("类型") }}</span><span role="columnheader">{{ t(kind === 'rules' ? '策略' : kind === 'proxies' ? '服务器' : '成员 / 集合') }}</span><span role="columnheader">{{ t("来源") }}</span><div v-if="kind !== 'rules'" class="sequence-batch-heading" role="columnheader"><span>{{ t('操作') }}</span><button type="button" class="rule-text-action rule-exclude-action" :disabled="disabled || excludedOriginalCount === originals.length" :title="t(kind === 'groups' ? '排除当前订阅的全部原始代理组（不受筛选影响）' : '排除当前订阅的全部原始节点（不受筛选影响）')" @click="batchExclude(true)">{{ t(kind === 'groups' ? '排除全部' : '全部排除') }}</button><button type="button" class="rule-text-action rule-restore-action" :disabled="disabled || !excludedOriginalCount" :title="t(kind === 'groups' ? '恢复当前订阅的全部原始代理组（不受筛选影响）' : '恢复当前订阅的全部原始节点（不受筛选影响）')" @click="batchExclude(false)">{{ t(kind === 'groups' ? '恢复全部' : '全部恢复') }}</button></div><span v-else role="columnheader">{{ t("操作") }}</span></div>
         <div ref="viewport" class="sequence-list rule-table-body" role="rowgroup" @scroll="scrollTop = ($event.target as HTMLElement).scrollTop">
           <div v-if="!rows.length" class="sequence-empty muted">{{ t(search || sourceFilter !== 'all' ? '没有匹配的条目' : '暂无条目') }}</div>
           <div :style="{ height: `${start * rowHeight}px` }" />
           <div v-for="(row, offset) in visibleRows" :key="row.key" class="rule-table-row rule-table-grid" :class="{ 'sequence-named-grid': kind !== 'rules', 'rule-excluded': row.deleted, 'rule-editing': editIndex === row.index && editSide === row.side }" role="row" :aria-rowindex="start + offset + 2">
-            <span class="muted" role="cell">{{ t(row.order) }}</span><span class="rule-table-content" role="cell" :title="describe(row.item)">{{ details(row.item).title }}</span><span role="cell" :title="details(row.item).type">{{ details(row.item).type }}</span><span role="cell" :title="sequenceEntrySummary(row.item, kind)">{{ sequenceEntrySummary(row.item, kind) }}</span><span role="cell" class="rule-table-source">{{ t(row.deleted ? '已排除' : row.side === 'base' ? '订阅原始' : row.side === 'prepend' ? '前置' : '后置') }}</span>
+            <span class="muted" role="cell">{{ t(row.order) }}</span><span class="rule-table-content" role="cell" :title="describe(row.item)">{{ details(row.item).title }}</span><span role="cell" :title="details(row.item).type">{{ details(row.item).type }}</span><span role="cell" :title="kind === 'groups' ? undefined : sequenceEntrySummary(row.item, kind)"><button v-if="kind === 'groups' && typeof row.item !== 'string'" type="button" class="sequence-member-summary" aria-haspopup="dialog" :aria-label="t('查看代理组 {arg0} 的全部成员与集合', { arg0: row.item.name })" :title="t('查看全部成员与集合')" @click="inspectedGroup = row.item">{{ sequenceEntrySummary(row.item, kind) }}</button><template v-else>{{ sequenceEntrySummary(row.item, kind) }}</template></span><span role="cell" class="rule-table-source">{{ t(row.deleted ? '已排除' : row.side === 'base' ? '订阅原始' : row.side === 'prepend' ? '前置' : '后置') }}</span>
             <div class="rule-table-actions" role="cell">
               <template v-if="row.side !== 'base'"><button class="rule-text-action" :disabled="disabled" :aria-label="t(`编辑 ${entryIdentity(row.item)}`)" :title="t(kind === 'proxies' ? '在高级 YAML 中编辑节点参数' : undefined)" @click="edit(row)">{{ t("编辑") }}</button><button class="rule-text-action rule-move" :disabled="disabled || row.index === 0" :aria-label="t(`上移 ${entryIdentity(row.item)}`)" :title="t('上移')" @click="reorder(row, -1)">↑</button><button class="rule-text-action rule-move" :disabled="disabled || row.index === modelValue[row.side].length - 1" :aria-label="t(`下移 ${entryIdentity(row.item)}`)" :title="t('下移')" @click="reorder(row, 1)">↓</button></template>
               <button class="rule-text-action" :class="{ 'rule-delete-action': row.side !== 'base', 'rule-exclude-action': row.side === 'base' && !row.deleted, 'rule-restore-action': row.deleted }" :disabled="disabled" :aria-label="`${t(row.deleted ? '恢复' : row.side === 'base' ? '排除' : '删除')} ${entryIdentity(row.item)}`" @click="remove(row)">{{ t(row.deleted ? '恢复' : row.side === 'base' ? '排除' : '删除') }}</button>
@@ -234,4 +256,5 @@ function reorder(row: Row, delta: number) {
       </div>
     </div>
   </div>
+  <GroupMembersModal :group="inspectedGroup" @close="inspectedGroup = null" />
 </template>

@@ -1087,30 +1087,25 @@ html[data-theme="light"] .topbar{background:rgba(248,250,253,.9)}
 .sequence-entry-actions .rule-position-field{width:164px;flex:none}
 .sequence-group-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
 .sequence-group-heading .rule-form-title{margin:0}
-.sequence-group-fields,.sequence-group-options{display:grid;grid-template-columns:minmax(140px,1fr) minmax(140px,1fr) minmax(220px,1.5fr) minmax(200px,1.4fr);align-items:start;gap:12px}
-.sequence-group-fields>label,.sequence-group-options>label,.sequence-member-field{display:flex;flex-direction:column;gap:5px;font-size:12px;min-width:0}
-.sequence-group-fields input,.sequence-group-fields select,.sequence-group-options input,.sequence-group-options select{height:34px;min-width:0;padding:6px 9px;font-size:12px}
+.sequence-group-fields{display:grid;grid-template-columns:minmax(140px,1fr) minmax(140px,1fr) minmax(220px,1.5fr) minmax(200px,1.4fr);align-items:start;gap:12px}
+.sequence-group-fields>label,.sequence-member-field{display:flex;flex-direction:column;gap:5px;font-size:12px;min-width:0}
+.sequence-group-fields input,.sequence-group-fields select{height:34px;min-width:0;padding:6px 9px;font-size:12px}
 .sequence-provider-input{align-items:center}
 .sequence-provider-input input{flex:1;min-width:0}
 .sequence-provider-input button{height:34px;flex:none;white-space:nowrap;font-size:11px;padding:6px 8px}
-.sequence-member-chips{display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-height:54px;overflow:auto;font-size:11px;line-height:22px}
-.sequence-member-chip{display:inline-flex;align-items:center;gap:2px;min-width:0;max-width:100%;height:24px;border:1px solid var(--line);border-radius:6px;background:var(--surface-inset);padding:0 3px 0 6px}
-.sequence-member-chip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.sequence-member-chip>button{background:transparent;color:var(--muted);padding:0;width:20px;height:22px;border-radius:4px;line-height:22px;font-size:14px;flex:none}
-.sequence-member-chip>button:hover{color:var(--bad)}
-.sequence-group-options{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
-.sequence-group-options>label.sequence-check{flex-direction:row;align-items:center;min-height:34px;gap:6px}
-.sequence-group-options .sequence-check input{width:14px;height:14px;padding:0;margin:0;flex:none}
 .sequence-group-actions{margin-top:8px}
 .sequence-group-actions>span{margin-right:auto;font-size:11px;align-self:center}
+.sequence-group-actions .rule-position-field{width:auto;flex-direction:row;align-items:center;gap:8px}
+.sequence-group-actions .rule-position-field>span{white-space:nowrap}
+.sequence-group-actions .rule-position{width:164px;flex:none}
 .sequence-groups-editor .sequence-form{max-height:52%;overflow:auto;scrollbar-width:auto;scrollbar-color:auto;flex-shrink:0}
 .sequence-named-grid{grid-template-columns:56px minmax(160px,1.4fr) minmax(90px,.65fr) minmax(160px,1.5fr) minmax(100px,.85fr) 154px}
 .sequence-groups-editor .sequence-named-grid{grid-template-columns:56px minmax(140px,1.4fr) minmax(90px,.65fr) minmax(140px,1.5fr) minmax(90px,.85fr) 190px}
-.sequence-batch-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:10px;flex:none;font-size:11px}
+.sequence-batch-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px 10px;margin-bottom:10px;flex:none;font-size:11px}
 .sequence-batch-actions button{white-space:nowrap}
-.sequence-batch-actions p{flex-basis:100%;margin:0;line-height:1.5}
-@media(max-width:1000px){.sequence-group-fields{grid-template-columns:1fr 1fr}.sequence-group-options{grid-template-columns:repeat(3,minmax(0,1fr))}.sequence-named-grid{grid-template-columns:42px minmax(110px,1fr) 86px minmax(130px,1.3fr) 74px 144px}.sequence-node-add{grid-template-columns:1fr}.sequence-node-add .sequence-entry-actions{justify-content:flex-end}}
-@media(max-width:760px){.sequence-group-fields{gap:8px;grid-template-columns:1fr 1fr}.sequence-group-options{grid-template-columns:1fr 1fr;gap:8px}.sequence-group-actions{flex-wrap:wrap;justify-content:flex-end;gap:8px}.sequence-group-actions>span{flex-basis:100%;margin:0}.sequence-groups-editor .sequence-form{max-height:52%;overflow:auto}.sequence-node-add .sequence-entry-actions{gap:8px}.sequence-node-add textarea{height:72px;min-height:72px}.sequence-entry-actions .rule-position-field{width:148px}}
+.sequence-batch-actions p{flex-basis:100%;margin:0;line-height:1.5;text-align:right}
+@media(max-width:1000px){.sequence-group-fields{grid-template-columns:1fr 1fr}.sequence-named-grid{grid-template-columns:42px minmax(110px,1fr) 86px minmax(130px,1.3fr) 74px 144px}.sequence-node-add{grid-template-columns:1fr}.sequence-node-add .sequence-entry-actions{justify-content:flex-end}}
+@media(max-width:760px){.sequence-group-fields{gap:8px;grid-template-columns:1fr 1fr}.sequence-group-actions{flex-wrap:wrap;justify-content:flex-end;gap:8px}.sequence-group-actions>span{flex-basis:100%;margin:0}.sequence-groups-editor .sequence-form{max-height:52%;overflow:auto}.sequence-node-add .sequence-entry-actions{gap:8px}.sequence-node-add textarea{height:72px;min-height:72px}.sequence-entry-actions .rule-position-field{width:148px}.sequence-group-actions .rule-position-field{width:auto}.sequence-group-actions .rule-position{width:148px}}
 
 /* Rule policy selection uses a separate search draft, never the selected value. */
 .rule-policy-field{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:12px}
@@ -1144,3 +1139,36 @@ html[lang="en-US"] .dashboard-field-prefix{white-space:nowrap}
 .topbar:has(.language-select) .topbar-title{flex:1}
 @media(max-width:900px){.topbar:has(.language-select) .settings-save-hint{display:none}}
 @media(max-width:680px){.topbar:has(.language-select){height:auto;min-height:46px;flex-wrap:wrap;gap:8px;padding-top:8px;padding-bottom:8px}}
+
+.sequence-member-summary{display:block;width:100%;min-width:0;border:0;border-radius:3px;padding:0;background:transparent;color:var(--accent);text-align:left;font:inherit;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sequence-member-summary:hover{text-decoration:underline}
+.sequence-member-summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.rule-excluded .sequence-member-summary{color:var(--muted)}
+
+/* Extended group options stay in their own dialog so the main list retains its space. */
+.group-options-form{border:0;margin:0;padding:0;min-width:0;display:grid;gap:18px}
+.group-options-section{padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface-inset)}
+.group-options-section h4{margin:0 0 12px;font-size:13px;font-weight:650}
+.group-options-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.group-options-grid>label{display:flex;flex-direction:column;gap:6px;font-size:12px;min-width:0}
+.group-options-grid input,.group-options-grid select{height:34px;padding:6px 9px;font-size:12px;min-width:0}
+.group-options-wide{grid-column:1/-1}
+.group-options-grid>label.sequence-check{flex-direction:row;align-items:center;gap:8px;min-height:24px}
+.group-options-grid .sequence-check input{width:14px;height:14px;margin:0;padding:0;flex:none}
+@media(max-width:480px){.group-options-grid{grid-template-columns:1fr}.group-options-section{padding:12px}}
+
+.rule-position-heading{position:relative;display:flex;align-items:center;gap:6px;min-height:16.5px}
+.rule-position-help{position:static}
+.rule-position-help .help-popover-panel{left:auto;right:0}
+.rule-position-help .help-popover-panel::before{display:none}
+@media(max-width:1000px){.rule-position-help .help-popover-panel{left:0;right:auto;width:min(300px,calc(100vw - 72px))}}
+@media(max-width:760px){.rule-position-help .help-popover-panel{left:auto;right:0;width:min(300px,calc(100vw - 112px))}}
+
+.rule-type-select-panel .policy-select-options button>span:first-child{white-space:normal;overflow-wrap:anywhere;line-height:1.6;text-overflow:clip}
+.rule-type-select-panel .policy-select-options button{align-items:flex-start}
+
+/* Keep batch actions in the fixed operation heading while the list scrolls. */
+.sequence-proxies-editor .sequence-named-grid{grid-template-columns:56px minmax(160px,1.4fr) minmax(90px,.65fr) minmax(160px,1.5fr) minmax(100px,.85fr) 190px}
+.sequence-batch-heading{display:flex;align-items:center;gap:4px;padding:0 8px;white-space:nowrap}
+.sequence-batch-heading>span{margin-right:auto}
+@media(max-width:1000px){.sequence-proxies-editor .sequence-named-grid{grid-template-columns:42px minmax(110px,1fr) 86px minmax(130px,1.3fr) 74px 190px}}

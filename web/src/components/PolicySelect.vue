@@ -3,7 +3,7 @@ import { t } from '@/services/i18n'
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 
-const props = withDefaults(defineProps<{ modelValue: string; options: string[]; disabled: boolean; label?: string; placeholder?: string; searchPlaceholder?: string; hideLabel?: boolean; allowCustom?: boolean }>(), { label: '代理策略', placeholder: '选择代理策略', searchPlaceholder: '搜索代理组或节点', hideLabel: false, allowCustom: false })
+const props = withDefaults(defineProps<{ modelValue: string; options: string[]; disabled: boolean; label?: string; placeholder?: string; searchPlaceholder?: string; hideLabel?: boolean; allowCustom?: boolean; panelClass?: string }>(), { label: '代理策略', placeholder: '选择代理策略', searchPlaceholder: '搜索代理组或节点', hideLabel: false, allowCustom: false, panelClass: '' })
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const root = ref<HTMLElement | null>(null), trigger = ref<HTMLButtonElement | null>(null), searchInput = ref<HTMLInputElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
@@ -77,7 +77,7 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside, tru
     <button ref="trigger" class="policy-select-trigger" type="button" :disabled="disabled" :aria-labelledby="hideLabel ? undefined : `${id}-label`" :aria-label="t(hideLabel ? label : undefined)" aria-haspopup="listbox" :aria-expanded="open" :aria-controls="`${id}-list`" @click="open ? close() : show()">
       <span :title="modelValue">{{ modelValue || t(placeholder) }}</span><span aria-hidden="true">⌄</span>
     </button>
-    <Teleport to="body"><div v-if="open" ref="panel" class="policy-select-panel" :style="panelStyle" @keydown="keyboard" @focusout="focusOut">
+    <Teleport to="body"><div v-if="open" ref="panel" class="policy-select-panel" :class="panelClass" :style="panelStyle" @keydown="keyboard" @focusout="focusOut">
       <input ref="searchInput" v-model="search" role="combobox" :aria-label="t('搜索{arg0}', { arg0: t(label) })" :placeholder="t(searchPlaceholder)" autocomplete="off" :aria-expanded="open" :aria-controls="`${id}-list`" :aria-activedescendant="visibleOptions.length ? `${id}-option-${activeIndex}` : undefined" />
       <div :id="`${id}-list`" class="policy-select-options" role="listbox" :aria-label="t('{arg0}候选', { arg0: t(label) })">
         <button v-for="(option, index) in visibleOptions" :id="`${id}-option-${index}`" :key="option" type="button" role="option" :aria-selected="option === modelValue" :class="{ 'is-active': index === activeIndex, 'is-selected': option === modelValue }" tabindex="-1" @pointerdown.prevent @click="choose(option)">
