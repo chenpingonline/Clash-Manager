@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomo"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
 )
 
 type dashboardStreamEvent struct {

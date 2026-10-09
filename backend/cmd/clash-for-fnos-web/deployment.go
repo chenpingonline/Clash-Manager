@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/runtimeenv"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/runtimeenv"
 )
 
 func gatewayPrefix() string {

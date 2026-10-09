@@ -4,7 +4,7 @@
 
 The Docker edition is called **Clash Manager**, formerly **Clash for fnOS / clash-for-fnos**. The main repository is [chenpingonline/clash-manager](https://hub.docker.com/r/chenpingonline/clash-manager); [chenpingonline/clash-for-fnos](https://hub.docker.com/r/chenpingonline/clash-for-fnos) remains a compatibility address. Matching version tags and `latest` publish the same multi-architecture manifest. Existing Compose services and `/data` remain compatible: change the image address while keeping the service and volume.
 
-Docker shares Vue, Go Web, Helper and Mihomo management code with the native fnOS edition. `chenpingonline/clash-manager:latest` supports Linux amd64/arm64. Docker selects the architecture automatically; Compose needs no `platform`. Version tags use `chenpingonline/clash-manager:<version>`, with no architecture or repair suffix. Startup ports can be configured through environment variables; management passwords require at least 8 characters. The application version comes from `fpk/manifest`.
+Docker shares Vue, Go Web, Helper and Mihomo management code with the native fnOS edition. `chenpingonline/clash-manager:latest` supports Linux amd64/arm64. Docker selects the architecture automatically; Compose needs no `platform`. Version tags use `chenpingonline/clash-manager:<version>`, with no architecture or repair suffix. Startup ports can be configured through environment variables; management passwords require at least 8 characters. The application version comes from `VERSION`.
 
 The UI supports Chinese and English. Select a language under Settings → Language (top right); the preference persists in the browser. Follow system uses the browser language. Proxy/profile names and YAML/log content are preserved. See [translation maintenance](../docs/i18n.md).
 
@@ -168,7 +168,7 @@ Features stay in the shared main branch; runtime differences are concentrated in
 Tag the same multi-architecture build with version and `latest` in both repositories to keep the compatibility address current. Version still comes from the manifest:
 
 ```sh
-VERSION=$(awk -F= '/^version[[:space:]]*=/{gsub(/[[:space:]]/,"",$2);print $2;exit}' fpk/manifest)
+VERSION=$(cat VERSION)
 docker buildx build --platform linux/amd64,linux/arm64 --push \
   -f docker/Dockerfile \
   -t "chenpingonline/clash-manager:$VERSION" \

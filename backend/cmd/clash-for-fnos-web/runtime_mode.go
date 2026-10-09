@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/configyaml"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomo"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/privileged"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/privileged"
 )
 
 func (g *gateway) updateRuntimeMode(ctx context.Context, live *mihomo.Client, mode string) error {

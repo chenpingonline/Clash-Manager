@@ -20,8 +20,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomo"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/privileged"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/privileged"
 )
 
 func (g *gateway) helperJSON(ctx context.Context, method, apiPath string, payload, target any, timeout time.Duration) error {

@@ -3,11 +3,11 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
-  base: process.env.VITE_APP_BASE || '/app/clash-for-fnos/',
+  base: process.env.VITE_APP_BASE || '/',
   plugins: [vue(), {
     name: 'deployment-title',
     transformIndexHtml(html) {
-      return process.env.VITE_APP_BASE === '/'
+      return !process.env.VITE_APP_BASE || process.env.VITE_APP_BASE === '/'
         ? html.replace('<title>Clash for fnos</title>', '<title>Clash Manager</title>')
         : html
     },

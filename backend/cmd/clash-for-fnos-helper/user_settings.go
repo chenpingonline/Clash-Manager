@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/configyaml"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
 	"gopkg.in/yaml.v3"
 )
 

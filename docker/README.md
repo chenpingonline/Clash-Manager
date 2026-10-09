@@ -4,7 +4,7 @@
 
 Docker 版现名 **Clash Manager**，原名 **Clash for fnOS / clash-for-fnos**。主仓库为 [chenpingonline/clash-manager](https://hub.docker.com/r/chenpingonline/clash-manager)，[chenpingonline/clash-for-fnos](https://hub.docker.com/r/chenpingonline/clash-for-fnos) 保留为兼容地址；对应版本与 `latest` 发布同一份双架构清单。旧 Compose 和 `/data` 数据目录可继续使用；迁移时只需更换镜像地址，保留服务名和数据卷。
 
-Clash Manager 是本项目的 Docker 版名称，与 fnOS 原生版 Clash for fnOS 共用 Vue、Go Web、Helper 和 Mihomo 管理代码。默认镜像 `chenpingonline/clash-manager:latest` 支持 Linux amd64/arm64，Docker 会自动选择宿主架构，无需在 Compose 中指定 `platform`。发布统一使用 `chenpingonline/clash-manager:<版本号>`，每个版本标签包含双架构清单，不附加架构或修复后缀。Docker 部署支持启动端口环境变量配置，管理密码至少 8 字符。应用版本由 `fpk/manifest` 注入，不另设版本源。
+Clash Manager 是本项目的 Docker 版名称，与 fnOS 原生版 Clash for fnOS 共用 Vue、Go Web、Helper 和 Mihomo 管理代码。默认镜像 `chenpingonline/clash-manager:latest` 支持 Linux amd64/arm64，Docker 会自动选择宿主架构，无需在 Compose 中指定 `platform`。发布统一使用 `chenpingonline/clash-manager:<版本号>`，每个版本标签包含双架构清单，不附加架构或修复后缀。Docker 部署支持启动端口环境变量配置，管理密码至少 8 字符。应用版本由 `VERSION` 注入，不另设版本源。
 
 ## 默认部署：fnOS/Linux 宿主 TUN
 
@@ -169,10 +169,10 @@ docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64 -t y
 
 ## 新旧仓库同步发布
 
-发布时将同一份多架构构建结果同时标记为两个仓库的版本标签和 `latest`，避免兼容地址落后。版本仍从 `fpk/manifest` 读取：
+发布时将同一份多架构构建结果同时标记为两个仓库的版本标签和 `latest`，避免兼容地址落后。版本仍从 `VERSION` 读取：
 
 ```sh
-VERSION=$(awk -F= '/^version[[:space:]]*=/{gsub(/[[:space:]]/,"",$2);print $2;exit}' fpk/manifest)
+VERSION=$(cat VERSION)
 docker buildx build --platform linux/amd64,linux/arm64 --push \
   -f docker/Dockerfile \
   -t "chenpingonline/clash-manager:$VERSION" \

@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/runtimeenv"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/runtimeenv"
 	"io"
 	"net/http"
 	"net/url"

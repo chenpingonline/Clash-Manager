@@ -1,4 +1,4 @@
-module github.com/chenpingonline/Clash-for-fnos/backend
+module github.com/chenpingonline/Clash-Manager/backend
 
 go 1.22
 

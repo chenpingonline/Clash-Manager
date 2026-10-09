@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomo"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
 )
 
 const maxDelayBatchConcurrency = 10

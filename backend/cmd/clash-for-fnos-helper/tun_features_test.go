@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/configyaml"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
 	"strings"
 	"testing"
 )

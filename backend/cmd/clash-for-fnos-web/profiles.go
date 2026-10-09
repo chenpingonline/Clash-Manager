@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/configyaml"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/privileged"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/privileged"
 )
 
 const (

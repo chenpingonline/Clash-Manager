@@ -23,12 +23,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/appsettings"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/configyaml"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomo"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomolog"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/privileged"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/runtimeenv"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/appsettings"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomolog"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/privileged"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/runtimeenv"
 )
 
 const appName = "clash-for-fnos"

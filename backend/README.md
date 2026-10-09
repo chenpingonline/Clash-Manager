@@ -26,7 +26,7 @@ fnOS Gateway -> Go web service -> Go Root Helper -> Mihomo/system
 - Go Root Helper 以 root 运行，只接受私有 Unix Socket 上的白名单请求，负责 Core、配置事务、TUN/DNS、GEO、系统代理与图标等必要的高权限操作。
 - 托管配置写入采用准备、校验、激活、运行状态确认、提交或回滚的事务流程。
 - fnOS 停止应用时先结束 Web，再结束 Helper；Helper 负责等待托管 Mihomo 正常退出。启动时 Web 会重新同步 Controller 设置，并对账托管 TUN 运行态。
-- 前端、后端、Go 构建版本及 FPK 文件名统一来自 `fpk/manifest`。
+- 前端、后端、Go 构建版本及 FPK 文件名统一来自 `VERSION`（fnOS 打包时由宿主 manifest 注入）。
 
 ## 已完成的迁移阶段
 
@@ -52,7 +52,7 @@ fnOS Gateway -> Go web service -> Go Root Helper -> Mihomo/system
 
 第 6 阶段已完成：独立 Go Root Helper 已覆盖配置事务、Core 启动与更新、网络/TUN/DNS、系统代理和图标白名单接口；内核更新由 Helper 再次核对官方 Release、大小、SHA-256 与可执行版本。
 
-第 7 阶段已完成：Node 兼容服务、旧 JavaScript 后端与 `nodejs_v22` 运行依赖已移除，fnOS 生命周期只启动 Go Web 与 Go Root Helper；发布版本统一由 `fpk/manifest` 提供。
+第 7 阶段已完成：Node 兼容服务、旧 JavaScript 后端与 `nodejs_v22` 运行依赖已移除，fnOS 生命周期只启动 Go Web 与 Go Root Helper；发布版本统一由 `VERSION`（fnOS 打包时由宿主 manifest 注入） 提供。
 
 ## Docker 运行环境
 

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomo"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
 )
 
 func (g *gateway) geoStatus(ctx context.Context) (map[string]any, error) {

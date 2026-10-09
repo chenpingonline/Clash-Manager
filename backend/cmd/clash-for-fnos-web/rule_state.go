@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomo"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
 )
 
 // The stored keys contain content, duplicate count and occurrence, never the

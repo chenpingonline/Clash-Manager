@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/configyaml"
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/runtimeenv"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/runtimeenv"
 )
 
 // Apply deployment overrides before bootstrap or API requests can start Core.

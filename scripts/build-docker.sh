@@ -2,7 +2,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DOCKERFILE="$ROOT/docker/Dockerfile"
-APP_RELEASE_VERSION="$(awk -F= '/^version[[:space:]]*=/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$ROOT/fpk/manifest")"
+APP_RELEASE_VERSION="$(cat "$ROOT/VERSION")"
+"$ROOT/scripts/sync-version.sh"
 LOCAL_BUILD=false
 if [ "${1:-}" = "--local-build" ]; then LOCAL_BUILD=true; shift; fi
 IMAGE="${1:-clash-manager:$APP_RELEASE_VERSION}"
@@ -14,14 +15,14 @@ if [ "$LOCAL_BUILD" = true ]; then
   WORK="$(mktemp -d)"
   trap 'rm -rf "$WORK"' EXIT
   VITE_APP_BASE=/ npm --prefix "$ROOT/web" run build
-  mkdir -p "$WORK/out/core" "$WORK/fpk/app"
+  mkdir -p "$WORK/out/core" "$WORK/assets"
   for component in web helper; do
     (cd "$ROOT/backend" && CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath -ldflags "-s -w -X main.version=$APP_RELEASE_VERSION" -o "$WORK/out/clash-$component" "./cmd/clash-for-fnos-$component")
   done
   case "$ARCH" in amd64) CORE_ARCH=x86;; arm64) CORE_ARCH=arm;; esac
   cp -a "$ROOT/resources/core/$CORE_ARCH/." "$WORK/out/core/"
   cp -a "$ROOT/web/dist" "$WORK/public"
-  cp -a "$ROOT/fpk/app/geodata" "$ROOT/fpk/app/licenses" "$ROOT/fpk/app/core" "$WORK/fpk/app/"
+  cp -a "$ROOT/assets/." "$WORK/assets/"
   mkdir -p "$WORK/docker"
   cp "$ROOT/docker/entrypoint.sh" "$ROOT/docker/healthcheck.sh" "$WORK/docker/"
   # Use exactly the same final runtime stage, replacing only builder-stage copies.

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chenpingonline/Clash-for-fnos/backend/internal/mihomo"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
 )
 
 func TestTrafficHistoryPersistsAndPrunesTenMinuteWindow(t *testing.T) {

@@ -1,4 +1,4 @@
-name: Shared fnOS and Docker checks
+name: Clash Manager checks
 on:
   push:
   pull_request:
@@ -22,7 +22,7 @@ jobs:
         working-directory: backend
       - run: npm ci && npm run check
         working-directory: web
-      - name: Compile both fnOS architectures
+      - name: Compile both Linux architectures
         working-directory: backend
         run: |
           for arch in amd64 arm64; do
@@ -30,6 +30,6 @@ jobs:
             CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -o /tmp/helper-$arch ./cmd/clash-for-fnos-helper
           done
       - name: Build Docker deployment from the same source
-        run: ./scripts/build-docker.sh clash-for-fnos:ci
+        run: ./scripts/build-docker.sh clash-manager:ci
       - name: Verify Docker lifecycle and persistence
-        run: python3 scripts/docker-smoke.py clash-for-fnos:ci
+        run: python3 scripts/docker-smoke.py clash-manager:ci

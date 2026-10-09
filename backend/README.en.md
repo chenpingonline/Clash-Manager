@@ -24,7 +24,7 @@ The two processes communicate through a private Unix socket. Web runs as the ded
 - Helper accepts only allowlisted private-socket requests for Core, configuration transactions, TUN/DNS, GEO, proxy environment variables and icons.
 - Managed configuration changes use prepare, validate, activate, verify runtime state, commit or roll back.
 - fnOS stops Web before Helper. Helper waits for managed Mihomo to exit gracefully. Startup resynchronizes Controller settings and reconciles managed TUN runtime state.
-- Frontend, backend, Go build versions and FPK filenames all read `fpk/manifest`.
+- Frontend, backend, Go build versions and FPK filenames all read `VERSION` (overridden by the fnOS package manifest in isolated builds).
 
 ## Completed migration phases
 
