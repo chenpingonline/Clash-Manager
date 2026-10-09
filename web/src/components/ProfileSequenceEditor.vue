@@ -9,6 +9,7 @@ import { errorMessage } from '@/services/api'
 import PolicySelect from './PolicySelect.vue'
 import GroupMembersModal from './GroupMembersModal.vue'
 import SelectedGroupMembers from './SelectedGroupMembers.vue'
+import GroupMemberSelect from './GroupMemberSelect.vue'
 import SequenceFormDialog from './SequenceFormDialog.vue'
 import HelpPopover from './HelpPopover.vue'
 import RuleTypeSelect from './RuleTypeSelect.vue'
@@ -37,17 +38,6 @@ const availableProxies = computed(() => [...new Set(['DIRECT', 'REJECT', 'REJECT
 const providerNames = computed(() => Object.keys((props.data.base['proxy-providers'] || {}) as object))
 const ruleProviderNames = computed(() => Object.keys((props.data.base['rule-providers'] || {}) as object))
 const subRuleNames = computed(() => Object.keys((props.data.base['sub-rules'] || {}) as object))
-const providerInput = ref(''), memberInput = ref('')
-function addMember() {
-  const value = memberInput.value.trim()
-  if (value && value !== name.value.trim() && !members.value.includes(value)) members.value.push(value)
-  memberInput.value = ''
-}
-function addProvider() {
-  const value = providerInput.value.trim()
-  if (value && !providers.value.includes(value)) providers.value.push(value)
-  providerInput.value = ''
-}
 const canNoResolve = computed(() => ['GEOIP', 'IP-ASN', 'IP-CIDR', 'IP-CIDR6', 'IP-SUFFIX', 'RULE-SET'].includes(ruleType.value))
 type Row = SequenceRow
 const allRows = computed(() => sequenceRows(originals.value, props.modelValue))
@@ -97,7 +87,6 @@ function loadGroup(value: NamedEntry) {
   members.value = Array.isArray(value.proxies) ? [...value.proxies] as string[] : []; providers.value = Array.isArray(value.use) ? [...value.use] as string[] : []
   url.value = String(value.url ?? 'https://www.gstatic.com/generate_204'); interval.value = Number(value.interval ?? 300); timeout.value = Number(value.timeout ?? 5000); tolerance.value = Number(value.tolerance ?? 50); lazy.value = value.lazy !== false; expectedStatus.value = String(value['expected-status'] ?? '*'); strategy.value = String(value.strategy ?? 'consistent-hashing')
   filter.value = String(value.filter || ''); excludeFilter.value = String(value['exclude-filter'] || ''); includeAll.value = value['include-all'] === true; hidden.value = value.hidden === true
-  memberInput.value = ''; providerInput.value = ''
 }
 async function duplicate(row: Row) {
   if (props.disabled || props.kind !== 'groups' || typeof row.item === 'string') return
@@ -200,8 +189,8 @@ function reorder(row: Row, delta: number) {
         <div class="sequence-group-fields">
           <label>{{ t("代理组类型") }}<select v-model="groupType"><option v-if="!['select', 'url-test', 'fallback', 'load-balance'].includes(groupType)" :value="groupType">{{ groupType }}</option><option value="select">{{ t("手动选择 · select") }}</option><option value="url-test">{{ t("自动选择 · url-test") }}</option><option value="fallback">{{ t("故障转移 · fallback") }}</option><option value="load-balance">{{ t("负载均衡 · load-balance") }}</option></select></label>
           <label>{{ t("代理组名称") }}<input ref="groupNameInput" v-model="name" :placeholder="t('我的代理组')" /></label>
-          <div class="sequence-member-field"><div class="sequence-member-heading"><span>{{ t("引入代理") }}</span><SelectedGroupMembers v-model="members" :disabled="disabled" /></div><div class="sequence-provider-input"><PolicySelect v-model="memberInput" :options="availableProxies.filter(item => item !== name.trim())" :disabled="disabled" :label="t('引入代理')" :placeholder="t('选择或输入名称')" :search-placeholder="t('搜索代理组、节点或输入名称')" hide-label allow-custom /><button type="button" class="ghost small" @click="addMember">{{ t("引入代理") }}</button></div></div>
-          <div class="sequence-member-field"><div class="sequence-member-heading"><span>{{ t("引入代理集合") }}</span><SelectedGroupMembers v-model="providers" :disabled="disabled" provider /></div><div class="sequence-provider-input"><PolicySelect v-model="providerInput" :options="providerNames" :disabled="disabled" :label="t('引入代理集合')" :placeholder="t('选择或输入集合名称')" :search-placeholder="t('搜索集合或输入名称')" hide-label allow-custom /><button type="button" class="ghost small" @click="addProvider">{{ t("引入集合") }}</button></div></div>
+          <div class="sequence-member-field"><div class="sequence-member-heading"><span>{{ t("引入代理") }}</span><SelectedGroupMembers v-model="members" :disabled="disabled" /></div><GroupMemberSelect v-model="members" :options="availableProxies" :exclude="name.trim()" :disabled="disabled" :label="t('引入代理')" :placeholder="t('选择或输入名称')" :search-placeholder="t('搜索代理组、节点或输入名称')" /></div>
+          <div class="sequence-member-field"><div class="sequence-member-heading"><span>{{ t("引入代理集合") }}</span><SelectedGroupMembers v-model="providers" :disabled="disabled" provider /></div><GroupMemberSelect v-model="providers" :options="providerNames" :disabled="disabled" :label="t('引入代理集合')" :placeholder="t('选择或输入集合名称')" :search-placeholder="t('搜索集合或输入名称')" /></div>
         </div>
         <SequenceFormDialog :open="groupExtra" :title="t('代理组更多设置')" :subtitle="name || t('我的代理组')" @close="groupExtra = false">
           <fieldset class="group-options-form" :disabled="disabled">
@@ -223,7 +212,7 @@ function reorder(row: Row, delta: number) {
             </div></section>
           </fieldset>
         </SequenceFormDialog>
-        <div class="sequence-entry-actions sequence-group-actions"><span class="muted">{{ t("成员可多次引入，前置 / 后置决定列表顺序。") }}</span><div class="rule-position-field"><span id="group-position-label">{{ t("添加位置") }}</span><div class="rule-position" role="group" aria-labelledby="group-position-label"><button type="button" :aria-pressed="addSide === 'prepend'" :class="{ active: addSide === 'prepend' }" @click="addSide = 'prepend'">{{ t("前置") }}</button><button type="button" :aria-pressed="addSide === 'append'" :class="{ active: addSide === 'append' }" @click="addSide = 'append'">{{ t("后置") }}</button></div></div><button type="button" class="small rule-add-submit" @click="add(addSide)">{{ t(editIndex !== null ? '更新代理组' : '添加代理组') }}</button><button v-if="editIndex !== null" type="button" class="ghost small" @click="cancelEdit">{{ t("取消条目编辑") }}</button></div>
+        <div class="sequence-entry-actions sequence-group-actions"><span class="muted">{{ t("可多选成员，前置 / 后置决定代理组位置。") }}</span><div class="rule-position-field"><span id="group-position-label">{{ t("添加位置") }}</span><div class="rule-position" role="group" aria-labelledby="group-position-label"><button type="button" :aria-pressed="addSide === 'prepend'" :class="{ active: addSide === 'prepend' }" @click="addSide = 'prepend'">{{ t("前置") }}</button><button type="button" :aria-pressed="addSide === 'append'" :class="{ active: addSide === 'append' }" @click="addSide = 'append'">{{ t("后置") }}</button></div></div><button type="button" class="small rule-add-submit" @click="add(addSide)">{{ t(editIndex !== null ? '更新代理组' : '添加代理组') }}</button><button v-if="editIndex !== null" type="button" class="ghost small" @click="cancelEdit">{{ t("取消条目编辑") }}</button></div>
       </template>
       <p v-if="kind !== 'rules' && error" class="sequence-error" role="alert">{{ t(error) }}</p>
     </fieldset>

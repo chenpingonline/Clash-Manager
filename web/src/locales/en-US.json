@@ -1442,6 +1442,9 @@
   "修改保留在当前表单，添加或更新代理组后进入草稿。": "Changes stay in this form. Add or update the group to include them in the draft.",
   "返回编辑": "Back to editor",
   "管理代理集合": "Manage proxy providers",
+  "全部移除": "Remove all",
+  "移除全部已引入的代理成员": "Remove all added proxy members",
+  "移除全部已引入的集合": "Remove all added providers",
   "管理代理成员": "Manage proxy members",
   "查看全部（{arg0}）": "View all ({arg0})",
   "已引入 {arg0} 项": "{arg0} items added",
@@ -1488,5 +1491,8 @@
   "排除全部": "Exclude all",
   "恢复全部": "Restore all",
   "排除筛选结果中的原始{arg0}": "Exclude original {arg0} matching the current filters",
-  "恢复筛选结果中的原始{arg0}": "Restore original {arg0} matching the current filters"
+  "恢复筛选结果中的原始{arg0}": "Restore original {arg0} matching the current filters",
+  "管理成员（{arg0}）": "Manage members ({arg0})",
+  "管理集合（{arg0}）": "Manage providers ({arg0})",
+  "可多选成员，前置 / 后置决定代理组位置。": "Select multiple members. Prepend / Append determines the group’s position."
 }

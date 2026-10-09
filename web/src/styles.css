@@ -1174,3 +1174,4 @@ html[lang="en-US"] .dashboard-field-prefix{white-space:nowrap}
 
 .sequence-member-heading{display:flex;align-items:center;gap:6px;min-width:0;height:20px}
 .sequence-member-heading>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:600px){.sequence-group-fields>.sequence-member-field{grid-column:1 / -1}}
