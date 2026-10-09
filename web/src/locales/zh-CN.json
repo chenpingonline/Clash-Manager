@@ -1425,5 +1425,13 @@
   "独立部署仅管理托管 Core，外部 Controller 可在连接设置中配置": "独立部署仅管理托管 Core，外部 Controller 可在连接设置中配置",
   "当前 Mihomo 缺少 TUN 所需的 NET_ADMIN 权限": "当前 Mihomo 缺少 TUN 所需的 NET_ADMIN 权限",
   "HTTP 部署必须设置至少 8 字符的 APP_AUTH_PASSWORD 或 APP_AUTH_PASSWORD_FILE": "HTTP 部署必须设置至少 8 字符的 APP_AUTH_PASSWORD 或 APP_AUTH_PASSWORD_FILE",
-  "APP_PLATFORM 必须为 fnos、docker 或 linux": "APP_PLATFORM 必须为 fnos、docker 或 linux"
+  "APP_PLATFORM 必须为 fnos、docker 或 linux": "APP_PLATFORM 必须为 fnos、docker 或 linux",
+  "副本": "副本",
+  "复制代理组 {arg0}": "复制代理组 {arg0}",
+  "排除全部原始规则": "排除全部原始规则",
+  "恢复全部原始规则": "恢复全部原始规则",
+  "原始规则已排除 {arg0} / {arg1} 条": "原始规则已排除 {arg0} / {arg1} 条",
+  "操作覆盖当前订阅全部原始规则，不受筛选影响；保存并应用后生效。订阅更新后新增的规则仍会出现。": "操作覆盖当前订阅全部原始规则，不受筛选影响；保存并应用后生效。订阅更新后新增的规则仍会出现。",
+  "全部代理集合": "全部代理集合",
+  "全部节点": "全部节点"
 }

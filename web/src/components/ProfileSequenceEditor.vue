@@ -2,7 +2,7 @@
 import { countLabel, t } from '@/services/i18n'
 
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { baseEntries, effectiveEntries, emptySequence, entryIdentity, makeRule, moveEntry, parseSequence, ruleParts, ruleTypes, ruleTypeLabels, sequenceRows, filterSequenceRows, sequenceEntrySummary } from '@/services/profile-sequences'
+import { baseEntries, copyGroup, effectiveEntries, emptySequence, entryIdentity, makeRule, moveEntry, parseSequence, ruleParts, ruleTypes, ruleTypeLabels, sequenceRows, filterSequenceRows, sequenceEntrySummary, setOriginalExclusions } from '@/services/profile-sequences'
 import type { NamedEntry, SequenceEditorData, SequenceEntry, SequenceExtension, SequenceKind, SequenceRow, SequenceSourceFilter } from '@/services/profile-sequences'
 import { parseProxyInput } from '@/services/proxy-uri'
 import { errorMessage } from '@/services/api'
@@ -18,6 +18,7 @@ const groupType = ref('select'), name = ref(''), icon = ref(''), members = ref<s
 const url = ref('https://www.gstatic.com/generate_204'), interval = ref(300), timeout = ref(5000), tolerance = ref(50), expectedStatus = ref('*'), lazy = ref(true), strategy = ref('consistent-hashing')
 const groupExtra = ref(false), filter = ref(''), excludeFilter = ref(''), includeAll = ref(false), hidden = ref(false)
 const editIndex = ref<number | null>(null), editSide = ref<'prepend' | 'append'>('prepend'), originalObject = ref<NamedEntry | null>(null)
+const groupNameInput = ref<HTMLInputElement | null>(null)
 const originals = computed(() => baseEntries(props.data.base, props.kind))
 const noun = computed(() => props.kind === 'rules' ? '规则' : props.kind === 'proxies' ? '节点' : '代理组')
 function sequence(kind: SequenceKind) {
@@ -42,6 +43,7 @@ function addProvider() {
 const canNoResolve = computed(() => ['GEOIP', 'IP-ASN', 'IP-CIDR', 'IP-CIDR6', 'IP-SUFFIX', 'RULE-SET'].includes(ruleType.value))
 type Row = SequenceRow
 const allRows = computed(() => sequenceRows(originals.value, props.modelValue))
+const excludedOriginalCount = computed(() => allRows.value.filter(row => row.side === 'base' && row.deleted).length)
 const rows = computed(() => filterSequenceRows(allRows.value, search.value, sourceFilter.value))
 const rulePlaceholder = computed(() => {
   if (ruleType.value === 'RULE-SET') return '规则集名称'
@@ -79,6 +81,29 @@ function remove(row: Row) {
   }
 }
 function cancelEdit() { editIndex.value = null; originalObject.value = null; error.value = '' }
+function loadGroup(value: NamedEntry) {
+  originalObject.value = value
+  name.value = value.name; groupType.value = value.type; icon.value = String(value.icon || '')
+  members.value = Array.isArray(value.proxies) ? [...value.proxies] as string[] : []; providers.value = Array.isArray(value.use) ? [...value.use] as string[] : []
+  url.value = String(value.url ?? 'https://www.gstatic.com/generate_204'); interval.value = Number(value.interval ?? 300); timeout.value = Number(value.timeout ?? 5000); tolerance.value = Number(value.tolerance ?? 50); lazy.value = value.lazy !== false; expectedStatus.value = String(value['expected-status'] ?? '*'); strategy.value = String(value.strategy ?? 'consistent-hashing')
+  filter.value = String(value.filter || ''); excludeFilter.value = String(value['exclude-filter'] || ''); includeAll.value = value['include-all'] === true; hidden.value = value.hidden === true
+  memberInput.value = ''; providerInput.value = ''
+}
+async function duplicate(row: Row) {
+  if (props.disabled || props.kind !== 'groups' || typeof row.item === 'string') return
+  const unavailable = [...allRows.value.map(row => entryIdentity(row.item)), ...baseEntries(props.data.base, 'proxies').map(entryIdentity), ...effectiveEntries([], sequence('proxies')).map(entryIdentity), 'DIRECT', 'REJECT', 'REJECT-DROP', 'PASS', 'GLOBAL']
+  cancelEdit()
+  loadGroup(copyGroup(row.item, unavailable, t('副本')))
+  addSide.value = row.side === 'append' ? 'append' : 'prepend'
+  groupExtra.value = true
+  await nextTick()
+  groupNameInput.value?.scrollIntoView({ block: 'nearest' })
+  groupNameInput.value?.focus({ preventScroll: true })
+}
+function batchExclude(excluded: boolean) {
+  if (props.disabled || props.kind !== 'rules') return
+  emit('update:modelValue', setOriginalExclusions(props.modelValue, originals.value, excluded))
+}
 function edit(row: Row) {
   if (row.side === 'base') return
   if (props.kind === 'proxies') { emit('advanced'); return }
@@ -86,11 +111,7 @@ function edit(row: Row) {
   if (typeof row.item === 'string') {
     const parts = ruleParts(row.item); ruleType.value = parts[0]!; payload.value = parts[0] === 'MATCH' ? '' : parts[1] || ''; policy.value = parts[parts[0] === 'MATCH' ? 1 : 2] || ''; noResolve.value = parts.includes('no-resolve')
   } else {
-    const value = row.item; originalObject.value = value
-    name.value = value.name; groupType.value = value.type; icon.value = String(value.icon || '')
-    members.value = Array.isArray(value.proxies) ? [...value.proxies] as string[] : []; providers.value = Array.isArray(value.use) ? [...value.use] as string[] : []
-    url.value = String(value.url || 'https://www.gstatic.com/generate_204'); interval.value = Number(value.interval ?? 300); timeout.value = Number(value.timeout ?? 5000); tolerance.value = Number(value.tolerance ?? 50); lazy.value = value.lazy !== false; expectedStatus.value = String(value['expected-status'] || '*'); strategy.value = String(value.strategy || 'consistent-hashing')
-    filter.value = String(value.filter || ''); excludeFilter.value = String(value['exclude-filter'] || ''); includeAll.value = value['include-all'] === true; hidden.value = value.hidden === true
+    loadGroup(row.item)
   }
 }
 async function add(side: 'prepend' | 'append') {
@@ -100,7 +121,8 @@ async function add(side: 'prepend' | 'append') {
     else if (props.kind === 'proxies') additions = parseProxyInput(input.value)
     else {
       if (!name.value.trim() || name.value.includes(',')) throw new Error('请填写有效的代理组名称')
-      if (!members.value.length && !providers.value.length && !includeAll.value) throw new Error('请引入代理节点或代理集合')
+      const implicitMembers = includeAll.value || originalObject.value?.['include-all-proxies'] === true || originalObject.value?.['include-all-providers'] === true
+      if (!members.value.length && !providers.value.length && !implicitMembers) throw new Error('请引入代理节点或代理集合')
       if (members.value.includes(name.value.trim())) throw new Error('代理组不能引用自身')
       if (![interval.value, timeout.value, tolerance.value].every(Number.isInteger) || interval.value < 0 || timeout.value <= 0 || tolerance.value < 0) throw new Error('检查间隔、超时和容差必须是有效整数')
       if (url.value) { const parsed = new URL(url.value); if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('健康检查地址必须使用 HTTP 或 HTTPS') }
@@ -109,6 +131,10 @@ async function add(side: 'prepend' | 'append') {
       group.url = url.value.trim(); group.interval = interval.value; group.timeout = timeout.value; group.lazy = lazy.value; group['expected-status'] = expectedStatus.value.trim() || '*'
       if (groupType.value === 'url-test') group.tolerance = tolerance.value
       if (groupType.value === 'load-balance') group.strategy = strategy.value
+      if (originalObject.value && groupType.value !== originalObject.value.type) {
+        if (groupType.value !== 'url-test') delete group.tolerance
+        if (groupType.value !== 'load-balance') delete group.strategy
+      }
       for (const [key, value] of [['filter', filter.value], ['exclude-filter', excludeFilter.value]] as const) { if (value) group[key] = value; else delete group[key] }
       group['include-all'] = includeAll.value; group.hidden = hidden.value
       additions = [group]
@@ -164,8 +190,8 @@ function reorder(row: Row, delta: number) {
       <template v-else>
         <div class="sequence-group-heading"><h4 class="rule-form-title">{{ t(editIndex !== null ? '编辑自定义代理组' : '添加代理组') }}</h4><button type="button" class="ghost small" :aria-expanded="groupExtra" aria-controls="sequence-group-options" @click="groupExtra = !groupExtra">{{ t(groupExtra ? '收起更多设置' : '更多设置') }}</button></div>
         <div class="sequence-group-fields">
-          <label>{{ t("代理组类型") }}<select v-model="groupType"><option value="select">{{ t("手动选择 · select") }}</option><option value="url-test">{{ t("自动选择 · url-test") }}</option><option value="fallback">{{ t("故障转移 · fallback") }}</option><option value="load-balance">{{ t("负载均衡 · load-balance") }}</option></select></label>
-          <label>{{ t("代理组名称") }}<input v-model="name" :placeholder="t('我的代理组')" /></label>
+          <label>{{ t("代理组类型") }}<select v-model="groupType"><option v-if="!['select', 'url-test', 'fallback', 'load-balance'].includes(groupType)" :value="groupType">{{ groupType }}</option><option value="select">{{ t("手动选择 · select") }}</option><option value="url-test">{{ t("自动选择 · url-test") }}</option><option value="fallback">{{ t("故障转移 · fallback") }}</option><option value="load-balance">{{ t("负载均衡 · load-balance") }}</option></select></label>
+          <label>{{ t("代理组名称") }}<input ref="groupNameInput" v-model="name" :placeholder="t('我的代理组')" /></label>
           <div class="sequence-member-field"><span>{{ t("引入代理") }}</span><div class="sequence-provider-input"><PolicySelect v-model="memberInput" :options="availableProxies.filter(item => item !== name.trim())" :disabled="disabled" :label="t('引入代理')" :placeholder="t('选择或输入名称')" :search-placeholder="t('搜索代理组、节点或输入名称')" hide-label allow-custom /><button type="button" class="ghost small" @click="addMember">{{ t("引入代理") }}</button></div><div class="sequence-member-chips"><span v-if="!members.length" class="muted">{{ t("尚未引入代理") }}</span><span v-for="item in members" :key="item" class="sequence-member-chip"><span :title="item">{{ item }}</span><button type="button" :aria-label="t(`移除代理 ${item}`)" @click="members = members.filter(value => value !== item)">×</button></span></div></div>
           <div class="sequence-member-field"><span>{{ t("引入代理集合") }}</span><div class="sequence-provider-input"><PolicySelect v-model="providerInput" :options="providerNames" :disabled="disabled" :label="t('引入代理集合')" :placeholder="t('选择或输入集合名称')" :search-placeholder="t('搜索集合或输入名称')" hide-label allow-custom /><button type="button" class="ghost small" @click="addProvider">{{ t("引入集合") }}</button></div><div class="sequence-member-chips"><span v-if="!providers.length" class="muted">{{ t("尚未引入集合") }}</span><span v-for="item in providers" :key="item" class="sequence-member-chip"><span :title="item">{{ item }}</span><button type="button" :aria-label="t(`移除集合 ${item}`)" @click="providers = providers.filter(value => value !== item)">×</button></span></div></div>
         </div>
@@ -183,6 +209,12 @@ function reorder(row: Row, delta: number) {
         <div class="rule-source-filters" role="group" :aria-label="t('{arg0}来源', { arg0: t(noun) })"><button v-for="option in sourceOptions" :key="option.value" type="button" :aria-pressed="sourceFilter === option.value" :class="{ active: sourceFilter === option.value }" @click="sourceFilter = option.value">{{ t(option.label) }}<span v-if="option.value !== 'all'">{{ option.value === 'base' ? originals.length : option.value === 'deleted' ? allRows.filter(row => row.deleted).length : modelValue[option.value].length }}</span></button></div>
         <span class="sequence-count muted">{{ countLabel(rows.length, kind === 'rules' ? '条规则' : kind === 'proxies' ? '个节点' : '个代理组') }}</span>
       </div>
+      <div v-if="kind === 'rules'" class="sequence-batch-actions">
+        <button type="button" class="ghost small" :disabled="disabled || excludedOriginalCount === originals.length" @click="batchExclude(true)">{{ t('排除全部原始规则') }}</button>
+        <button type="button" class="ghost small" :disabled="disabled || !excludedOriginalCount" @click="batchExclude(false)">{{ t('恢复全部原始规则') }}</button>
+        <span class="muted" role="status">{{ t('原始规则已排除 {arg0} / {arg1} 条', { arg0: excludedOriginalCount, arg1: originals.length }) }}</span>
+        <p class="muted">{{ t('操作覆盖当前订阅全部原始规则，不受筛选影响；保存并应用后生效。订阅更新后新增的规则仍会出现。') }}</p>
+      </div>
       <div v-if="data.warning" class="muted">{{ t(data.warning) }}</div>
       <div class="sequence-table-shell" role="table" :aria-label="t(`订阅${noun}`)" :aria-rowcount="rows.length + 1">
         <div class="rule-table-heading rule-table-grid" :class="{ 'sequence-named-grid': kind !== 'rules' }" role="row" aria-rowindex="1"><span role="columnheader">{{ t("序号") }}</span><span role="columnheader">{{ kind === 'rules' ? t('规则内容') : t('{arg0}名称', { arg0: t(noun) }) }}</span><span role="columnheader">{{ t("类型") }}</span><span role="columnheader">{{ t(kind === 'rules' ? '策略' : kind === 'proxies' ? '服务器' : '成员 / 集合') }}</span><span role="columnheader">{{ t("来源") }}</span><span role="columnheader">{{ t("操作") }}</span></div>
@@ -194,6 +226,7 @@ function reorder(row: Row, delta: number) {
             <div class="rule-table-actions" role="cell">
               <template v-if="row.side !== 'base'"><button class="rule-text-action" :disabled="disabled" :aria-label="t(`编辑 ${entryIdentity(row.item)}`)" :title="t(kind === 'proxies' ? '在高级 YAML 中编辑节点参数' : undefined)" @click="edit(row)">{{ t("编辑") }}</button><button class="rule-text-action rule-move" :disabled="disabled || row.index === 0" :aria-label="t(`上移 ${entryIdentity(row.item)}`)" :title="t('上移')" @click="reorder(row, -1)">↑</button><button class="rule-text-action rule-move" :disabled="disabled || row.index === modelValue[row.side].length - 1" :aria-label="t(`下移 ${entryIdentity(row.item)}`)" :title="t('下移')" @click="reorder(row, 1)">↓</button></template>
               <button class="rule-text-action" :class="{ 'rule-delete-action': row.side !== 'base', 'rule-exclude-action': row.side === 'base' && !row.deleted, 'rule-restore-action': row.deleted }" :disabled="disabled" :aria-label="`${t(row.deleted ? '恢复' : row.side === 'base' ? '排除' : '删除')} ${entryIdentity(row.item)}`" @click="remove(row)">{{ t(row.deleted ? '恢复' : row.side === 'base' ? '排除' : '删除') }}</button>
+              <button v-if="kind === 'groups'" type="button" class="rule-text-action" :disabled="disabled" :aria-label="t('复制代理组 {arg0}', { arg0: entryIdentity(row.item) })" @click="duplicate(row)">{{ t('复制') }}</button>
             </div>
           </div>
           <div :style="{ height: `${Math.max(0, rows.length - end) * rowHeight}px` }" />

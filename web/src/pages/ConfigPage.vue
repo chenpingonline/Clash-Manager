@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/services/i18n'
 
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AsyncState from '@/components/AsyncState.vue'
 import ConfigEditor from '@/components/ConfigEditor.vue'
 import ConfigTextView from '@/components/ConfigTextView.vue'
@@ -32,7 +32,15 @@ const error = ref('')
 const config = ref<EffectiveConfig | null>(null)
 const query = ref('')
 const editing = ref(false)
-const format = ref<Exclude<ConfigFormat, 'original'>>('compact')
+const FORMAT_STORAGE_KEY = 'clash-manager.config-format.v1'
+function savedFormat(): Exclude<ConfigFormat, 'original'> {
+  try { return localStorage.getItem(FORMAT_STORAGE_KEY) === 'formatted' ? 'formatted' : 'compact' }
+  catch { return 'compact' }
+}
+const format = ref<Exclude<ConfigFormat, 'original'>>(savedFormat())
+watch(format, value => {
+  try { localStorage.setItem(FORMAT_STORAGE_KEY, value) } catch { /* Storage may be disabled. */ }
+})
 const activeMatch = ref(0)
 const matchCount = ref(0)
 const textView = ref<InstanceType<typeof ConfigTextView> | null>(null)

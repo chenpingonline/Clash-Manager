@@ -31,13 +31,26 @@ export function parseSequence(content: string, kind: SequenceKind): SequenceExte
 }
 export const serializeSequence = (value: SequenceExtension): string => stringify(value, { lineWidth: 0 })
 export const entryIdentity = (item: SequenceEntry): string => typeof item === 'string' ? item : item.name
+// Editor data comes from JSON. Detach nested fields as well as member arrays.
+export function copyGroup(item: NamedEntry, unavailable: Iterable<string>, suffix: string): NamedEntry {
+  const occupied = new Set(unavailable), stem = `${item.name}-${suffix}`
+  let name = stem, number = 2
+  while (occupied.has(name)) name = `${stem}-${number++}`
+  return { ...JSON.parse(JSON.stringify(item)) as NamedEntry, name }
+}
+// Batch actions apply to the downloaded originals, independently of table filters.
+export function setOriginalExclusions(model: SequenceExtension, base: SequenceEntry[], excluded: boolean): SequenceExtension {
+  const identities = new Set(base.map(entryIdentity))
+  return { ...model, delete: excluded ? [...new Set([...model.delete, ...identities])] : model.delete.filter(identity => !identities.has(identity)) }
+}
 export const baseEntries = (base: Record<string, unknown>, kind: SequenceKind): SequenceEntry[] => {
   const list = base[kind === 'groups' ? 'proxy-groups' : kind]
   if (!Array.isArray(list)) return []
   return list.filter((value): value is SequenceEntry => kind === 'rules' ? typeof value === 'string' : isNamed(value))
 }
 export function effectiveEntries(base: SequenceEntry[], model: SequenceExtension): SequenceEntry[] {
-  return [...model.prepend, ...base.filter(item => !model.delete.includes(entryIdentity(item))), ...model.append]
+  const deleted = new Set(model.delete)
+  return [...model.prepend, ...base.filter(item => !deleted.has(entryIdentity(item))), ...model.append]
 }
 // Logical rule operands contain commas inside parentheses.
 export function ruleParts(rule: string): string[] {
@@ -101,5 +114,9 @@ export function sequenceEntrySummary(item: SequenceEntry, kind: SequenceKind): s
     ...(Array.isArray(item.use) ? item.use.filter((entry): entry is string => typeof entry === 'string').map(entry => t('集合：{arg0}', { arg0: entry })) : []),
   ]
   if (item['include-all'] === true) entries.unshift(t('全部节点与集合'))
+  else {
+    if (item['include-all-providers'] === true) entries.unshift(t('全部代理集合'))
+    if (item['include-all-proxies'] === true) entries.unshift(t('全部节点'))
+  }
   return entries.length ? entries.slice(0, 3).join(getLocale() === 'en-US' ? ', ' : '、') + (entries.length > 3 ? ` ${t('等 {arg0} 项', { arg0: entries.length })}` : '') : t('未配置成员')
 }

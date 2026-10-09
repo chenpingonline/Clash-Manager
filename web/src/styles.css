@@ -1105,6 +1105,10 @@ html[data-theme="light"] .topbar{background:rgba(248,250,253,.9)}
 .sequence-group-actions>span{margin-right:auto;font-size:11px;align-self:center}
 .sequence-groups-editor .sequence-form{max-height:52%;overflow:auto;scrollbar-width:auto;scrollbar-color:auto;flex-shrink:0}
 .sequence-named-grid{grid-template-columns:56px minmax(160px,1.4fr) minmax(90px,.65fr) minmax(160px,1.5fr) minmax(100px,.85fr) 154px}
+.sequence-groups-editor .sequence-named-grid{grid-template-columns:56px minmax(140px,1.4fr) minmax(90px,.65fr) minmax(140px,1.5fr) minmax(90px,.85fr) 190px}
+.sequence-batch-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:10px;flex:none;font-size:11px}
+.sequence-batch-actions button{white-space:nowrap}
+.sequence-batch-actions p{flex-basis:100%;margin:0;line-height:1.5}
 @media(max-width:1000px){.sequence-group-fields{grid-template-columns:1fr 1fr}.sequence-group-options{grid-template-columns:repeat(3,minmax(0,1fr))}.sequence-named-grid{grid-template-columns:42px minmax(110px,1fr) 86px minmax(130px,1.3fr) 74px 144px}.sequence-node-add{grid-template-columns:1fr}.sequence-node-add .sequence-entry-actions{justify-content:flex-end}}
 @media(max-width:760px){.sequence-group-fields{gap:8px;grid-template-columns:1fr 1fr}.sequence-group-options{grid-template-columns:1fr 1fr;gap:8px}.sequence-group-actions{flex-wrap:wrap;justify-content:flex-end;gap:8px}.sequence-group-actions>span{flex-basis:100%;margin:0}.sequence-groups-editor .sequence-form{max-height:52%;overflow:auto}.sequence-node-add .sequence-entry-actions{gap:8px}.sequence-node-add textarea{height:72px;min-height:72px}.sequence-entry-actions .rule-position-field{width:148px}}
 

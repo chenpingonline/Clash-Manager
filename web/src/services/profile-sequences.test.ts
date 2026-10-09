@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { effectiveEntries, emptySequence, makeRule, moveEntry, parseSequence, ruleParts, serializeSequence, sequenceRows, filterSequenceRows } from './profile-sequences'
+import { copyGroup, effectiveEntries, emptySequence, makeRule, moveEntry, parseSequence, ruleParts, serializeSequence, sequenceRows, filterSequenceRows, setOriginalExclusions } from './profile-sequences'
 import { parseProxyInput, parseProxyURI } from './proxy-uri'
 
 describe('subscription sequence drafts', () => {
@@ -25,6 +25,31 @@ describe('subscription sequence drafts', () => {
     expect(makeRule('RULE-SET', 'test', 'Proxy', true)).toBe('RULE-SET,test,Proxy,no-resolve')
     expect(makeRule('DST-PORT', '80/443/1000-2000', 'DIRECT')).toContain('80/443/1000-2000')
     for (const [type, payload] of [['DOMAIN', 'a,b'], ['DST-PORT', '70000'], ['DST-PORT', '90-80'], ['NETWORK', 'other'], ['AND', '(bad']]) expect(() => makeRule(type!, payload!, 'DIRECT')).toThrow()
+  })
+})
+describe('group copies and batch exclusions', () => {
+  it('copies all fields, avoids occupied names and detaches nested values from the source', () => {
+    const source = { name: 'Hong Kong', type: 'url-test', proxies: ['HK-1', 'HK-2'], use: ['Airport'], lazy: false, interval: 0, 'custom-option': { nested: ['one', 'two'] } }
+    const copy = copyGroup(source, ['Hong Kong-Copy', 'Hong Kong-Copy-2'], 'Copy')
+    expect(copy).toEqual({ ...source, name: 'Hong Kong-Copy-3' })
+    ;(copy.proxies as string[]).push('DIRECT')
+    ;(copy['custom-option'] as { nested: string[] }).nested[0] = 'changed'
+    expect(source.proxies).toEqual(['HK-1', 'HK-2'])
+    expect(source['custom-option'].nested).toEqual(['one', 'two'])
+    expect(parseSequence(serializeSequence({ ...emptySequence(), prepend: [copy] }), 'groups').prepend).toEqual([copy])
+  })
+  it('excludes all downloaded originals once and restores them without losing custom additions or stale exclusions', () => {
+    const base = Array.from({ length: 12000 }, (_, index) => `DOMAIN,site-${index}.example,DIRECT`)
+    const model = { ...emptySequence(), prepend: ['DOMAIN,local.example,DIRECT'], append: ['MATCH,DIRECT'], delete: [base[0]!, 'DOMAIN,old.example,DIRECT'], 'future-option': true }
+    const excluded = setOriginalExclusions(model, [...base, base[0]!], true)
+    expect(excluded.delete).toHaveLength(12001)
+    expect(effectiveEntries(base, excluded)).toEqual([...model.prepend, ...model.append])
+    expect(setOriginalExclusions(excluded, base, true)).toEqual(excluded)
+    expect(model.delete).toEqual([base[0], 'DOMAIN,old.example,DIRECT'])
+    const restored = setOriginalExclusions(excluded, base, false)
+    expect(restored).toEqual({ ...model, delete: ['DOMAIN,old.example,DIRECT'] })
+    expect(effectiveEntries([...base, 'DOMAIN,new.example,DIRECT'], excluded)).toContain('DOMAIN,new.example,DIRECT')
+    expect(setOriginalExclusions(model, [], false)).toEqual(model)
   })
 })
 describe('rule table filtering', () => {
