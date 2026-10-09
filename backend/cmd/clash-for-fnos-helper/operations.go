@@ -60,7 +60,7 @@ func (h *helper) saveProxySettings(settings proxySettings, changed []string) (ma
 // effect of saving unrelated network/TUN settings. Since those files did not
 // record explicit user intent, disable them once and remove only our blocks.
 func (h *helper) reconcileProxyEnvironmentOnStartup() (map[string]any, error) {
-	if runtimeenv.Docker() {
+	if runtimeenv.Standalone() {
 		return map[string]any{"supported": false}, nil
 	}
 	settings := h.readProxySettings()
@@ -249,7 +249,7 @@ func (h *helper) updateProxyEnvironment(body map[string]any) (map[string]any, er
 	return h.saveProxySettings(settings, changed)
 }
 func (h *helper) syncProxyEnvironment() (map[string]any, error) {
-	if runtimeenv.Docker() {
+	if runtimeenv.Standalone() {
 		return map[string]any{"supported": false}, nil
 	}
 	settings := h.readProxySettings()

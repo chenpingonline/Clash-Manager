@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+# Fixed package paths; do not recursively change ownership of user-imported files.
+install -d -m 0750 -o root -g clash-manager /var/lib/clash-manager
+for dir in config state; do
+    # Sticky root-owned parents let Web save its own files without replacing
+    # the root-owned managed Core or Mihomo config directories.
+    install -d -m 1770 -o root -g clash-manager "/var/lib/clash-manager/$dir"
+done
+for dir in /var/lib/clash-manager/config/mihomo /var/lib/clash-manager/state/managed-core; do
+    install -d -m 0750 -o root -g clash-manager "$dir"
+done
+install -d -m 0750 -o clash-manager -g clash-manager /var/lib/clash-manager/state/core-stage
+for name in Country.mmdb geoip.dat geosite.dat; do
+    target="/var/lib/clash-manager/config/mihomo/$name"
+    if [ ! -f "$target" ]; then
+        install -m 0640 -o root -g clash-manager "/usr/lib/clash-manager/geodata/$name" "$target"
+    fi
+done
+if ! cmp -s /usr/lib/clash-manager/core/bundled-core.json /var/lib/clash-manager/state/package-core.json; then
+    touch /var/lib/clash-manager/state/bundled-core-upgrade.pending
+    cp /usr/lib/clash-manager/core/bundled-core.json /var/lib/clash-manager/state/package-core.json
+fi

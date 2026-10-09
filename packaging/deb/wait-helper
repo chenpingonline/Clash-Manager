@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+# Let systemd start Web only after Helper has bound its Unix socket.
+i=0
+while [ "$i" -lt 100 ]; do
+    if [ -S /run/clash-manager/helper.sock ]; then
+        chown root:clash-manager /run/clash-manager/helper.sock
+        chmod 0660 /run/clash-manager/helper.sock
+        exit 0
+    fi
+    i=$((i + 1))
+    sleep 0.1
+done
+echo 'Helper socket startup timed out' >&2
+exit 1

@@ -32,7 +32,7 @@ function applyTheme(theme: Theme, mode: Theme | 'system'): void {
 
 export function useFnosTheme(): void {
   const media = matchMedia('(prefers-color-scheme: dark)')
-  const sdk = runtime.value.platform === 'docker' ? null : new TrimApp()
+  const sdk = runtime.value.platform === 'fnos' ? new TrimApp() : null
   let disposed = false
   let hostThemeActive = false
   let subscribed = false

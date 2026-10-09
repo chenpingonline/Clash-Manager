@@ -64,7 +64,7 @@ const tunStatus = computed(() => {
 const tunDescription = computed(() => {
   if (tunError.value) return tunError.value
   if (!tunSupported.value && !tunEnabled.value) return tunCapability.value.message || '当前环境暂不支持 TUN'
-  return tunCapability.value.message || (runtime.value.platform === 'docker' ? '接管当前网络范围内的流量' : '接管 fnOS 系统流量')
+  return tunCapability.value.message || (runtime.value.platform === 'linux' ? '接管 Linux 主机流量' : runtime.value.platform === 'docker' ? '接管当前网络范围内的流量' : '接管 fnOS 系统流量')
 })
 async function toggle(event: Event) {
   const next = (event.target as HTMLInputElement).checked

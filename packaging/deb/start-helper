@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+# Validate the same credentials as Web before a persisted TUN can be restored.
+if [ -n "${APP_AUTH_PASSWORD_FILE:-}" ]; then
+    password=$(runuser -u clash-manager -- cat "$APP_AUTH_PASSWORD_FILE") || {
+        echo 'Web user cannot read APP_AUTH_PASSWORD_FILE' >&2; exit 1;
+    }
+else
+    password="${APP_AUTH_PASSWORD:-}"
+fi
+[ "${#password}" -ge 8 ] || { echo 'Set a management password of at least 8 characters' >&2; exit 1; }
+unset password APP_AUTH_PASSWORD APP_AUTH_PASSWORD_FILE
+exec /usr/lib/clash-manager/bin/clash-helper

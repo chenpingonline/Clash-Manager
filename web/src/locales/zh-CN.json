@@ -1410,5 +1410,20 @@
   "界面语言与软件图标": "界面语言与软件图标",
   "语言偏好保存在当前浏览器中，切换后立即生效。": "语言偏好保存在当前浏览器中，切换后立即生效。",
   "连接超时，请检查服务状态后重试": "连接超时，请检查服务状态后重试",
-  "连接失败，请检查服务状态后重试": "连接失败，请检查服务状态后重试"
+  "连接失败，请检查服务状态后重试": "连接失败，请检查服务状态后重试",
+  "接管 Linux 主机流量；首页可以快速开关": "接管 Linux 主机流量；首页可以快速开关",
+  "TUN 会修改 Linux 主机的系统路由与 DNS 流向。": "TUN 会修改 Linux 主机的系统路由与 DNS 流向。",
+  "读取 Linux 主机的 hosts 文件": "读取 Linux 主机的 hosts 文件",
+  "由应用管理 Linux 主机上的 Mihomo 启动、停止和更新。": "由应用管理 Linux 主机上的 Mihomo 启动、停止和更新。",
+  "填写 Linux 主机可访问的地址，保存后再测试连接。": "填写 Linux 主机可访问的地址，保存后再测试连接。",
+  "接管 Linux 主机流量": "接管 Linux 主机流量",
+  "读取托管 Mihomo 配置和 APP_IMPORT_PATHS 指定的导入目录": "读取托管 Mihomo 配置和 APP_IMPORT_PATHS 指定的导入目录",
+  "请通过 APP_IMPORT_PATHS 指定 YAML 导入目录；也可以直接上传配置文件。": "请通过 APP_IMPORT_PATHS 指定 YAML 导入目录；也可以直接上传配置文件。",
+  "Linux 安装包版本与升级方式": "Linux 安装包版本与升级方式",
+  "Linux 安装包更新": "Linux 安装包更新",
+  "。使用 apt 安装新版 DEB，保留现有配置即可升级。": "。使用 apt 安装新版 DEB，保留现有配置即可升级。",
+  "独立部署仅管理托管 Core，外部 Controller 可在连接设置中配置": "独立部署仅管理托管 Core，外部 Controller 可在连接设置中配置",
+  "当前 Mihomo 缺少 TUN 所需的 NET_ADMIN 权限": "当前 Mihomo 缺少 TUN 所需的 NET_ADMIN 权限",
+  "HTTP 部署必须设置至少 8 字符的 APP_AUTH_PASSWORD 或 APP_AUTH_PASSWORD_FILE": "HTTP 部署必须设置至少 8 字符的 APP_AUTH_PASSWORD 或 APP_AUTH_PASSWORD_FILE",
+  "APP_PLATFORM 必须为 fnos、docker 或 linux": "APP_PLATFORM 必须为 fnos、docker 或 linux"
 }

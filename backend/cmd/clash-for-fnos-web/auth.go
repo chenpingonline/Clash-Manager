@@ -61,7 +61,7 @@ func (g *gateway) sessionToken(expiry time.Time) string {
 }
 func (g *gateway) authenticated(r *http.Request) bool {
 	if g.config.authPassword == "" {
-		return g.config.platform != "docker" && g.config.listenAddr == ""
+		return (g.config.platform == "fnos" || g.config.platform == "") && g.config.listenAddr == ""
 	}
 	cookie, err := r.Cookie(sessionCookie)
 	if err != nil {
@@ -117,7 +117,7 @@ func (g *gateway) handleAuth(w http.ResponseWriter, r *http.Request, path string
 	}
 	switch {
 	case path == "/api/auth/session" && r.Method == http.MethodGet:
-		writeJSON(w, 200, map[string]bool{"required": g.config.authPassword != "" || g.config.platform == "docker", "authenticated": g.authenticated(r)})
+		writeJSON(w, 200, map[string]bool{"required": g.config.authPassword != "" || (g.config.platform == "docker" || g.config.platform == "linux"), "authenticated": g.authenticated(r)})
 	case path == "/api/auth/login" && r.Method == http.MethodPost:
 		if !sameOrigin(r) {
 			writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})

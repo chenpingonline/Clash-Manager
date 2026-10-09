@@ -112,6 +112,7 @@ const allCategories: Array<{ key: Section; title: string; description: string }>
   { key: 'update', title: '更新设置', description: '应用版本、检查更新与更新提示' },
 ]
 const categories = computed(() => allCategories.filter(item => (item.key !== 'advanced' || runtime.value.capabilities.hostProxyEnvironment) && (item.key !== 'behavior' || runtime.value.capabilities.appIcons)).map(item => {
+  if (item.key === 'update' && runtime.value.platform === 'linux') return { ...item, description: 'Linux 安装包版本与升级方式' }
   if (item.key === 'update' && runtime.value.platform === 'docker') return { ...item, description: 'Docker 镜像版本与升级方式' }
   return item
 }))
@@ -537,7 +538,7 @@ onMounted(initialize)
             <div class="section-head">
               <div class="tun-section-heading">
                 <div class="tun-section-title-row"><h2>{{ t("TUN 详细设置") }}</h2><span v-if="tunSwitching" class="dashboard-tun-progress settings-tun-progress" role="status" aria-live="polite"><i aria-hidden="true" /><span>{{ t(tunProgress) }}</span></span></div>
-                <p>{{ t(runtime.platform === 'docker' ? '接管当前部署网络范围内的流量；首页可以快速开关' : '接管 NAS 系统流量；首页可以快速开关，这里配置完整参数') }}</p>
+                <p>{{ t(runtime.platform === 'linux' ? '接管 Linux 主机流量；首页可以快速开关' : runtime.platform === 'docker' ? '接管当前部署网络范围内的流量；首页可以快速开关' : '接管 NAS 系统流量；首页可以快速开关，这里配置完整参数') }}</p>
               </div>
               <div class="tun-master"><span :class="network.tun.enabled ? 'good-text' : 'muted-text'">{{ t(tunSwitching ? (network.tun.enabled ? '正在开启' : '正在关闭') : network.tun.enabled ? '已开启' : '已关闭') }}</span><label class="switch large"><input v-model="network.tun.enabled" type="checkbox" :disabled="tunSwitching || netState === 'pending' || netState === 'saving' || (!tunSupported && !network.tun.enabled)" @change="toggleTunSetting"><span /></label></div>
             </div>
@@ -557,7 +558,7 @@ onMounted(initialize)
               <span class="field-note">{{ t("每行一个 IPv4/IPv6 CIDR；留空表示不额外排除。") }}</span>
             </div>
             <div v-if="network.tun.enabled && network.tun.dnsHijack && !network.dns.enable" class="tun-capability warn"><strong>DNS</strong><span>{{ t("开启 DNS 劫持前建议先启用 Mihomo DNS。") }}</span></div>
-            <div class="tun-note"><strong>{{ t("注意") }}</strong><span>{{ t(runtime.platform === 'docker' ? 'TUN 修改所在网络命名空间的路由。Host 网络下作用于宿主；Bridge 网络下作用于容器。' : 'TUN 会修改 fnOS 的系统路由与 DNS 流向。') }}{{ t("默认关闭；配置不可用时可能影响访问互联网。") }}</span></div>
+            <div class="tun-note"><strong>{{ t("注意") }}</strong><span>{{ t(runtime.platform === 'linux' ? 'TUN 会修改 Linux 主机的系统路由与 DNS 流向。' : runtime.platform === 'docker' ? 'TUN 修改所在网络命名空间的路由。Host 网络下作用于宿主；Bridge 网络下作用于容器。' : 'TUN 会修改 fnOS 的系统路由与 DNS 流向。') }}{{ t("默认关闭；配置不可用时可能影响访问互联网。") }}</span></div>
           </div>
 
           <div v-else-if="category.key === 'dns'" class="settings-accordion-panel dns-settings-panel" :class="{ 'dns-on': network.dnsOverrideEnabled }">
@@ -568,7 +569,7 @@ onMounted(initialize)
             <div class="dns-tab-panels">
               <div v-show="dnsTab === 'basic'" id="dns-panel-basic" class="dns-tab-panel" role="tabpanel" aria-labelledby="dns-tab-basic">
                 <div class="dns-field-grid"><div class="field"><label>{{ t("DNS 监听地址") }}</label><input v-model="network.dns.listen" class="mono" @change="saveDns(80)"></div><div class="field"><label>{{ t("增强模式") }}</label><select v-model="network.dns.enhancedMode" @change="saveDns(180)"><option value="fake-ip">Fake IP</option><option value="redir-host">Redir Host</option></select></div><div class="field"><label>{{ t("Fake IP IPv4 范围") }}</label><input v-model="network.dns.fakeIpRange" class="mono" @change="saveDns(80)"></div><div class="field"><label>{{ t("Fake IP IPv6 范围") }}</label><input v-model="network.dns.fakeIpRange6" class="mono" @change="saveDns(80)"></div><div class="field"><label>{{ t("Fake IP 过滤模式") }}</label><select v-model="network.dns.fakeIpFilterMode" @change="saveDns(180)"><option value="blacklist">{{ t("黑名单") }}</option><option value="whitelist">{{ t("白名单") }}</option><option value="rule">{{ t("规则模式") }}</option></select></div></div>
-                <div class="dns-toggle-grid"><SettingToggle v-model="network.dns.enable" :title="t('启用 DNS')" :description="t('写入覆写配置时启用 Mihomo DNS')" @change="saveDns(120)" /><SettingToggle v-model="network.dns.ipv6" :title="t('IPv6 DNS 解析')" :description="t('是否返回 AAAA 记录；与全局 IPv6 开关不同')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.preferH3" :title="t('优先使用 HTTP/3')" :description="t('DoH 优先尝试 HTTP/3')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.respectRules" :title="t('DNS 遵循路由规则')" :description="t('需要配置代理节点 DNS，避免解析循环')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.useHosts" :title="t('使用配置 Hosts')" :description="t('使用 Mihomo 配置中的 hosts 映射')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.useSystemHosts" :title="t('使用系统 Hosts')" :description="t(runtime.platform === 'docker' ? '读取容器内 hosts 文件' : '读取 fnOS 的系统 hosts 文件')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.directNameserverFollowPolicy" :title="t('直连 DNS 遵循策略')" :description="t('直连域名解析遵循 nameserver-policy')" @change="saveDns(180)" /></div>
+                <div class="dns-toggle-grid"><SettingToggle v-model="network.dns.enable" :title="t('启用 DNS')" :description="t('写入覆写配置时启用 Mihomo DNS')" @change="saveDns(120)" /><SettingToggle v-model="network.dns.ipv6" :title="t('IPv6 DNS 解析')" :description="t('是否返回 AAAA 记录；与全局 IPv6 开关不同')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.preferH3" :title="t('优先使用 HTTP/3')" :description="t('DoH 优先尝试 HTTP/3')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.respectRules" :title="t('DNS 遵循路由规则')" :description="t('需要配置代理节点 DNS，避免解析循环')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.useHosts" :title="t('使用配置 Hosts')" :description="t('使用 Mihomo 配置中的 hosts 映射')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.useSystemHosts" :title="t('使用系统 Hosts')" :description="t(runtime.platform === 'linux' ? '读取 Linux 主机的 hosts 文件' : runtime.platform === 'docker' ? '读取容器内 hosts 文件' : '读取 fnOS 的系统 hosts 文件')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.directNameserverFollowPolicy" :title="t('直连 DNS 遵循策略')" :description="t('直连域名解析遵循 nameserver-policy')" @change="saveDns(180)" /></div>
               </div>
               <div v-show="dnsTab === 'servers'" id="dns-panel-servers" class="dns-tab-panel dns-text-grid" role="tabpanel" aria-labelledby="dns-tab-servers"><div v-for="field in dnsServerFields" :key="field.key" class="field"><label>{{ t(field.label) }}</label><textarea v-model="dnsText[field.key]" class="dns-list-input mono" @change="saveDns(80)" @input="saveDns(1000)" /></div></div>
               <div v-show="dnsTab === 'fake-ip'" id="dns-panel-fake-ip" class="dns-tab-panel dns-text-grid" role="tabpanel" aria-labelledby="dns-tab-fake-ip"><div class="field"><label>{{ t("Fake IP 过滤") }}</label><textarea v-model="dnsText.fakeIpFilter" class="dns-list-input mono" @change="saveDns(80)" @input="saveDns(1000)" /></div><div class="field"><label>{{ t("域名服务器策略") }}</label><textarea v-model="dnsText.nameserverPolicy" class="dns-list-input mono" placeholder="+.example.com = server1; server2" @change="saveDns(80)" @input="saveDns(1000)" /></div></div>
@@ -629,7 +630,7 @@ onMounted(initialize)
                   <button :disabled="Boolean(busy) || system.available === false" @click="switchCoreMode">{{ t(busy === 'core-mode' ? '正在切换…' : '应用') }}</button>
                 </div>
               </div>
-            <p class="hint">{{ t(runtime.platform === 'docker' ? '由应用管理容器内 Mihomo 的启动、停止和更新。' : '托管：由应用管理内核启停。外部：连接本机已有 Mihomo，并停止托管内核。') }}</p>
+            <p class="hint">{{ t(runtime.platform === 'linux' ? '由应用管理 Linux 主机上的 Mihomo 启动、停止和更新。' : runtime.platform === 'docker' ? '由应用管理容器内 Mihomo 的启动、停止和更新。' : '托管：由应用管理内核启停。外部：连接本机已有 Mihomo，并停止托管内核。') }}</p>
             <div v-if="coreModeError || system.bootstrap?.error" class="local-warning">{{ t(coreModeError || system.bootstrap?.error) }}</div>
             <PortConflictHelp :managed="system.mode === 'managed'" @updated="load" :error="t(coreModeError || system.bootstrap?.error || '')" />
             <div class="core-startup-preference">
@@ -654,7 +655,7 @@ onMounted(initialize)
                   <div class="field"><label for="external-secret">Secret</label><input id="external-secret" v-model="externalSecret" type="password" autocomplete="new-password" :placeholder="t('留空保留已有 Secret')" :disabled="clearExternalSecret"></div>
                 </div>
                 <div class="core-connection-footer"><label class="core-check"><input v-model="clearExternalSecret" type="checkbox"> {{ t("清除已保存的 Secret") }}</label><button :disabled="Boolean(busy)" @click="saveExternalController()">{{ t(busy === 'controller' ? '保存中…' : '保存连接设置') }}</button></div>
-                <p class="hint">{{ t(runtime.platform === 'docker' ? '填写容器内可访问的地址，保存后再测试连接。' : '填写 fnOS 主机可访问的地址，保存后再测试连接。') }}</p>
+                <p class="hint">{{ t(runtime.platform === 'linux' ? '填写 Linux 主机可访问的地址，保存后再测试连接。' : runtime.platform === 'docker' ? '填写容器内可访问的地址，保存后再测试连接。' : '填写 fnOS 主机可访问的地址，保存后再测试连接。') }}</p>
               </template>
               <template v-else>
                 <div class="core-connection-summary"><div class="core-controller-summary"><span>Controller</span><strong class="mono">{{ manager.controller || '--' }}</strong><a class="core-port-settings-link" href="#settings?section=network" @click.prevent="openSettingsSection('network')">{{ t("端口设置") }}</a></div><div><span>Secret</span><div class="core-secret-display"><strong class="mono">{{ t(manager.hasSecret ? secretVisible ? revealedSecret : '********' : '未设置') }}</strong><button v-if="manager.hasSecret" class="core-secret-toggle" type="button" :disabled="secretLoading" :aria-label="t(secretVisible ? '隐藏 Secret' : '显示 Secret')" :aria-pressed="secretVisible" :title="t(secretVisible ? '隐藏 Secret' : '显示 Secret')" @click="toggleSecretVisibility"><svg viewBox="0 0 24 24" aria-hidden="true"><template v-if="secretVisible"><path d="M3 3l18 18" /><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" /><path d="M9.9 4.2A10.5 10.5 0 0 1 12 4c6.5 0 10 8 10 8a18 18 0 0 1-2.1 3.2" /><path d="M6.6 6.6C3.6 8.5 2 12 2 12s3.5 8 10 8a9.7 9.7 0 0 0 4.1-.9" /></template><template v-else><path d="M2 12s3.5-8 10-8 10 8 10 8-3.5 8-10 8S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></template></svg></button></div></div></div>
@@ -713,6 +714,7 @@ onMounted(initialize)
           </div>
 
           <div v-else class="settings-accordion-panel update-panel">
+ <div v-if="runtime.platform === 'linux'" class="section"><h2>{{ t("Linux 安装包更新") }}</h2><p>{{ t("当前版本 v") }}{{ t(runtime.version) }}{{ t("。使用 apt 安装新版 DEB，保留现有配置即可升级。") }}</p></div>
  <div v-if="runtime.platform === 'docker'" class="section"><h2>{{ t("Docker 镜像更新") }}</h2><p>{{ t("当前版本 v") }}{{ t(runtime.version) }}{{ t("。拉取新镜像并重新创建容器，保留数据卷即可升级。") }}</p></div>
             <div v-if="runtime.capabilities.appUpdates" class="update-row app-update-row">
               <div class="app-update-identity">

@@ -82,8 +82,8 @@ describe('useFnosTheme', () => {
     expect(mocks.on).not.toHaveBeenCalled()
   })
 
-  it('uses browser preferences in Docker without contacting the host SDK', () => {
-    mocks.platform = 'docker'
+  it.each(['docker', 'linux'])('uses browser preferences in %s without contacting the host SDK', (platform) => {
+    mocks.platform = platform
     media.matches = true
     useFnosTheme()
     mocks.mounted?.()

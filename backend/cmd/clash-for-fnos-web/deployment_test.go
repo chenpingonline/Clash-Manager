@@ -156,3 +156,51 @@ func TestLoginRateLimit(t *testing.T) {
 		t.Fatal("blocked unrelated client")
 	}
 }
+
+func TestLinuxAuthenticationAndCapabilities(t *testing.T) {
+	t.Setenv("APP_AUTH_PASSWORD_FILE", "")
+	t.Setenv("APP_PLATFORM", "linux")
+	t.Setenv("GATEWAY_PREFIX", "")
+	if gatewayPrefix() != "" {
+		t.Fatal("Linux should serve the root URL")
+	}
+	cfg := config{platform: "linux"}
+	if configureAuth(&cfg) == nil {
+		t.Fatal("Linux accepted missing credentials")
+	}
+	cfg.authPassword = "linux-pass8"
+	if err := configureAuth(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.listenAddr != ":8080" {
+		t.Fatal("missing HTTP listener")
+	}
+	g := newGateway(cfg)
+	req := httptest.NewRequest("GET", "/api/runtime", nil)
+	rec := httptest.NewRecorder()
+	g.ServeHTTP(rec, req)
+	if rec.Code != 401 {
+		t.Fatal("Linux runtime was accessible without login")
+	}
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: g.sessionToken(time.Now().Add(time.Hour))})
+	rec = httptest.NewRecorder()
+	g.ServeHTTP(rec, req)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"platform":"linux"`) || !strings.Contains(rec.Body.String(), `"displayName":"Clash Manager"`) || !strings.Contains(rec.Body.String(), `"appIcons":false`) {
+		t.Fatalf("runtime: %d %s", rec.Code, rec.Body.String())
+	}
+	for path, status := range map[string]int{"/api/app/icon": 409, "/api/system/proxy-environment": 409, "/api/app/update-info": 200} {
+		req := httptest.NewRequest("GET", path, nil)
+		req.AddCookie(&http.Cookie{Name: sessionCookie, Value: g.sessionToken(time.Now().Add(time.Hour))})
+		rec := httptest.NewRecorder()
+		g.ServeHTTP(rec, req)
+		if rec.Code != status {
+			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		if status == 200 && !strings.Contains(rec.Body.String(), `"delivery":"deb"`) {
+			t.Fatalf("incorrect update delivery: %s", rec.Body.String())
+		}
+	}
+	if newGateway(config{platform: "linux"}).authenticated(httptest.NewRequest("GET", "/", nil)) {
+		t.Fatal("Linux bypassed auth without password and listener")
+	}
+}

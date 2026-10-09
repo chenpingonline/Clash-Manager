@@ -14,15 +14,15 @@ func gatewayPrefix() string {
 	if value, ok := os.LookupEnv("GATEWAY_PREFIX"); ok {
 		return strings.TrimRight(value, "/")
 	}
-	if runtimeenv.Docker() {
+	if runtimeenv.Standalone() {
 		return ""
 	}
 	return "/app/" + appName
 }
 
 func configureAuth(cfg *config) error {
-	if cfg.platform != "fnos" && cfg.platform != "docker" {
-		return errors.New("APP_PLATFORM 必须为 fnos 或 docker")
+	if cfg.platform != "fnos" && cfg.platform != "docker" && cfg.platform != "linux" {
+		return errors.New("APP_PLATFORM 必须为 fnos、docker 或 linux")
 	}
 	if file := os.Getenv("APP_AUTH_PASSWORD_FILE"); file != "" {
 		body, err := os.ReadFile(file)
@@ -31,10 +31,10 @@ func configureAuth(cfg *config) error {
 		}
 		cfg.authPassword = strings.TrimRight(string(body), "\r\n")
 	}
-	if (cfg.platform == "docker" || cfg.listenAddr != "") && len(cfg.authPassword) < 8 {
-		return errors.New("HTTP/Docker 部署必须设置至少 8 字符的 APP_AUTH_PASSWORD 或 APP_AUTH_PASSWORD_FILE")
+	if (cfg.platform != "fnos" || cfg.listenAddr != "") && len(cfg.authPassword) < 8 {
+		return errors.New("HTTP 部署必须设置至少 8 字符的 APP_AUTH_PASSWORD 或 APP_AUTH_PASSWORD_FILE")
 	}
-	if cfg.platform == "docker" && cfg.listenAddr == "" {
+	if cfg.platform != "fnos" && cfg.listenAddr == "" {
 		cfg.listenAddr = ":8080"
 	}
 	return nil
@@ -69,9 +69,13 @@ func (g *gateway) runtimeCapabilities() map[string]any {
 	}}
 }
 
-func (g *gateway) handleUnsupportedDocker(w http.ResponseWriter, r *http.Request, path string) bool {
+func (g *gateway) handleUnsupportedStandalone(w http.ResponseWriter, r *http.Request, path string) bool {
 	if path == "/api/app/update-info" || path == "/api/app/check-update" {
-		writeJSON(w, 200, map[string]any{"currentVersion": version, "sourceConfigured": false, "platform": "docker", "delivery": "image"})
+		delivery := "image"
+		if g.config.platform == "linux" {
+			delivery = "deb"
+		}
+		writeJSON(w, 200, map[string]any{"currentVersion": version, "sourceConfigured": false, "platform": g.config.platform, "delivery": delivery})
 		return true
 	}
 	if strings.HasPrefix(path, "/api/app/icon") || path == "/api/system/proxy-environment" {

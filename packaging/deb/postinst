@@ -1,0 +1,35 @@
+#!/bin/sh
+set -eu
+case "$1" in
+    configure)
+        if ! getent group clash-manager >/dev/null; then
+            addgroup --system clash-manager
+        fi
+        if ! getent passwd clash-manager >/dev/null; then
+            adduser --system --ingroup clash-manager --home /var/lib/clash-manager --no-create-home --disabled-login clash-manager
+        fi
+        install -d -m 0750 -o root -g clash-manager /etc/clash-manager
+        if [ ! -e /etc/clash-manager/password ]; then
+            (umask 077; head -c 24 /dev/urandom | base64 > /etc/clash-manager/password)
+        fi
+        chown root:clash-manager /etc/clash-manager/password
+        chmod 0640 /etc/clash-manager/password
+        /usr/lib/clash-manager/prepare-linux
+        if command -v deb-systemd-helper >/dev/null; then
+            if deb-systemd-helper debian-installed clash-manager.service; then
+                deb-systemd-helper unmask clash-manager.service >/dev/null || true
+            fi
+            if deb-systemd-helper --quiet was-enabled clash-manager.service; then
+                deb-systemd-helper enable clash-manager.service >/dev/null || true
+            else
+                deb-systemd-helper update-state clash-manager.service >/dev/null || true
+            fi
+        fi
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+            deb-systemd-invoke restart clash-manager.service || true
+        fi
+        echo 'Clash Manager: http://127.0.0.1:8080 (default); user: admin.'
+        echo 'Read initial password: sudo cat /etc/clash-manager/password'
+        ;;
+esac

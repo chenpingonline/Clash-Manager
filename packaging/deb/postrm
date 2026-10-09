@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+case "$1" in
+    remove)
+        if command -v deb-systemd-helper >/dev/null; then
+            deb-systemd-helper mask clash-manager.service >/dev/null || true
+        fi
+        ;;
+    purge)
+        if command -v deb-systemd-helper >/dev/null; then
+            deb-systemd-helper purge clash-manager.service >/dev/null || true
+            deb-systemd-helper unmask clash-manager.service >/dev/null || true
+        fi
+        rm -f /etc/clash-manager/password
+        rmdir /etc/clash-manager 2>/dev/null || true
+        # Keep /var/lib/clash-manager and the system user: user data is not erased.
+        ;;
+esac
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+fi

@@ -104,7 +104,7 @@ func newHelper(cfg helperConfig) *helper {
 
 func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
-	if runtimeenv.Docker() && (strings.HasPrefix(path, "/system/proxy-environment") || strings.HasPrefix(path, "/app/icon/")) {
+	if runtimeenv.Standalone() && (strings.HasPrefix(path, "/system/proxy-environment") || strings.HasPrefix(path, "/app/icon/")) {
 		writeJSON(w, 409, map[string]string{"error": "此功能仅适用于 fnOS 原生应用"})
 		return
 	}
@@ -295,7 +295,7 @@ func run() error {
 		}
 	}
 	h := newHelper(cfg)
-	if err := h.applyDockerStartupPorts(); err != nil {
+	if err := h.applyStandaloneStartupPorts(); err != nil {
 		return err
 	}
 	if err := removeSocket(cfg.socket); err != nil {

@@ -188,7 +188,7 @@ func (g *gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, g.runtimeCapabilities())
 		return
 	}
-	if g.config.platform == "docker" && g.handleUnsupportedDocker(w, r, requestPath) {
+	if (g.config.platform == "docker" || g.config.platform == "linux") && g.handleUnsupportedStandalone(w, r, requestPath) {
 		return
 	}
 	if g.handleLogs(w, r, requestPath) {

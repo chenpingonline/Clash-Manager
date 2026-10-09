@@ -8,8 +8,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestDockerStartupPortsPreserveConfigAndSubscriptions(t *testing.T) {
-	t.Setenv("APP_PLATFORM", "docker")
+func TestStandaloneStartupPortsPreserveConfigAndSubscriptions(t *testing.T) {
+	for _, platform := range []string{"docker", "linux"} {
+		t.Run(platform, func(t *testing.T) {
+			t.Setenv("APP_PLATFORM", platform)
+			checkStandaloneStartupPortsPreserveConfigAndSubscriptions(t)
+		})
+	}
+}
+
+func checkStandaloneStartupPortsPreserveConfigAndSubscriptions(t *testing.T) {
 	t.Setenv("APP_CONTROLLER_PORT", "19090")
 	t.Setenv("APP_MIXED_PORT", "17890")
 	h := offlineNetworkHelper(t)
@@ -20,7 +28,7 @@ func TestDockerStartupPortsPreserveConfigAndSubscriptions(t *testing.T) {
 	if err := atomicWrite(h.userSettingsPath(), []byte(`{"mixed-port":7891,"allow-lan":false,"tun":{"mtu":1400}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.applyDockerStartupPorts(); err != nil {
+	if err := h.applyStandaloneStartupPorts(); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(h.config.managedConfig)
@@ -48,7 +56,7 @@ func TestDockerStartupPortsPreserveConfigAndSubscriptions(t *testing.T) {
 	t.Setenv("APP_CONTROLLER_PORT", "")
 	t.Setenv("APP_MIXED_PORT", "")
 	before, _ := os.ReadFile(h.config.managedConfig)
-	if err = h.applyDockerStartupPorts(); err != nil {
+	if err = h.applyStandaloneStartupPorts(); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(h.config.managedConfig)
@@ -62,7 +70,7 @@ func TestDockerStartupPortsFreshConfigAndNativeIsolation(t *testing.T) {
 	t.Setenv("APP_CONTROLLER_PORT", "19090")
 	t.Setenv("APP_MIXED_PORT", "")
 	h := testHelper(t)
-	if err := h.applyDockerStartupPorts(); err != nil {
+	if err := h.applyStandaloneStartupPorts(); err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(h.config.managedConfig)
@@ -72,7 +80,7 @@ func TestDockerStartupPortsFreshConfigAndNativeIsolation(t *testing.T) {
 	t.Setenv("APP_PLATFORM", "fnos")
 	t.Setenv("APP_CONTROLLER_PORT", "invalid")
 	native := testHelper(t)
-	if err := native.applyDockerStartupPorts(); err != nil {
+	if err := native.applyStandaloneStartupPorts(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(native.config.managedConfig); !os.IsNotExist(err) {
@@ -88,7 +96,7 @@ func TestInvalidDockerStartupPortsDoNotWrite(t *testing.T) {
 			t.Setenv("APP_MIXED_PORT", value)
 			h := offlineNetworkHelper(t)
 			before, _ := os.ReadFile(h.config.managedConfig)
-			if err := h.applyDockerStartupPorts(); err == nil || !strings.Contains(err.Error(), "APP_MIXED_PORT") {
+			if err := h.applyStandaloneStartupPorts(); err == nil || !strings.Contains(err.Error(), "APP_MIXED_PORT") {
 				t.Fatalf("invalid port accepted: %v", err)
 			}
 			after, _ := os.ReadFile(h.config.managedConfig)

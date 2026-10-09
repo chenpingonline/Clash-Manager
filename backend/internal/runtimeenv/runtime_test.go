@@ -19,3 +19,18 @@ func TestDeploymentPaths(t *testing.T) {
 		t.Fatal("deployment overrides ignored")
 	}
 }
+
+func TestStandalonePlatforms(t *testing.T) {
+	for _, platform := range []string{"fnos", "docker", "linux"} {
+		t.Setenv("APP_PLATFORM", platform)
+		if Standalone() != (platform != "fnos") {
+			t.Fatalf("standalone %s", platform)
+		}
+		if Docker() != (platform == "docker") {
+			t.Fatalf("Docker scope %s", platform)
+		}
+		if platform != "fnos" && DisplayName(platform) != "Clash Manager" {
+			t.Fatalf("branding %s", platform)
+		}
+	}
+}

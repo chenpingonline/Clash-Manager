@@ -2,6 +2,14 @@
 
 本项目的重要版本变化记录在此。公共程序版本由根目录 `VERSION` 统一管理；fnOS 包版本由 fnOS 仓库的 manifest 管理。
 
+## [1.3.6] - 2026-10-09
+
+### Linux DEB
+
+- 新增 Debian/Ubuntu 原生运行模式与 amd64/arm64 DEB 构建，内置 Mihomo Core、GEO 数据和 systemd 服务。
+- Web 使用低权限用户，Helper 管理 Core 与 TUN；默认本机监听并生成独立登录密码。
+- 支持启动端口覆写、配置保留和服务停止时清理托管 Core；Linux 页面显示包升级说明，保留 fnOS/Docker 兼容性。
+
 ## [1.3.5] - 2026-10-09
 
 ### 仓库拆分

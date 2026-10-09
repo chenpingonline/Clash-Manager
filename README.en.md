@@ -6,6 +6,10 @@ A Mihomo manager for Linux / Docker and the shared source used by [Clash for fnO
 
 Manage proxies, profiles, rules, configuration, connections, logs, DNS, TUN, Core and GEO data. The UI supports Simplified Chinese, English and the browser language.
 
+## Linux DEB installation
+
+amd64/arm64 packages include systemd services, independent authentication and managed Mihomo. See the [DEB guide](packaging/deb/README.en.md) for installation, upgrades and builds.
+
 ## Docker
 
 Image: `chenpingonline/clash-manager`, supporting Linux amd64 / arm64. Moving source does not update existing images. See the [Docker guide](docker/README.en.md).
@@ -30,11 +34,11 @@ npm --prefix web run check
 ./scripts/build-docker.sh clash-manager:local
 ```
 
-VERSION is the sole shared application version source. The default frontend base is `/`. The fnOS packager sets `/app/clash-for-fnos/` and injects its package version and changelog in an isolated build directory. Native Linux package delivery scripts are not implemented yet; the Docker entrypoint is not a host installer.
+VERSION is the sole shared application version source. The default frontend base is `/`. The fnOS packager sets `/app/clash-for-fnos/` and injects its package version and changelog in an isolated build directory. Native Linux DEBs use dedicated systemd lifecycle and packaging scripts.
 
 ## Repository maintenance
 
-This repository owns the shared Vue / Go implementation, translations and Docker builds, including compatibility adapters for fnOS capabilities. The fnOS repository owns native packaging, lifecycle, host configuration, desktop integration and icons. Its upstream.lock pins this repository by version and full commit SHA. Shared features are implemented once here, then adopted and validated by the fnOS packager. Both repositories use master and are pushed independently. Original Git history is retained.
+This repository owns the shared Vue / Go implementation, translations and Docker / Linux DEB builds, including compatibility adapters for fnOS capabilities. The fnOS repository owns native packaging, lifecycle, host configuration, desktop integration and icons. Its upstream.lock pins this repository by version and full commit SHA. Shared features are implemented once here, then adopted and validated by the fnOS packager. Both repositories use master and are pushed independently. Original Git history is retained.
 
 See [maintenance](docs/repository-maintenance.md), the [user guide](docs/user-guide.md), [translations](docs/i18n.md) and [backend](backend/README.en.md).
 

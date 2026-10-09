@@ -1,0 +1,21 @@
+[Unit]
+Description=Clash Manager privileged Mihomo helper
+After=network.target
+PartOf=clash-manager.service
+
+[Service]
+Type=simple
+User=root
+Group=clash-manager
+UMask=0027
+Environment=APP_PLATFORM=linux APP_DIR=/usr/lib/clash-manager APP_CONFIG_DIR=/var/lib/clash-manager/config APP_STATE_DIR=/var/lib/clash-manager/state PRIV_SOCKET_PATH=/run/clash-manager/helper.sock APP_NETWORK_SCOPE=host
+EnvironmentFile=/etc/clash-manager/clash-manager.conf
+RuntimeDirectory=clash-manager
+RuntimeDirectoryMode=0750
+ExecStartPre=/usr/lib/clash-manager/prepare-linux
+ExecStart=/usr/lib/clash-manager/start-helper
+ExecStartPost=/usr/lib/clash-manager/wait-helper
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=40
+KillMode=mixed

@@ -6,6 +6,10 @@
 
 提供节点、订阅、规则、配置编辑、连接、日志、DNS、TUN、Core 与 GEO 管理，支持简体中文、English 和跟随系统。
 
+## Linux DEB 安装
+
+支持 amd64/arm64，提供 systemd 服务、独立登录和托管 Mihomo。安装、升级与构建见 [DEB 使用说明](packaging/deb/README.md)。
+
 ## Docker 部署
 
 镜像：`chenpingonline/clash-manager`，支持 Linux amd64 / arm64。已有镜像不会因源码迁移自动更新；构建与发布方法见 [Docker 使用说明](docker/README.md)。
@@ -30,11 +34,11 @@ npm --prefix web run check
 ./scripts/build-docker.sh clash-manager:local
 ```
 
-`VERSION` 是公共程序唯一版本源。前端默认以 `/` 构建；fnOS 打包方使用 `/app/clash-for-fnos/`，并在隔离构建目录注入 FPK 版本和更新日志。Linux 原生安装包的交付脚本尚未实现，不应将 Docker entrypoint 直接当成宿主安装器。
+`VERSION` 是公共程序唯一版本源。前端默认以 `/` 构建；fnOS 打包方使用 `/app/clash-for-fnos/`，并在隔离构建目录注入 FPK 版本和更新日志。Linux 原生 DEB 使用独立的 systemd 生命周期和打包脚本。
 
 ## 两个仓库怎么维护
 
-- 本仓库维护公共 Vue / Go / 多语言与 Docker 构建；保留 fnOS 能力适配，保证只有一份业务实现。
+- 本仓库维护公共 Vue / Go / 多语言与 Docker / Linux DEB 构建；保留 fnOS 能力适配，保证只有一份业务实现。
 - fnOS 仓库维护 FPK 生命周期、宿主配置、窗口入口、图标及原生发布。
 - fnOS 的 upstream.lock 固定本仓库的版本与完整 commit SHA；打包时下载该提交，编译后装入 FPK。
 - 公共功能只在本仓库修改；发布并验证后，fnOS 更新版本记录。两个仓库各用 master，各自提交、推送。

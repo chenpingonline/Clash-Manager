@@ -14,8 +14,8 @@ import (
 
 // Apply deployment overrides before bootstrap or API requests can start Core.
 // Persist them as user settings so applying subscriptions keeps the new ports.
-func (h *helper) applyDockerStartupPorts() error {
-	if !runtimeenv.Docker() {
+func (h *helper) applyStandaloneStartupPorts() error {
+	if !runtimeenv.Standalone() {
 		return nil
 	}
 	patch := map[string]any{}
@@ -53,7 +53,7 @@ func (h *helper) applyDockerStartupPorts() error {
 	}
 	content, err := configyaml.MergeOverrides(raw, patch)
 	if err != nil {
-		return fmt.Errorf("应用 Docker 启动端口失败: %w", err)
+		return fmt.Errorf("应用启动端口失败: %w", err)
 	}
 	mergeUserSettings(settings, patch)
 	body, err := json.MarshalIndent(settings, "", "  ")

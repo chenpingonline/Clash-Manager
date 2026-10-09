@@ -1,0 +1,25 @@
+[Unit]
+Description=Clash Manager web interface
+Requires=clash-manager-helper.service
+After=network.target clash-manager-helper.service
+
+[Service]
+Type=simple
+User=clash-manager
+Group=clash-manager
+UMask=0027
+Environment=APP_PLATFORM=linux APP_DIR=/usr/lib/clash-manager APP_CONFIG_DIR=/var/lib/clash-manager/config APP_STATE_DIR=/var/lib/clash-manager/state PRIV_SOCKET_PATH=/run/clash-manager/helper.sock PUBLIC_DIR=/usr/lib/clash-manager/public
+EnvironmentFile=/etc/clash-manager/clash-manager.conf
+ExecStart=/usr/lib/clash-manager/bin/clash-web
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

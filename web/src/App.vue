@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
       <div class="topbar-title"><h1>{{ t(activePage.label) }}</h1><div id="page-title-meta" class="page-title-meta" /></div>
       <div class="top-actions">
         <LanguageSelect v-if="current === 'settings'" />
-        <button v-if="runtime.platform === 'docker'" class="ghost" @click="logout">{{ t("退出登录") }}</button><div id="page-actions" class="page-actions" /><button class="ghost" :disabled="pageRefreshing" :aria-busy="pageRefreshing" @click="refreshActivePage">{{ t(pageRefreshing ? '刷新中…' : '刷新') }}</button></div>
+        <button v-if="runtime.platform !== 'fnos'" class="ghost" @click="logout">{{ t("退出登录") }}</button><div id="page-actions" class="page-actions" /><button class="ghost" :disabled="pageRefreshing" :aria-busy="pageRefreshing" @click="refreshActivePage">{{ t(pageRefreshing ? '刷新中…' : '刷新') }}</button></div>
     </header>
     <section class="content" :class="{ 'config-content': current === 'config', 'logs-content': current === 'logs', 'rules-content': current === 'rules' }" @scroll.passive="markScrollActivity">
       <component :is="activePage.component" :key="`${current}-${refreshKey}`" ref="activePageRef" />

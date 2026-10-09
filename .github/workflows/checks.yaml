@@ -33,3 +33,19 @@ jobs:
         run: ./scripts/build-docker.sh clash-manager:ci
       - name: Verify Docker lifecycle and persistence
         run: python3 scripts/docker-smoke.py clash-manager:ci
+      - name: Build DEB packages for amd64 and arm64
+        run: |
+          ./scripts/build-deb.sh all
+          python3 scripts/audit-deb.py dist/*.deb
+      - name: Verify native Debian systemd lifecycle
+        run: |
+          docker build -f packaging/deb/test.Dockerfile -t clash-manager:deb-test-debian12 .
+          python3 scripts/deb-smoke.py "dist/clash-manager_$(cat VERSION)_amd64.deb"
+      - name: Verify native Ubuntu systemd lifecycle
+        run: |
+          docker build --build-arg BASE=ubuntu:24.04 -f packaging/deb/test.Dockerfile -t clash-manager:deb-test-ubuntu24 .
+          python3 scripts/deb-smoke.py "dist/clash-manager_$(cat VERSION)_amd64.deb" --image clash-manager:deb-test-ubuntu24
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: dist/*.deb*

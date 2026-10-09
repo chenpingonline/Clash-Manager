@@ -179,7 +179,7 @@ watch(() => props.open, open => {
         </div>
 
         <div v-if="form.enabled && form.dnsHijack && !dnsEnabled" class="tun-capability warn"><strong>DNS</strong><span>{{ t("开启 DNS 劫持前建议先启用 Mihomo DNS。") }}</span></div>
-        <div class="tun-note"><strong>{{ t("注意") }}</strong><span>{{ t(runtime.platform === 'docker' ? 'TUN 修改所在网络命名空间的路由。Host 网络下作用于宿主；Bridge 网络下作用于容器。' : 'TUN 会修改 fnOS 的系统路由与 DNS 流向。') }} {{ t('默认关闭；配置不可用时可能影响访问互联网。') }}</span></div>
+        <div class="tun-note"><strong>{{ t("注意") }}</strong><span>{{ t(runtime.platform === 'linux' ? 'TUN 会修改 Linux 主机的系统路由与 DNS 流向。' : runtime.platform === 'docker' ? 'TUN 修改所在网络命名空间的路由。Host 网络下作用于宿主；Bridge 网络下作用于容器。' : 'TUN 会修改 fnOS 的系统路由与 DNS 流向。') }} {{ t('默认关闭；配置不可用时可能影响访问互联网。') }}</span></div>
       </div>
     </div>
   </BaseModal>

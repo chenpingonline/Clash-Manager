@@ -15,6 +15,7 @@ func Value(name, fallback string) string {
 }
 func Platform() string { return Value("APP_PLATFORM", "fnos") }
 func Docker() bool     { return Platform() == "docker" }
+func Standalone() bool { return Platform() == "docker" || Platform() == "linux" }
 func EtcDir() string   { return Value("APP_CONFIG_DIR", Value("TRIM_PKGETC", "/tmp/clash-for-fnos-etc")) }
 func VarDir() string   { return Value("APP_STATE_DIR", Value("TRIM_PKGVAR", "/tmp/clash-for-fnos-var")) }
 func AppDir() string {
@@ -24,9 +25,9 @@ func AccessiblePaths() string {
 	return Value("APP_IMPORT_PATHS", os.Getenv("TRIM_DATA_ACCESSIBLE_PATHS"))
 }
 
-// DisplayName preserves the native product name while branding standalone Docker deployments.
+// DisplayName preserves the native product name while branding standalone deployments.
 func DisplayName(platform string) string {
-	if platform == "docker" {
+	if platform == "docker" || platform == "linux" {
 		return "Clash Manager"
 	}
 	return "Clash for fnOS"
