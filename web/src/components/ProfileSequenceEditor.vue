@@ -2,8 +2,8 @@
 import { countLabel, t } from '@/services/i18n'
 
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, useId, watch } from 'vue'
-import { baseEntries, copyGroup, effectiveEntries, emptySequence, entryIdentity, makeRule, moveEntry, parseSequence, ruleParts, sequenceRows, filterSequenceRows, sequenceEntrySummary, setOriginalExclusions } from '@/services/profile-sequences'
-import type { NamedEntry, SequenceEditorData, SequenceEntry, SequenceExtension, SequenceKind, SequenceRow, SequenceSourceFilter } from '@/services/profile-sequences'
+import { baseEntries, copyGroup, effectiveEntries, emptySequence, entryIdentity, makeRule, moveEntry, parseSequence, ruleParts, sequenceRows, filterSequenceRows, sortSequenceRows, sequenceEntryFields, sequenceEntrySummary, setOriginalExclusions } from '@/services/profile-sequences'
+import type { NamedEntry, SequenceEditorData, SequenceEntry, SequenceExtension, SequenceKind, SequenceRow, SequenceSourceFilter, SequenceSortColumn } from '@/services/profile-sequences'
 import { parseProxyInput } from '@/services/proxy-uri'
 import { errorMessage } from '@/services/api'
 import PolicySelect from './PolicySelect.vue'
@@ -41,7 +41,24 @@ const subRuleNames = computed(() => Object.keys((props.data.base['sub-rules'] ||
 const canNoResolve = computed(() => ['GEOIP', 'IP-ASN', 'IP-CIDR', 'IP-CIDR6', 'IP-SUFFIX', 'RULE-SET'].includes(ruleType.value))
 type Row = SequenceRow
 const allRows = computed(() => sequenceRows(originals.value, props.modelValue))
-const rows = computed(() => filterSequenceRows(allRows.value, search.value, sourceFilter.value))
+const typeFilter = ref(''), policyFilter = ref(''), detailFilter = ref('')
+const sortColumn = ref<SequenceSortColumn | null>(null), sortDirection = ref<'asc' | 'desc'>('asc')
+const typeOptions = computed(() => [...new Set(allRows.value.map(row => sequenceEntryFields(row.item, props.kind).type))].filter(Boolean).sort())
+const policyOptions = computed(() => [...new Set(allRows.value.map(row => sequenceEntryFields(row.item, props.kind).policy))].filter(Boolean).sort())
+const detailLabel = computed(() => props.kind === 'rules' ? '策略' : props.kind === 'proxies' ? '服务器' : '成员 / 集合')
+const columns = computed<{ key: SequenceSortColumn; label: string }[]>(() => [
+  { key: 'order', label: t('序号') },
+  { key: 'title', label: props.kind === 'rules' ? t('规则内容') : t('{arg0}名称', { arg0: t(noun.value) }) },
+  { key: 'type', label: t('类型') }, { key: 'detail', label: t(detailLabel.value) }, { key: 'source', label: t('来源') },
+])
+const rows = computed(() => sortSequenceRows(filterSequenceRows(allRows.value, search.value, sourceFilter.value, { kind: props.kind, type: typeFilter.value, policy: policyFilter.value, detail: detailFilter.value }), props.kind, sortColumn.value, sortDirection.value))
+const viewChanged = computed(() => !!(search.value || sourceFilter.value !== 'all' || typeFilter.value || policyFilter.value || detailFilter.value || sortColumn.value))
+function resetView() { search.value = ''; sourceFilter.value = 'all'; typeFilter.value = ''; policyFilter.value = ''; detailFilter.value = ''; sortColumn.value = null; sortDirection.value = 'asc' }
+function toggleSort(column: SequenceSortColumn) {
+  if (sortColumn.value !== column) { sortColumn.value = column; sortDirection.value = 'asc' }
+  else if (sortDirection.value === 'asc') sortDirection.value = 'desc'
+  else sortColumn.value = null
+}
 const batchRows = computed(() => rows.value.filter(row => row.side === 'base'))
 const canBatchExclude = computed(() => batchRows.value.some(row => !row.deleted))
 const canBatchRestore = computed(() => batchRows.value.some(row => row.deleted))
@@ -56,17 +73,13 @@ const rulePlaceholder = computed(() => {
 })
 const appendWarning = computed(() => addSide.value === 'append' && effectiveEntries(originals.value, props.modelValue).some(item => typeof item === 'string' && ruleParts(item)[0] === 'MATCH'))
 function describe(item: SequenceEntry): string { return typeof item === 'string' ? item : `${item.name} ${item.type}` }
-function details(item: SequenceEntry) {
-  if (typeof item !== 'string') return { title: item.name, type: item.type, policy: '' }
-  const parts = ruleParts(item), match = parts[0] === 'MATCH'
-  return { title: match ? t('所有其他流量') : parts[1] || item, type: parts[0], policy: parts[match ? 1 : 2] || '' }
-}
+function details(item: SequenceEntry) { return sequenceEntryFields(item, props.kind) }
 const viewport = ref<HTMLElement | null>(null), scrollTop = ref(0), viewportHeight = ref(440)
 const rowHeight = 26
 const start = computed(() => Math.max(0, Math.min(rows.value.length - 1, Math.floor(scrollTop.value / rowHeight)) - 4))
 const end = computed(() => Math.min(rows.value.length, start.value + Math.ceil(viewportHeight.value / rowHeight) + 8))
 const visibleRows = computed(() => rows.value.slice(start.value, end.value))
-watch([search, sourceFilter], () => { scrollTop.value = 0; if (viewport.value) viewport.value.scrollTop = 0 })
+watch([search, sourceFilter, typeFilter, policyFilter, detailFilter, sortColumn, sortDirection], () => { scrollTop.value = 0; if (viewport.value) viewport.value.scrollTop = 0 })
 let resizeObserver: ResizeObserver | undefined
 onMounted(() => { if (viewport.value) { resizeObserver = new ResizeObserver(entries => { viewportHeight.value = entries[0]?.contentRect.height || 440 }); resizeObserver.observe(viewport.value) } })
 onBeforeUnmount(() => resizeObserver?.disconnect())
@@ -152,7 +165,7 @@ async function add(side: 'prepend' | 'append') {
     else if (side === 'prepend') next.prepend.unshift(...additions)
     else next.append.push(...additions)
     emit('update:modelValue', next); error.value = ''; cancelEdit(); input.value = ''; payload.value = ''
-    sourceFilter.value = 'all'; search.value = ''
+    resetView()
     await nextTick()
     if (viewport.value) viewport.value.scrollTop = side === 'prepend' ? 0 : rows.value.length * rowHeight
   } catch (cause) { error.value = errorMessage(cause) }
@@ -192,7 +205,7 @@ function reorder(row: Row, delta: number) {
           <div class="sequence-member-field"><div class="sequence-member-heading"><span>{{ t("引入代理") }}</span><SelectedGroupMembers v-model="members" :disabled="disabled" /></div><GroupMemberSelect v-model="members" :options="availableProxies" :exclude="name.trim()" :disabled="disabled" :label="t('引入代理')" :placeholder="t('选择或输入名称')" :search-placeholder="t('搜索代理组、节点或输入名称')" /></div>
           <div class="sequence-member-field"><div class="sequence-member-heading"><span>{{ t("引入代理集合") }}</span><SelectedGroupMembers v-model="providers" :disabled="disabled" provider /></div><GroupMemberSelect v-model="providers" :options="providerNames" :disabled="disabled" :label="t('引入代理集合')" :placeholder="t('选择或输入集合名称')" :search-placeholder="t('搜索集合或输入名称')" /></div>
         </div>
-        <SequenceFormDialog :open="groupExtra" :title="t('代理组更多设置')" :subtitle="name || t('我的代理组')" @close="groupExtra = false">
+        <SequenceFormDialog :open="groupExtra" :title="t('代理组更多设置')" :subtitle="name || t('我的代理组')" hide-footer @close="groupExtra = false">
           <fieldset class="group-options-form" :disabled="disabled">
             <section class="group-options-section"><h4>{{ t('健康检查') }}</h4><div class="group-options-grid">
               <label class="group-options-wide">{{ t('健康检查地址') }}<input v-model="url" type="url" /></label>
@@ -222,19 +235,26 @@ function reorder(row: Row, delta: number) {
         <div class="rule-source-filters" role="group" :aria-label="t('{arg0}来源', { arg0: t(noun) })"><button v-for="option in sourceOptions" :key="option.value" type="button" :aria-pressed="sourceFilter === option.value" :class="{ active: sourceFilter === option.value }" @click="sourceFilter = option.value">{{ t(option.label) }}<span v-if="option.value !== 'all'">{{ option.value === 'base' ? originals.length : option.value === 'deleted' ? allRows.filter(row => row.deleted).length : modelValue[option.value].length }}</span></button></div>
         <span class="sequence-count muted">{{ countLabel(rows.length, kind === 'rules' ? '条规则' : kind === 'proxies' ? '个节点' : '个代理组') }}</span>
       </div>
+      <div class="sequence-column-filters">
+        <label>{{ t('类型') }}<select v-model="typeFilter" :aria-label="t('筛选类型')"><option value="">{{ t('全部类型') }}</option><option v-for="type in typeOptions" :key="type" :value="type">{{ type }}</option></select></label>
+        <label v-if="kind === 'rules'">{{ t('策略') }}<select v-model="policyFilter" :aria-label="t('筛选策略')"><option value="">{{ t('全部策略') }}</option><option v-for="item in policyOptions" :key="item" :value="item">{{ item }}</option></select></label>
+        <label v-else>{{ t(detailLabel) }}<input v-model="detailFilter" :aria-label="t(kind === 'proxies' ? '筛选服务器' : '筛选成员或集合')" :placeholder="t(kind === 'proxies' ? '输入服务器地址或端口' : '输入成员或集合名称')" /></label>
+        <button type="button" class="ghost small" :disabled="!viewChanged" @click="resetView">{{ t('重置筛选与排序') }}</button>
+        <span class="muted">{{ t('点击表头排序，仅影响列表显示') }}</span>
+      </div>
       <div v-if="data.warning" class="muted">{{ t(data.warning) }}</div>
       <div class="sequence-table-shell" role="table" :aria-label="t(`订阅${noun}`)" :aria-rowcount="rows.length + 1">
-        <div class="rule-table-heading rule-table-grid" :class="{ 'sequence-named-grid': kind !== 'rules' }" role="row" aria-rowindex="1"><span role="columnheader">{{ t("序号") }}</span><span role="columnheader">{{ kind === 'rules' ? t('规则内容') : t('{arg0}名称', { arg0: t(noun) }) }}</span><span role="columnheader">{{ t("类型") }}</span><span role="columnheader">{{ t(kind === 'rules' ? '策略' : kind === 'proxies' ? '服务器' : '成员 / 集合') }}</span><span role="columnheader">{{ t("来源") }}</span><div class="sequence-batch-heading" role="columnheader" :aria-label="t('操作')">
+        <div class="rule-table-heading rule-table-grid" :class="{ 'sequence-named-grid': kind !== 'rules' }" role="row" aria-rowindex="1"><span v-for="column in columns" :key="column.key" role="columnheader" :aria-sort="sortColumn === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"><button type="button" class="sequence-sort-button" :class="{ active: sortColumn === column.key }" :aria-label="t('按{arg0}排序', { arg0: column.label })" @click="toggleSort(column.key)"><span>{{ column.label }}</span><span aria-hidden="true">{{ sortColumn === column.key ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span></button></span><div class="sequence-batch-heading" role="columnheader" :aria-label="t('操作')">
           <button type="button" class="rule-text-action rule-exclude-action" :disabled="disabled || !canBatchExclude" :aria-label="t('排除筛选结果中的原始{arg0}', { arg0: t(noun) })" :title="t('排除筛选结果中的原始{arg0}', { arg0: t(noun) })" @click="batchExclude(true)">{{ t(kind === 'proxies' ? '全部排除' : '排除全部') }}</button>
           <button type="button" class="rule-text-action rule-restore-action" :disabled="disabled || !canBatchRestore" :aria-label="t('恢复筛选结果中的原始{arg0}', { arg0: t(noun) })" :title="t('恢复筛选结果中的原始{arg0}', { arg0: t(noun) })" @click="batchExclude(false)">{{ t(kind === 'proxies' ? '全部恢复' : '恢复全部') }}</button>
         </div></div>
         <div ref="viewport" class="sequence-list rule-table-body" role="rowgroup" @scroll="scrollTop = ($event.target as HTMLElement).scrollTop">
-          <div v-if="!rows.length" class="sequence-empty muted">{{ t(search || sourceFilter !== 'all' ? '没有匹配的条目' : '暂无条目') }}</div>
+          <div v-if="!rows.length" class="sequence-empty muted">{{ t(viewChanged ? '没有匹配的条目' : '暂无条目') }}</div>
           <div :style="{ height: `${start * rowHeight}px` }" />
           <div v-for="(row, offset) in visibleRows" :key="row.key" class="rule-table-row rule-table-grid" :class="{ 'sequence-named-grid': kind !== 'rules', 'rule-excluded': row.deleted, 'rule-editing': editIndex === row.index && editSide === row.side }" role="row" :aria-rowindex="start + offset + 2">
             <span class="muted" role="cell">{{ t(row.order) }}</span><span class="rule-table-content" role="cell" :title="describe(row.item)">{{ details(row.item).title }}</span><span role="cell" :title="details(row.item).type">{{ details(row.item).type }}</span><span role="cell" :title="kind === 'groups' ? undefined : sequenceEntrySummary(row.item, kind)"><button v-if="kind === 'groups' && typeof row.item !== 'string'" type="button" class="sequence-member-summary" aria-haspopup="dialog" :aria-label="t('查看代理组 {arg0} 的全部成员与集合', { arg0: row.item.name })" :title="t('查看全部成员与集合')" @click="inspectedGroup = row.item">{{ sequenceEntrySummary(row.item, kind) }}</button><template v-else>{{ sequenceEntrySummary(row.item, kind) }}</template></span><span role="cell" class="rule-table-source">{{ t(row.side === 'base' ? '订阅原始' : row.side === 'prepend' ? '前置' : '后置') }}</span>
             <div class="rule-table-actions" role="cell">
-              <template v-if="row.side !== 'base'"><button class="rule-text-action" :disabled="disabled" :aria-label="t(`编辑 ${entryIdentity(row.item)}`)" :title="t(kind === 'proxies' ? '在高级 YAML 中编辑节点参数' : undefined)" @click="edit(row)">{{ t("编辑") }}</button><button class="rule-text-action rule-move" :disabled="disabled || row.index === 0" :aria-label="t(`上移 ${entryIdentity(row.item)}`)" :title="t('上移')" @click="reorder(row, -1)">↑</button><button class="rule-text-action rule-move" :disabled="disabled || row.index === modelValue[row.side].length - 1" :aria-label="t(`下移 ${entryIdentity(row.item)}`)" :title="t('下移')" @click="reorder(row, 1)">↓</button></template>
+              <template v-if="row.side !== 'base'"><button class="rule-text-action" :disabled="disabled" :aria-label="t(`编辑 ${entryIdentity(row.item)}`)" :title="t(kind === 'proxies' ? '在高级 YAML 中编辑节点参数' : undefined)" @click="edit(row)">{{ t("编辑") }}</button><button class="rule-text-action rule-move" :disabled="disabled || sortColumn !== null || row.index === 0" :aria-label="t(`上移 ${entryIdentity(row.item)}`)" :title="t(sortColumn ? '请恢复默认排序后调整顺序' : '上移')" @click="reorder(row, -1)">↑</button><button class="rule-text-action rule-move" :disabled="disabled || sortColumn !== null || row.index === modelValue[row.side].length - 1" :aria-label="t(`下移 ${entryIdentity(row.item)}`)" :title="t(sortColumn ? '请恢复默认排序后调整顺序' : '下移')" @click="reorder(row, 1)">↓</button></template>
               <button class="rule-text-action" :class="{ 'rule-delete-action': row.side !== 'base', 'rule-exclude-action': row.side === 'base' && !row.deleted, 'rule-restore-action': row.deleted }" :disabled="disabled" :aria-label="`${t(row.deleted ? '恢复' : row.side === 'base' ? '排除' : '删除')} ${entryIdentity(row.item)}`" @click="remove(row)">{{ t(row.deleted ? '恢复' : row.side === 'base' ? '排除' : '删除') }}</button>
               <button v-if="kind === 'groups'" type="button" class="rule-text-action" :disabled="disabled" :aria-label="t('以代理组 {arg0} 为模板新建', { arg0: entryIdentity(row.item) })" :title="t('将此组配置填入上方，修改后添加为新代理组')" @click="duplicate(row)">{{ t('以此新建') }}</button>
             </div>

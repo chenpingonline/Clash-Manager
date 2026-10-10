@@ -1540,5 +1540,22 @@
   "（此行过长，已截断）": "(Line too long; truncated)",
   "日志读取失败，请重新读取": "Unable to read logs. Please reload.",
   "暂无托管 Core 输出日志": "No managed Core output logs yet",
-  "托管 Core 原始输出 · 已暂停刷新": "Managed Core raw output · Refresh paused"
+  "托管 Core 原始输出 · 已暂停刷新": "Managed Core raw output · Refresh paused",
+  "全选": "Select all",
+  "取消全选": "Deselect all",
+  "全选匹配项": "Select all matches",
+  "取消匹配项选择": "Deselect matches",
+  "已选 {arg0} / {arg1} 项": "Selected {arg0} / {arg1}",
+  "按{arg0}排序": "Sort by {arg0}",
+  "筛选类型": "Filter by type",
+  "全部类型": "All types",
+  "筛选策略": "Filter by policy",
+  "全部策略": "All policies",
+  "筛选服务器": "Filter by server",
+  "筛选成员或集合": "Filter by member or provider",
+  "输入服务器地址或端口": "Enter a server address or port",
+  "输入成员或集合名称": "Enter a member or provider name",
+  "重置筛选与排序": "Reset filters and sorting",
+  "点击表头排序，仅影响列表显示": "Click a column header to sort the list view",
+  "请恢复默认排序后调整顺序": "Restore default sorting before changing the order"
 }

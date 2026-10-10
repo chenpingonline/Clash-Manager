@@ -93,9 +93,38 @@ export function sequenceRows(base: SequenceEntry[], model: SequenceExtension): S
   }
   return rows
 }
-export function filterSequenceRows(rows: SequenceRow[], search: string, source: SequenceSourceFilter = 'all'): SequenceRow[] {
+export type SequenceSortColumn = 'order' | 'title' | 'type' | 'detail' | 'source'
+export interface SequenceColumnFilters { kind?: SequenceKind; type?: string; policy?: string; detail?: string }
+export function sequenceEntryFields(item: SequenceEntry, kind: SequenceKind) {
+  if (typeof item === 'string') {
+    const parts = ruleParts(item), match = parts[0] === 'MATCH', policy = parts[match ? 1 : 2] || ''
+    return { title: match ? t('所有其他流量') : parts[1] || item, type: parts[0] || '', policy, detail: policy }
+  }
+  return { title: item.name, type: item.type, policy: '', detail: kind === 'groups' ? groupMemberEntries(item).join(' ') : sequenceEntrySummary(item, kind) }
+}
+export function filterSequenceRows(rows: SequenceRow[], search: string, source: SequenceSourceFilter = 'all', filters: SequenceColumnFilters = {}): SequenceRow[] {
   const term = search.trim().toLocaleLowerCase()
-  return rows.filter(row => (source === 'all' || (source === 'deleted' ? row.deleted : row.side === source)) && (!term || (typeof row.item === 'string' ? row.item : `${row.item.name} ${row.item.type}`).toLocaleLowerCase().includes(term)))
+  const detail = filters.detail?.trim().toLocaleLowerCase() || ''
+  return rows.filter(row => {
+    if (source !== 'all' && !(source === 'deleted' ? row.deleted : row.side === source)) return false
+    const fields = sequenceEntryFields(row.item, filters.kind || 'proxies')
+    const text = typeof row.item === 'string' ? row.item : `${fields.title} ${fields.type} ${fields.detail}`
+    return (!term || text.toLocaleLowerCase().includes(term)) && (!filters.type || fields.type === filters.type)
+      && (!filters.policy || fields.policy === filters.policy) && (!detail || fields.detail.toLocaleLowerCase().includes(detail))
+  })
+}
+// Sort a display copy; preserve original indices for mutations and matching priority.
+export function sortSequenceRows(rows: SequenceRow[], kind: SequenceKind, column: SequenceSortColumn | null, direction: 'asc' | 'desc' = 'asc'): SequenceRow[] {
+  if (!column) return [...rows]
+  const collator = new Intl.Collator(getLocale(), { numeric: true, sensitivity: 'base' })
+  const sourceOrder = { prepend: 0, base: 1, append: 2 }
+  return rows.map(row => {
+    const fields = sequenceEntryFields(row.item, kind)
+    return { row, value: column === 'order' ? row.order : column === 'source' ? sourceOrder[row.side] : fields[column] }
+  }).sort((a, b) => {
+    const result = typeof a.value === 'number' && typeof b.value === 'number' ? a.value - b.value : collator.compare(String(a.value), String(b.value))
+    return result * (direction === 'desc' ? -1 : 1) || a.row.order - b.row.order
+  }).map(entry => entry.row)
 }
 export const ruleTypeLabels: Record<string, string> = {
   "DOMAIN": "匹配完整域名",

@@ -1045,6 +1045,15 @@ html[data-theme="light"] .topbar{background:rgba(248,250,253,.9)}
 .rule-source-filters button.active{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent)}
 .rule-source-filters button span{font-size:10px;font-weight:400;opacity:.8}
 .rule-list-toolbar .sequence-count{margin-left:auto;white-space:nowrap;font-size:11px}
+.sequence-column-filters{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-bottom:10px;font-size:11px;flex:none}
+.sequence-column-filters label{display:flex;align-items:center;gap:6px;min-width:0;color:var(--muted)}
+.sequence-column-filters input,.sequence-column-filters select{width:180px;max-width:100%;height:30px;padding:4px 8px;font-size:12px}
+.sequence-column-filters>span{margin-left:auto}
+.sequence-sort-button{display:flex;align-items:center;gap:6px;width:100%;height:100%;min-width:0;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font-size:inherit;font-weight:inherit;text-align:left}
+.sequence-sort-button>span:first-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.sequence-sort-button>span:last-child{flex:none;opacity:.6}
+.sequence-sort-button.active,.sequence-sort-button:hover{color:var(--accent)}
+.sequence-sort-button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .sequence-rule-editor .sequence-table-shell{border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .rule-table-grid{display:grid;grid-template-columns:56px minmax(180px,1.6fr) minmax(110px,1fr) minmax(100px,1fr) minmax(100px,.85fr) 154px;align-items:center}
 .rule-table-grid>span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 10px}

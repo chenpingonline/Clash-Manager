@@ -33,7 +33,7 @@ onBeforeUnmount(() => dialog.value?.close())
   <Teleport to="body">
     <dialog ref="dialog" class="modal-card sequence-form-dialog" :class="{ 'sequence-form-dialog-compact': compact }" :aria-label="title" @cancel.prevent.stop="emit('close')" @keydown.esc.stop @keydown="keyboard" @click="backdrop">
       <template v-if="open">
-        <header class="sequence-dialog-header"><div :class="{ 'sequence-dialog-title-inline': inlineSubtitle }"><h3>{{ title }}</h3><p v-if="subtitle">{{ subtitle }}</p></div><button type="button" class="ghost small" autofocus :aria-label="t('关闭')" @click="emit('close')">×</button></header>
+        <header class="sequence-dialog-header"><div :class="{ 'sequence-dialog-title-inline': inlineSubtitle }"><h3>{{ title }}</h3><p v-if="subtitle">{{ subtitle }}</p></div><button type="button" class="ghost small sequence-dialog-close" autofocus :aria-label="t('关闭')" @click="emit('close')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" /></svg></button></header>
         <div ref="body" class="sequence-dialog-body" tabindex="0" :aria-label="title"><slot /></div>
         <footer v-if="!hideFooter" class="sequence-dialog-footer"><slot name="footer"><span class="muted">{{ t('修改保留在当前表单，添加或更新代理组后进入草稿。') }}</span><button type="button" class="small" @click="emit('close')">{{ t('返回编辑') }}</button></slot></footer>
       </template>
@@ -49,6 +49,8 @@ onBeforeUnmount(() => dialog.value?.close())
 .sequence-dialog-header .sequence-dialog-title-inline{display:flex;align-items:center;gap:10px}
 .sequence-dialog-header .sequence-dialog-title-inline p{margin:0;white-space:nowrap}
 .sequence-dialog-header button{flex:none;width:30px;height:30px;padding:0;font-size:20px}
+.sequence-dialog-close{display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.sequence-dialog-close svg{display:block;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round}
 .sequence-dialog-body{max-height:min(60dvh,520px);overflow:auto;overscroll-behavior:contain;padding:2px}
 .sequence-dialog-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid var(--line);padding-top:14px;margin-top:16px}
 .sequence-dialog-footer span{font-size:11px;line-height:1.5}.sequence-dialog-footer button{flex:none}

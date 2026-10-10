@@ -11,6 +11,8 @@ const selected = computed(() => new Set(props.modelValue))
 // Retain references from copied groups even when they are absent from the candidate source.
 const candidates = computed(() => [...new Set([...props.options, ...props.modelValue])].filter(value => value !== props.exclude || selected.value.has(value)))
 const matches = computed(() => candidates.value.filter(value => value.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())))
+const bulkOptions = computed(() => matches.value.filter(value => value !== props.exclude))
+const bulkSelectedCount = computed(() => bulkOptions.value.filter(value => selected.value.has(value)).length)
 const customOption = computed(() => {
   const value = search.value.trim()
   return value && value !== props.exclude && !candidates.value.includes(value) ? value : ''
@@ -23,6 +25,14 @@ function toggle(value: string) {
   if (props.disabled) return
   if (selected.value.has(value)) emit('update:modelValue', props.modelValue.filter(item => item !== value))
   else if (value !== props.exclude) emit('update:modelValue', [...props.modelValue, value])
+}
+function selectMatches(select: boolean) {
+  if (props.disabled) return
+  const values = new Set(bulkOptions.value)
+  emit('update:modelValue', select
+    ? [...new Set([...props.modelValue, ...bulkOptions.value])]
+    : props.modelValue.filter(value => !values.has(value)))
+  searchInput.value?.focus()
 }
 async function show() {
   if (props.disabled) return
@@ -51,6 +61,7 @@ function keyboard(event: KeyboardEvent) {
     const index = current < 0 ? (event.key === 'ArrowDown' ? 0 : inputs.length - 1) : (current + (event.key === 'ArrowDown' ? 1 : -1) + inputs.length) % inputs.length
     inputs[index]?.focus(); inputs[index]?.scrollIntoView({ block: 'nearest' })
   } else if (event.key === 'Enter' && open.value) {
+    if (event.target instanceof HTMLButtonElement) return
     event.preventDefault(); event.stopPropagation()
     const current = document.activeElement as HTMLInputElement
     const value = current?.type === 'checkbox' ? current.value : visibleOptions.value[0]
@@ -72,6 +83,11 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside, tru
     </button>
     <Teleport to="body"><div v-if="open" :id="`${id}-panel`" ref="panel" class="policy-select-panel group-member-panel" :style="panelStyle" role="dialog" :aria-label="t('{arg0}候选', { arg0: label })" @keydown="keyboard" @focusout="focusOut">
       <input ref="searchInput" v-model="search" :aria-label="t('搜索{arg0}', { arg0: label })" :placeholder="searchPlaceholder" autocomplete="off" :aria-controls="`${id}-list`" />
+      <div class="group-member-actions">
+        <button type="button" class="ghost small" :disabled="disabled || bulkSelectedCount === bulkOptions.length" @click="selectMatches(true)">{{ t(search.trim() ? '全选匹配项' : '全选') }}</button>
+        <button type="button" class="ghost small" :disabled="disabled || !bulkSelectedCount" @click="selectMatches(false)">{{ t(search.trim() ? '取消匹配项选择' : '取消全选') }}</button>
+        <span class="muted">{{ t('已选 {arg0} / {arg1} 项', { arg0: bulkSelectedCount, arg1: bulkOptions.length }) }}</span>
+      </div>
       <div :id="`${id}-list`" class="group-member-options">
         <label v-for="option in visibleOptions" :key="option" class="group-member-option" :class="{ 'is-selected': selected.has(option) }">
           <input type="checkbox" :value="option" :checked="selected.has(option)" :disabled="disabled" :aria-label="option" @change="toggle(option)" />
@@ -86,6 +102,9 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside, tru
 
 <style scoped>
 .group-member-select{min-width:0;width:100%}
+.group-member-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line);margin-bottom:4px}
+.group-member-actions button{padding:4px 8px;font-size:11px}
+.group-member-actions span{margin-left:auto;font-size:11px;white-space:nowrap}
 .group-member-options{min-height:0;max-height:min(240px,30dvh);overflow:auto;scrollbar-width:thin;scrollbar-color:var(--muted) transparent}
 .group-member-option{display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;font-size:12px;cursor:pointer;min-width:0}
 .group-member-option:hover,.group-member-option:focus-within{background:color-mix(in srgb,var(--accent) 12%,var(--panel))}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { copyGroup, effectiveEntries, emptySequence, makeRule, moveEntry, parseSequence, ruleParts, serializeSequence, sequenceRows, filterSequenceRows, setOriginalExclusions } from './profile-sequences'
+import { copyGroup, effectiveEntries, emptySequence, makeRule, moveEntry, parseSequence, ruleParts, serializeSequence, sequenceRows, filterSequenceRows, sortSequenceRows, setOriginalExclusions } from './profile-sequences'
 import { parseProxyInput, parseProxyURI } from './proxy-uri'
 
 describe('subscription sequence drafts', () => {
@@ -75,9 +75,50 @@ describe('rule table filtering', () => {
     const result = filterSequenceRows(rows, 'site-11999', 'base')
     expect(result).toMatchObject([{ index: 11999, order: 12002, deleted: false }])
     expect(rows).toHaveLength(12003)
+    const sorted = sortSequenceRows(filterSequenceRows(rows, 'site-', 'base'), 'rules', 'title', 'desc')
+    expect(sorted.slice(0, 3).map(row => row.index)).toEqual([11999, 11998, 11997])
+    expect(sorted[0]?.item).toBe(large[11999])
+    expect(rows[2]?.item).toBe(large[0])
   })
 })
 const b64 = (value: string) => Buffer.from(value).toString('base64')
+describe('sequence table column filters and display sorting', () => {
+  it('combines rule search, source, exact type and policy filters and excludes only the matching original', () => {
+    const base = ['DOMAIN,z10.example,DIRECT', 'DOMAIN,z2.example,REJECT', 'DOMAIN-SUFFIX,z2.example,REJECT', 'MATCH,REJECT']
+    const model = { ...emptySequence(), prepend: ['DOMAIN,z2.example,REJECT'] }
+    const rows = sequenceRows(base, model)
+    const filtered = filterSequenceRows(rows, 'z2', 'base', { kind: 'rules', type: 'DOMAIN', policy: 'REJECT' })
+    expect(filtered).toMatchObject([{ index: 1, order: 3, side: 'base' }])
+    expect(setOriginalExclusions(model, filtered.map(row => row.item), true).delete).toEqual([base[1]])
+    expect(filterSequenceRows(rows, '', 'all', { kind: 'rules', type: 'MATCH', policy: 'REJECT' }).map(row => row.item)).toEqual([base[3]])
+  })
+  it('sorts names naturally in both directions without changing rule priority or row identity', () => {
+    const base = ['DOMAIN,z10.example,DIRECT', 'DOMAIN,z2.example,REJECT', 'DOMAIN,z2.example,DIRECT']
+    const model = { ...emptySequence(), prepend: ['DOMAIN,z20.example,DIRECT'] }
+    const rows = sequenceRows(base, model), before = serializeSequence(model)
+    const ascending = sortSequenceRows(rows, 'rules', 'title')
+    expect(ascending.map(row => row.order)).toEqual([3, 4, 2, 1])
+    expect(sortSequenceRows(rows, 'rules', 'title', 'desc').map(row => row.order)).toEqual([1, 2, 3, 4])
+    expect(ascending[0]).toBe(rows[2])
+    expect(rows.map(row => row.order)).toEqual([1, 2, 3, 4])
+    expect(serializeSequence(model)).toBe(before)
+    expect(effectiveEntries(base, model)).toEqual([...model.prepend, ...base])
+    expect(sortSequenceRows(ascending, 'rules', 'order').map(row => row.order)).toEqual([1, 2, 3, 4])
+  })
+  it('filters node servers without treating credentials as searchable metadata', () => {
+    const rows = sequenceRows([{ name: 'Node', type: 'ss', server: '2001:db8::1', port: 443, password: 'private-secret' }, { name: 'Other', type: 'trojan', server: 'host.test', port: 8443 }], emptySequence())
+    expect(filterSequenceRows(rows, '', 'all', { kind: 'proxies', type: 'ss', detail: 'db8' })).toHaveLength(1)
+    expect(filterSequenceRows(rows, 'host.test', 'all', { kind: 'proxies' })).toHaveLength(1)
+    expect(filterSequenceRows(rows, 'private-secret', 'all', { kind: 'proxies' })).toEqual([])
+  })
+  it('finds group members beyond the truncated summary and intersects with excluded-source filtering', () => {
+    const group = { name: 'Group', type: 'select', proxies: ['one', 'two', 'three', 'four'], use: ['Airport'] }
+    const rows = sequenceRows([group, { name: 'Auto', type: 'url-test', proxies: ['DIRECT'] }], { ...emptySequence(), delete: ['Group'] })
+    expect(filterSequenceRows(rows, '', 'deleted', { kind: 'groups', type: 'select', detail: 'four' })).toMatchObject([{ index: 0, deleted: true }])
+    expect(filterSequenceRows(rows, 'Airport', 'base', { kind: 'groups' })).toHaveLength(1)
+    expect(filterSequenceRows(rows, '', 'all', { kind: 'groups', type: 'url-test', detail: 'Airport' })).toEqual([])
+  })
+})
 describe('proxy URI import', () => {
   it('imports whole Base64 subscriptions with Unicode names and preserves link order', () => {
     const result = parseProxyInput(b64('trojan://test@server.test:443#%E9%A6%99%E6%B8%AF\nanytls://test@server.test:8443#AnyTLS'))
