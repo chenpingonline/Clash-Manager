@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/logstore"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/runtimeenv"
 	"io"
 	"log"
@@ -62,6 +63,7 @@ type transaction struct {
 }
 
 type helper struct {
+	coreLogs           *coreLogWriter
 	config             helperConfig
 	mu                 sync.Mutex
 	bootstrapMu        sync.RWMutex
@@ -99,7 +101,7 @@ func newHelper(cfg helperConfig) *helper {
 	if fileExists(filepath.Join(cfg.appDir, "core", "online-core.json")) && !fileExists(cfg.managedCore) {
 		bootstrap = map[string]any{"state": "download-required", "mode": "managed", "message": "all 通用包未内置 Mihomo Core，请下载后启用", "progress": 0, "delivery": "online"}
 	}
-	return &helper{config: cfg, transactions: map[string]*transaction{}, coreTx: map[string]*transaction{}, bootstrap: bootstrap}
+	return &helper{config: cfg, coreLogs: &coreLogWriter{store: logstore.New(cfg.managedLog, logstore.Defaults().Core, 0o640)}, transactions: map[string]*transaction{}, coreTx: map[string]*transaction{}, bootstrap: bootstrap}
 }
 
 func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -112,6 +114,11 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var result any
 		var err error
 		switch path {
+		case "/logs/core":
+			h.readCoreLogs(w, r)
+			return
+		case "/logs/status":
+			result, err = h.coreLogStatus()
 		case "/status":
 			result, err = h.systemStatus(r.Context())
 		case "/bootstrap/status":
@@ -146,6 +153,13 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var result any
 	var err error
 	switch path {
+	case "/logs/reload":
+		result, err = h.coreLogStatus()
+	case "/logs/clear":
+		err = h.coreLogs.store.Clear()
+		if err == nil {
+			result, err = h.coreLogStatus()
+		}
 	case "/bootstrap/retry":
 		result, err = h.ensureBootstrap(r.Context(), true, "")
 	case "/bootstrap/cancel":
@@ -317,6 +331,10 @@ func run() error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	if err := h.refreshLogPolicy(); err != nil {
+		log.Printf("Core log retention initialization failed: %v", err)
+	}
+	go h.maintainCoreLogs(ctx)
 	go func() {
 		_, err := h.bootstrapAfterPackageUpgrade(ctx)
 		if err != nil {

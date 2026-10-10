@@ -25,6 +25,7 @@ import (
 
 	"github.com/chenpingonline/Clash-Manager/backend/internal/appsettings"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/logstore"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomolog"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/privileged"
@@ -87,6 +88,7 @@ type gateway struct {
 	delayJob           *delayBatchJob
 	delayResults       map[string]delayBatchResult
 	delayWatchers      map[chan delayBatchStatus]struct{}
+	logSettingsMu      sync.Mutex
 	logs               *mihomolog.Manager
 	settings           *appsettings.Store
 	trafficTotals      *trafficTotalsTracker
@@ -134,9 +136,19 @@ func loadConfig() config {
 }
 
 func newGateway(cfg config) *gateway {
+	logs := mihomolog.New(cfg.mihomoLogFile)
+	if cfg.settingsFile != "" {
+		if settings, err := logstore.LoadSettings(logstore.SettingsPath(filepath.Dir(cfg.settingsFile))); err == nil {
+			if err := logs.Configure(settings.History, settings.SaveLevel); err != nil {
+				log.Printf("Log retention initialization failed: %v", err)
+			}
+		} else {
+			log.Printf("Log settings read failed: %v", err)
+		}
+	}
 	return &gateway{
 		config:             cfg,
-		logs:               mihomolog.New(cfg.mihomoLogFile),
+		logs:               logs,
 		settings:           &appsettings.Store{File: cfg.settingsFile},
 		profileJobs:        make(map[string]*profileJob),
 		profileJobWatchers: make(map[string]map[chan profileJob]struct{}),
@@ -841,14 +853,12 @@ func (g *gateway) runStartupTasks(ctx context.Context) {
 }
 
 func (g *gateway) handleLogs(w http.ResponseWriter, r *http.Request, requestPath string) bool {
+	if g.handleLogSettings(w, r, requestPath) {
+		return true
+	}
 	switch {
 	case requestPath == "/api/logs/history" && r.Method == http.MethodGet:
-		payload, err := g.logs.History(r.URL.Query().Get("level"), mihomolog.ParseLimit(r.URL.Query().Get("limit")))
-		if err != nil {
-			writeJSON(w, 500, map[string]string{"error": "读取日志失败: " + err.Error()})
-		} else {
-			writeJSON(w, 200, payload)
-		}
+		g.logHistory(w, r)
 	case requestPath == "/api/logs/history" && r.Method == http.MethodDelete:
 		if err := g.logs.Clear(); err != nil {
 			writeJSON(w, 500, map[string]string{"error": "清空日志失败: " + err.Error()})

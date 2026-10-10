@@ -6,10 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/logstore"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,14 +17,7 @@ import (
 	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
 )
 
-const MaxBytes int64 = 1024 * 1024
-const trimTarget int64 = 768 * 1024
-
-type Record struct {
-	Time    string `json:"time"`
-	Level   string `json:"level"`
-	Message string `json:"message"`
-}
+type Record = logstore.Record
 
 type subscriber struct {
 	level   string
@@ -33,13 +25,18 @@ type subscriber struct {
 }
 
 type Manager struct {
-	File   string
-	mu     sync.Mutex
-	subsMu sync.Mutex
-	subs   map[*subscriber]struct{}
+	File      string
+	mu        sync.RWMutex
+	store     *logstore.Store
+	saveLevel string
+	lastError string
+	subsMu    sync.Mutex
+	subs      map[*subscriber]struct{}
 }
 
-func New(file string) *Manager { return &Manager{File: file, subs: map[*subscriber]struct{}{}} }
+func New(file string) *Manager {
+	return &Manager{File: file, store: logstore.New(file, logstore.Defaults().History, 0o600), saveLevel: "info", subs: map[*subscriber]struct{}{}}
+}
 
 func normalizeLevel(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
@@ -89,86 +86,68 @@ func Normalize(line []byte) (Record, bool) {
 	return Record{Time: when, Level: normalizeLevel(level), Message: message}, true
 }
 
+func (m *Manager) Configure(policy logstore.Policy, level string) error {
+	m.mu.Lock()
+	m.saveLevel = level
+	m.mu.Unlock()
+	if err := m.store.Configure(policy); err != nil {
+		return err
+	}
+	return m.store.PruneRecords()
+}
 func (m *Manager) Append(record Record) error {
+	m.mu.RLock()
+	level := m.saveLevel
+	m.mu.RUnlock()
+	if rank(record.Level) < rank(level) {
+		return nil
+	}
+	// Bound each structured record, including adversarially long Controller messages.
+	if len(record.Message) > 32*1024 {
+		record.Message = strings.ToValidUTF8(record.Message[:32*1024], "") + "…"
+	}
+	if len(record.Time) > 128 {
+		record.Time = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	record.Level = normalizeLevel(record.Level)
+	body, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	_, err = m.store.Write(append(body, '\n'))
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := os.MkdirAll(filepath.Dir(m.File), 0o700); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(m.File, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	m.lastError = ""
 	if err != nil {
-		return err
+		m.lastError = err.Error()
 	}
-	body, _ := json.Marshal(record)
-	_, writeErr := file.Write(append(body, '\n'))
-	closeErr := file.Close()
-	if writeErr != nil {
-		return writeErr
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if info, err := os.Stat(m.File); err == nil && info.Size() > MaxBytes {
-		return m.trim(info.Size())
-	}
-	return nil
+	m.mu.Unlock()
+	return err
 }
-
-func (m *Manager) trim(size int64) error {
-	file, err := os.Open(m.File)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	keep := trimTarget
-	if size < keep {
-		keep = size
-	}
-	buffer := make([]byte, keep)
-	if _, err := file.ReadAt(buffer, size-keep); err != nil && err != io.EOF {
-		return err
-	}
-	if index := bytes.IndexByte(buffer, '\n'); index >= 0 {
-		buffer = buffer[index+1:]
-	}
-	return os.WriteFile(m.File, buffer, 0o600)
-}
-
 func (m *Manager) History(level string, limit int) (map[string]any, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if limit < 1 {
-		limit = 800
-	}
-	if limit > 2000 {
-		limit = 2000
-	}
-	body, err := os.ReadFile(m.File)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	items := []Record{}
-	selected := rank(level)
-	for _, line := range bytes.Split(body, []byte{'\n'}) {
-		var record Record
-		if json.Unmarshal(line, &record) == nil && rank(record.Level) >= selected {
-			items = append(items, record)
-		}
-	}
-	if len(items) > limit {
-		items = items[len(items)-limit:]
-	}
-	return map[string]any{"items": items, "size": len(body), "maxBytes": MaxBytes}, nil
+	page, err := m.Query(context.Background(), logstore.Query{Level: level, Limit: limit})
+	return map[string]any{"items": page.Items, "size": page.Size, "maxBytes": page.MaxBytes, "nextCursor": page.NextCursor, "hasMore": page.HasMore, "oldest": page.Oldest}, err
 }
-
-func (m *Manager) Clear() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := os.MkdirAll(filepath.Dir(m.File), 0o700); err != nil {
+func (m *Manager) Query(ctx context.Context, query logstore.Query) (logstore.Page, error) {
+	page, err := m.store.ReadPage(ctx, query)
+	m.mu.RLock()
+	page.Error = m.lastError
+	m.mu.RUnlock()
+	return page, err
+}
+func (m *Manager) Stats() (logstore.Stats, error) {
+	stats, err := m.store.RecordStats()
+	m.mu.RLock()
+	stats.Error = m.lastError
+	m.mu.RUnlock()
+	return stats, err
+}
+func (m *Manager) Cleanup() error {
+	if err := m.store.Cleanup(); err != nil {
 		return err
 	}
-	return os.WriteFile(m.File, nil, 0o600)
+	return m.store.PruneRecords()
 }
+func (m *Manager) Clear() error { return m.store.Clear() }
 
 func (m *Manager) broadcast(record Record) {
 	m.subsMu.Lock()
@@ -218,6 +197,19 @@ func (m *Manager) ServeSSE(w http.ResponseWriter, r *http.Request, level string)
 }
 
 func (m *Manager) Run(ctx context.Context, settingsFile string) {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = m.Cleanup()
+			}
+		}
+	}()
+	_ = m.Cleanup()
 	for ctx.Err() == nil {
 		client := &mihomo.Client{SettingsFile: settingsFile}
 		streamContext, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -228,9 +220,8 @@ func (m *Manager) Run(ctx context.Context, settingsFile string) {
 			for scanner.Scan() {
 				record, ok := Normalize(scanner.Bytes())
 				if ok {
-					if m.Append(record) == nil {
-						m.broadcast(record)
-					}
+					_ = m.Append(record)
+					m.broadcast(record)
 				}
 			}
 			response.Body.Close()

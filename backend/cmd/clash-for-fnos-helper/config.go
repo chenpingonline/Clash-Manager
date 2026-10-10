@@ -14,6 +14,7 @@ import (
 	"github.com/chenpingonline/Clash-Manager/backend/internal/runtimeenv"
 	"gopkg.in/yaml.v3"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/netip"
@@ -312,15 +313,14 @@ func (h *helper) startManaged() (*processInfo, error) {
 	if err := h.checkManagedPorts(); err != nil {
 		return nil, err
 	}
-	logFile, err := os.OpenFile(h.config.managedLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o640)
+	err := h.refreshLogPolicy()
 	if err != nil {
-		return nil, err
+		log.Printf("Core log policy could not be applied: %v", err)
 	}
 	cmd := exec.Command(h.config.managedCore, "-d", h.config.managedConfigDir, "-f", h.config.managedConfig)
-	cmd.Stdout, cmd.Stderr = logFile, logFile
+	cmd.Stdout, cmd.Stderr = h.coreLogs, h.coreLogs
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err = cmd.Start(); err != nil {
-		_ = logFile.Close()
 		return nil, err
 	}
 	h.managed = cmd.Process
@@ -328,7 +328,6 @@ func (h *helper) startManaged() (*processInfo, error) {
 	exited := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
-		_ = logFile.Close()
 		// An older process must not remove the PID file of its replacement.
 		if body, readErr := os.ReadFile(h.config.managedPID); readErr == nil && strings.TrimSpace(string(body)) == strconv.Itoa(cmd.Process.Pid) {
 			_ = os.Remove(h.config.managedPID)

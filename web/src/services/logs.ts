@@ -2,11 +2,28 @@ import { getLocale } from './i18n'
 import type { LogItem } from '@/types/api'
 
 export interface NormalizedLog { time: string; level: string; message: string }
+export interface CoreLogLine { key: string; message: string; truncated?: boolean }
+
+// Terminal formatting is not meaningful in the text viewer. Keep messages as
+// escaped text (including HTML-looking output), never interpret it as markup.
+export function plainCoreOutput(message: string): string {
+  return message.replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
+}
 
 export function displayLogTime(value: unknown): string {
-  if (!value) return new Date().toLocaleTimeString(getLocale())
+  if (!value) return new Date().toLocaleString(getLocale(), { hour12: false })
   const date = new Date(value as string | number)
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleTimeString(getLocale())
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(getLocale(), { hour12: false })
+}
+
+// Calendar boundaries follow the user's local timezone, including DST transitions.
+export function logDateBoundary(value: string, end = false): string {
+  if (!value) return ''
+  const date = new Date(`${value}T00:00:00`)
+  if (end) date.setDate(date.getDate() + 1)
+  return date.toISOString()
 }
 
 export function normalizeLog(item: LogItem): NormalizedLog {

@@ -35,7 +35,7 @@ onBeforeUnmount(() => dialog.value?.close())
       <template v-if="open">
         <header class="sequence-dialog-header"><div :class="{ 'sequence-dialog-title-inline': inlineSubtitle }"><h3>{{ title }}</h3><p v-if="subtitle">{{ subtitle }}</p></div><button type="button" class="ghost small" autofocus :aria-label="t('关闭')" @click="emit('close')">×</button></header>
         <div ref="body" class="sequence-dialog-body" tabindex="0" :aria-label="title"><slot /></div>
-        <footer v-if="!hideFooter" class="sequence-dialog-footer"><span class="muted">{{ t('修改保留在当前表单，添加或更新代理组后进入草稿。') }}</span><button type="button" class="small" @click="emit('close')">{{ t('返回编辑') }}</button></footer>
+        <footer v-if="!hideFooter" class="sequence-dialog-footer"><slot name="footer"><span class="muted">{{ t('修改保留在当前表单，添加或更新代理组后进入草稿。') }}</span><button type="button" class="small" @click="emit('close')">{{ t('返回编辑') }}</button></slot></footer>
       </template>
     </dialog>
   </Teleport>
