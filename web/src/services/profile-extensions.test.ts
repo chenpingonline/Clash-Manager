@@ -10,7 +10,7 @@ describe('profile enhancements', () => {
     for (const label of ['编辑规则', '编辑节点', '编辑代理组', '扩展覆写配置', '扩展脚本']) expect(profiles).toContain(label)
     expect(editor).toContain('/extensions/${props.kind}')
     expect(editor).not.toContain('点击“应用”后生效')
-    expect(editor).toContain("jsonRequest('PUT', { content: content.value, apply: true })")
+    expect(editor).toContain("jsonRequest('PUT', { content: savedContent, apply: true })")
     expect(editor).toContain("streamProfileJob(result.jobId")
     expect(editor).toContain("'保存并应用中…') : '保存并应用'")
     expect(editor).toContain('已保存并应用，配置已立即生效')

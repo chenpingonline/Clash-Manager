@@ -1557,5 +1557,15 @@
   "输入成员或集合名称": "Enter a member or provider name",
   "重置筛选与排序": "Reset filters and sorting",
   "点击表头排序，仅影响列表显示": "Click a column header to sort the list view",
-  "请恢复默认排序后调整顺序": "Restore default sorting before changing the order"
+  "请恢复默认排序后调整顺序": "Restore default sorting before changing the order",
+  "配置校验失败": "Configuration validation failed",
+  "增强内容已保存，但未能应用。": "Your changes were saved, but could not be applied.",
+  "代理组「{arg0}」引用的「{arg1}」不存在或已被排除。": "Proxy group “{arg0}” references “{arg1}”, which is missing or excluded.",
+  "恢复「{arg0}」，或在「{arg1}」中移除／替换对它的引用，再应用配置。": "Restore “{arg0}”, or remove/replace its reference in “{arg1}”, then apply the configuration again.",
+  "规则「{arg0}」引用的策略「{arg1}」不存在或已被排除。": "Rule “{arg0}” references policy “{arg1}”, which is missing or excluded.",
+  "恢复「{arg0}」，或将这条规则的策略改为已有节点／代理组，再应用配置。": "Restore “{arg0}”, or change this rule to use an existing proxy/group, then apply the configuration again.",
+  "内核校验错误：{arg0}": "Core validation error: {arg0}",
+  "配置未通过 Mihomo 校验，请展开详情查看原始错误。": "The configuration failed Mihomo validation. Expand the details to see the original error.",
+  "请检查最近修改的配置；修正后重新应用。": "Review your recent configuration changes, fix the error, and apply again.",
+  "查看原始错误": "View original error"
 }

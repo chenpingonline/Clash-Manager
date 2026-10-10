@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { countLabel, t } from '@/services/i18n'
+import { t } from '@/services/i18n'
 
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { baseEntries, copyGroup, effectiveEntries, emptySequence, entryIdentity, makeRule, moveEntry, parseSequence, ruleParts, sequenceRows, filterSequenceRows, sortSequenceRows, sequenceEntryFields, sequenceEntrySummary, setOriginalExclusions } from '@/services/profile-sequences'
@@ -15,7 +15,7 @@ import HelpPopover from './HelpPopover.vue'
 import RuleTypeSelect from './RuleTypeSelect.vue'
 
 const props = defineProps<{ kind: SequenceKind; modelValue: SequenceExtension; data: SequenceEditorData; disabled: boolean }>()
-const emit = defineEmits<{ 'update:modelValue': [value: SequenceExtension]; advanced: [] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: SequenceExtension]; 'view-count': [value: number]; advanced: [] }>()
 const search = ref(''), error = ref(''), input = ref('')
 const nodeInputId = `sequence-node-links-${useId()}`
 const nodePlaceholder = computed(() => `${t('每行一条 URI，也可粘贴 Base64 编码的节点列表')}\n${t('示例：')}trojan://password@example.com:443#Trojan\nsocks5://user:password@example.com:1080#SOCKS5`)
@@ -52,6 +52,7 @@ const columns = computed<{ key: SequenceSortColumn; label: string }[]>(() => [
   { key: 'type', label: t('类型') }, { key: 'detail', label: t(detailLabel.value) }, { key: 'source', label: t('来源') },
 ])
 const rows = computed(() => sortSequenceRows(filterSequenceRows(allRows.value, search.value, sourceFilter.value, { kind: props.kind, type: typeFilter.value, policy: policyFilter.value, detail: detailFilter.value }), props.kind, sortColumn.value, sortDirection.value))
+watch(() => rows.value.length, value => emit('view-count', value), { immediate: true })
 const viewChanged = computed(() => !!(search.value || sourceFilter.value !== 'all' || typeFilter.value || policyFilter.value || detailFilter.value || sortColumn.value))
 function resetView() { search.value = ''; sourceFilter.value = 'all'; typeFilter.value = ''; policyFilter.value = ''; detailFilter.value = ''; sortColumn.value = null; sortDirection.value = 'asc' }
 function toggleSort(column: SequenceSortColumn) {
@@ -237,7 +238,7 @@ function reorder(row: Row, delta: number) {
         <label v-if="kind === 'rules'" class="sequence-filter-field">{{ t('策略') }}<select v-model="policyFilter" :aria-label="t('筛选策略')"><option value="">{{ t('全部策略') }}</option><option v-for="item in policyOptions" :key="item" :value="item">{{ item }}</option></select></label>
         <label v-else class="sequence-filter-field">{{ t(detailLabel) }}<input v-model="detailFilter" :aria-label="t(kind === 'proxies' ? '筛选服务器' : '筛选成员或集合')" :placeholder="t(kind === 'proxies' ? '输入服务器地址或端口' : '输入成员或集合名称')" /></label>
         <button type="button" class="ghost small sequence-view-reset" :disabled="!viewChanged" @click="resetView">{{ t('重置筛选与排序') }}</button>
-        <div class="sequence-view-summary"><span class="sequence-count muted">{{ countLabel(rows.length, kind === 'rules' ? '条规则' : kind === 'proxies' ? '个节点' : '个代理组') }}</span><HelpPopover :label="t('排序')"><span>{{ t('点击表头排序，仅影响列表显示') }}</span></HelpPopover></div>
+        <HelpPopover class="sequence-sort-help" :label="t('排序')"><span>{{ t('点击表头排序，仅影响列表显示') }}</span></HelpPopover>
       </div>
       <div v-if="data.warning" class="muted">{{ t(data.warning) }}</div>
       <div class="sequence-table-shell" role="table" :aria-label="t(`订阅${noun}`)" :aria-rowcount="rows.length + 1">

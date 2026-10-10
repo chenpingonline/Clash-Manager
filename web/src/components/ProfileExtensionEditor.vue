@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { t } from '@/services/i18n'
+import { countLabel, t } from '@/services/i18n'
 
 import { computed, nextTick, ref, watch } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
@@ -10,7 +10,7 @@ import { baseEntries, emptySequence, entryIdentity, parseSequence, serializeSequ
 import type { SequenceEditorData, SequenceExtension, SequenceKind } from '@/services/profile-sequences'
 import { api, errorMessage, jsonRequest } from '@/services/api'
 import { streamProfileJob } from '@/services/profile-jobs'
-import { notify } from '@/services/toast'
+import { dismissConfigErrors, notify } from '@/services/toast'
 import type { ProfileExtensionKind, ProfileItem, ProfileJob } from '@/types/api'
 
 const props = withDefaults(defineProps<{ open: boolean; profile: ProfileItem | null; kind: ProfileExtensionKind | null; global?: boolean }>(), { global: false })
@@ -31,6 +31,7 @@ function resetKeydown(event: KeyboardEvent) {
 watch(resetting, async value => { if (value) { await nextTick(); keepButton.value?.focus({ preventScroll: true }) } })
 const advanced = ref(false), visualError = ref('')
 const sequenceData = ref<SequenceEditorData | null>(null), sequenceModel = ref<SequenceExtension>(emptySequence())
+const visibleEntryCount = ref<number | null>(null)
 const sequenceKind = computed(() => !props.global && ['rules', 'proxies', 'groups'].includes(props.kind || '') ? props.kind as SequenceKind : null)
 const excludedEntryCount = computed(() => {
   const kind = sequenceKind.value
@@ -70,7 +71,7 @@ async function load() {
   const generation = ++loadGeneration
   loading.value = true
   resetting.value = false
-  advanced.value = false; visualError.value = ''; sequenceData.value = null
+  advanced.value = false; visualError.value = ''; sequenceData.value = null; visibleEntryCount.value = null
   try {
     const result = await api<SequenceEditorData>(endpoint.value + (sequenceKind.value ? '/editor' : ''))
     if (generation !== loadGeneration || !props.open) return
@@ -96,13 +97,17 @@ async function save() {
   saving.value = true
   applyMessage.value = ''
   try {
-    let result = await api<ProfileJob & { applied?: boolean }>(endpoint.value, jsonRequest('PUT', { content: content.value, apply: true }))
+    const savedContent = content.value
+    let result = await api<ProfileJob & { applied?: boolean }>(endpoint.value, jsonRequest('PUT', { content: savedContent, apply: true }))
+    // The extension is persisted before the apply job starts, even if Core validation fails.
+    original.value = savedContent
+    customized.value = true
     if (result.jobId) {
       applyMessage.value = result.message || '准备应用当前配置…'
       result = await streamProfileJob(result.jobId, job => { applyMessage.value = job.message || '正在应用当前配置…' }, new AbortController().signal) as ProfileJob & { applied?: boolean }
       if (result.state === 'failed') throw new Error(`${title.value}已保存，但应用当前配置失败：${result.error ? String(result.error) : '未知错误'}`)
     }
-    customized.value = true
+    if (result.jobId) dismissConfigErrors()
     notify(result.jobId ? `${title.value}已保存并应用，配置已立即生效` : `${title.value}已保存；当前没有正在使用的配置`)
     emit('saved')
     emit('close')
@@ -134,10 +139,11 @@ watch(() => [props.open, props.profile?.id, props.kind, props.global] as const, 
   <BaseModal :open="open" :title="title" :card-class="`profile-extension-modal ${sequenceKind ? 'profile-sequence-modal' : ''} ${sequenceKind ? 'profile-table-modal' : ''} ${isRules ? 'profile-rules-modal' : ''}`" :closable="!saving && !resetting" :inert="resetting" @close="emit('close')">
     <template #header><div class="sequence-modal-heading"><div class="sequence-modal-title"><h3>{{ title }}</h3><RuleSequenceHelp v-if="kind === 'rules' && !global" /><ProfileExtensionHelp v-else-if="kind" :kind="kind" /></div><div v-if="sequenceKind" class="sequence-modal-actions"><button class="ghost small" :disabled="loading || saving" @click="toggleAdvanced">{{ t(advanced ? '可视化' : '高级') }}</button></div></div></template>
     <div v-if="loading" class="profile-extension-loading">{{ t("正在读取…") }}</div>
-    <ProfileSequenceEditor v-else-if="sequenceKind && sequenceData && !advanced" :kind="sequenceKind" :model-value="sequenceModel" :data="sequenceData" :disabled="saving" @update:model-value="updateSequence" @advanced="advanced = true" />
+    <ProfileSequenceEditor v-else-if="sequenceKind && sequenceData && !advanced" :kind="sequenceKind" :model-value="sequenceModel" :data="sequenceData" :disabled="saving" @update:model-value="updateSequence" @view-count="visibleEntryCount = $event" @advanced="advanced = true" />
     <template v-else><p v-if="visualError" class="sequence-error" role="alert">{{ t(visualError) }}</p><textarea v-model="content" class="editor profile-extension-editor" spellcheck="false" :aria-label="t(meta.title)" :disabled="saving" /></template>
     <div class="actions profile-extension-actions" :class="{ 'rule-editor-footer': !!sequenceKind }">
       <span v-if="sequenceKind" class="muted rule-footer-note">{{ t("修改仅作用于当前订阅，更新订阅后保留。") }}</span>
+      <span v-if="sequenceKind && !advanced && !loading && visibleEntryCount !== null" class="muted sequence-footer-count" role="status">{{ countLabel(visibleEntryCount, sequenceKind === 'rules' ? '条规则' : sequenceKind === 'proxies' ? '个节点' : '个代理组') }}</span>
       <span v-if="excludedEntryCount !== null" class="rule-footer-excluded" role="status">{{ t('已排除 {arg0} 条', { arg0: excludedEntryCount }) }}</span>
       <button ref="saveButton" class="small" :disabled="loading || saving || (!!sequenceKind && !dirty)" @click="save">{{ t(saving ? (applyMessage || '保存并应用中…') : '保存并应用') }}</button>
       <button v-if="sequenceKind || customized" ref="resetButton" class="danger small" :disabled="loading || saving || (!!sequenceKind && !hasSequenceChanges)" @click="sequenceKind ? resetting = true : reset()">{{ t(sequenceKind ? '重置本订阅增强' : '恢复默认') }}</button>
