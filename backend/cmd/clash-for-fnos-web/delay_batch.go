@@ -9,9 +9,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/http"
-	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -68,11 +66,8 @@ func normalizedDelayNames(names []string) ([]string, error) {
 	return result, nil
 }
 
-func delayResult(ctx context.Context, client *mihomo.Client, name, testURL string, timeout int) delayBatchResult {
-	query := url.Values{}
-	query.Set("url", testURL)
-	query.Set("timeout", strconv.Itoa(timeout))
-	response, err := client.Do(ctx, http.MethodGet, "/proxies/"+url.PathEscape(name)+"/delay?"+query.Encode(), nil, time.Duration(timeout+3000)*time.Millisecond)
+func delayResult(ctx context.Context, client *mihomo.DelayClient, name, testURL string, timeout int) delayBatchResult {
+	response, err := client.Do(ctx, name, testURL, timeout)
 	if err != nil {
 		state := "error"
 		var networkError net.Error
@@ -168,6 +163,7 @@ func (g *gateway) startDelayBatch(w http.ResponseWriter, r *http.Request, client
 }
 
 func (g *gateway) runDelayBatch(client *mihomo.Client, testURL string, timeout int, jobID string, names []string) {
+	delayClient := mihomo.NewDelayClient(client)
 	results := make(chan delayBatchResult, maxDelayBatchConcurrency)
 	jobs := make(chan string)
 	workerCount := min(maxDelayBatchConcurrency, len(names))
@@ -180,7 +176,7 @@ func (g *gateway) runDelayBatch(client *mihomo.Client, testURL string, timeout i
 				if len(names) > 1 {
 					time.Sleep(time.Duration(rand.IntN(201)) * time.Millisecond)
 				}
-				results <- delayResult(context.Background(), client, name, testURL, timeout)
+				results <- delayResult(context.Background(), delayClient, name, testURL, timeout)
 			}
 		}()
 	}

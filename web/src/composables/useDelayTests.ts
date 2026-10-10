@@ -2,7 +2,7 @@ import { computed, reactive, readonly, ref } from 'vue'
 import { createDelayTest, loadDelayTestStatus, openDelayTestStream, type DelayTestStatus } from '@/services/delay-tests'
 import type { ProxyNode } from '@/types/api'
 
-export type NodeDelayState = { value: number; state: 'idle' | 'testing' | 'done' | 'timeout' | 'error' }
+export type NodeDelayState = { value: number; state: 'idle' | 'testing' | 'done' | 'timeout' | 'error'; error?: string }
 
 const idleStatus: DelayTestStatus = { state: 'idle', names: [], results: [] }
 const status = ref<DelayTestStatus>(idleStatus)
@@ -25,7 +25,7 @@ function applyStatus(next: DelayTestStatus) {
     next.names.forEach(name => delays.set(name, { value: 0, state: 'testing' }))
   } else if (next.state === 'done') {
     const completed = new Set(next.results.map(result => result.name))
-    next.results.forEach(result => delays.set(result.name, { value: result.delay, state: result.state }))
+    next.results.forEach(result => delays.set(result.name, { value: result.delay || 0, state: result.state, ...(result.error ? { error: result.error } : {}) }))
     next.names.forEach(name => {
       if (!completed.has(name)) delays.set(name, { value: 0, state: 'error' })
     })

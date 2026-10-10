@@ -775,27 +775,7 @@ func (h *helper) proxyGroupOrder() (map[string]any, error) {
 		return map[string]any{"configPath": nil, "order": []string{}}, nil
 	}
 	raw, _ := active["content"].(string)
-	order := []string{}
-	in := false
-	indent := 0
-	for _, line := range strings.Split(raw, "\n") {
-		spaces := len(line) - len(strings.TrimLeft(line, " "))
-		trim := strings.TrimSpace(line)
-		if trim == "proxy-groups:" {
-			in = true
-			indent = spaces
-			continue
-		}
-		if in && trim != "" && spaces <= indent {
-			break
-		}
-		if in && strings.HasPrefix(trim, "- name:") {
-			name := strings.Trim(strings.TrimSpace(strings.TrimPrefix(trim, "- name:")), "\"'")
-			if name != "" {
-				order = append(order, name)
-			}
-		}
-	}
+	order := configyaml.ProxyGroupOrder(raw)
 	return map[string]any{"ok": true, "configPath": active["path"], "order": order}, nil
 }
 

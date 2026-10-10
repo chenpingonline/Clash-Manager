@@ -17,7 +17,6 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -961,10 +960,17 @@ func (g *gateway) handleMihomoAPI(w http.ResponseWriter, r *http.Request, reques
 			writeMihomoError(w, err)
 			return true
 		}
-		query := url.Values{}
-		query.Set("url", settings.HealthcheckURL)
-		query.Set("timeout", strconv.Itoa(settings.HealthcheckTimeout))
-		g.forwardMihomo(w, r, client, http.MethodGet, "/proxies/"+name+"/delay?"+query.Encode(), nil, time.Duration(settings.HealthcheckTimeout+3000)*time.Millisecond)
+		decodedName, _ := url.PathUnescape(name)
+		response, err := mihomo.NewDelayClient(client).Do(r.Context(), decodedName, settings.HealthcheckURL, settings.HealthcheckTimeout)
+		if err != nil {
+			writeMihomoError(w, err)
+			return true
+		}
+		defer response.Body.Close()
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(response.StatusCode)
+		_, _ = io.Copy(w, response.Body)
 	case requestPath == "/api/stream/traffic" && r.Method == http.MethodGet:
 		g.streamMihomoSSE(w, r, client, "/traffic")
 	case requestPath == "/api/stream/memory" && r.Method == http.MethodGet:

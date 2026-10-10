@@ -42,4 +42,19 @@ describe('useDelayTests', () => {
     expect(dashboardPage.testing.value).toBe(false)
     expect(proxiesPage.delays.get('node-a')).toEqual({ value: 24, state: 'done' })
   })
+
+  it('keeps the precise failure reason and clears it on the next measurement', async () => {
+    const { useDelayTests } = await import('./useDelayTests')
+    const tests = useDelayTests()
+    mocks.load.mockResolvedValue({ state: 'done', names: ['provider-node'], results: [
+      { name: 'provider-node', state: 'error', error: 'Mihomo 404: Not Found' },
+    ] })
+    await tests.restore()
+    expect(tests.delays.get('provider-node')).toEqual({ value: 0, state: 'error', error: 'Mihomo 404: Not Found' })
+    mocks.load.mockResolvedValue({ state: 'done', names: ['provider-node'], results: [
+      { name: 'provider-node', state: 'done', delay: 32 },
+    ] })
+    await tests.restore()
+    expect(tests.delays.get('provider-node')).toEqual({ value: 32, state: 'done' })
+  })
 })

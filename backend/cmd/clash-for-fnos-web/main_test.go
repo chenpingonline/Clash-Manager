@@ -587,7 +587,7 @@ func TestProxyGroupsUseManagedConfigOrderWhenHelperIsUnavailable(t *testing.T) {
 	defer controller.Close()
 	directory := t.TempDir()
 	managedConfig := filepath.Join(directory, "config.yaml")
-	if err := os.WriteFile(managedConfig, []byte("proxy-groups:\n  - name: A\n  - name: B\n"), 0o600); err != nil {
+	if err := os.WriteFile(managedConfig, []byte("proxy-groups: [{type: select, name: A}, {name: B}]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	handler := newGateway(config{

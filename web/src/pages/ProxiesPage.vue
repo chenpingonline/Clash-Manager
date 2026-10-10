@@ -74,8 +74,8 @@ function updateTimeoutVisibility(name: string, event: Event) {
 function snapshot(name: string) {
   const item = delays.get(name)
   if (item?.state === 'testing') return { text: '测试中…', className: 'testing' }
-  if (item?.state === 'timeout') return { text: '超时', className: 'bad' }
-  if (item?.state === 'error') return { text: '失败', className: 'bad' }
+  if (item?.state === 'timeout') return { text: '超时', className: 'bad', error: item.error }
+  if (item?.state === 'error') return { text: '失败', className: 'bad', error: item.error }
   return item?.value ? { text: `${item.value} ms`, className: latencyClass(item.value) } : { text: '--', className: '' }
 }
 function testable(name: string) {
@@ -107,7 +107,9 @@ async function select(group: ProxyGroup, name: string) {
 async function testOne(name: string) {
   if (!testable(name)) return
   try {
-    await delayTests.start([name])
+    const result = await delayTests.start([name])
+    const failure = result.results.find(item => item.name === name && item.error)
+    if (failure?.error) notify(failure.error, true)
   } catch (cause) {
     notify(errorMessage(cause), true)
   }
@@ -226,7 +228,7 @@ onMounted(() => { void delayTests.restore(); void load() })
             <label class="proxy-timeout-toggle" :title="t('关闭后隐藏测速结果为超时的节点')"><input type="checkbox" :checked="groupShowsTimeoutNodes(group.name)" @change="updateTimeoutVisibility(group.name, $event)"><span>{{ t("显示超时节点") }}</span></label>
             <span>{{ t(group.nodes.length) }} / {{ t(group.proxy.all?.length || 0) }} {{ t("个节点") }}</span>
           </div>
-          <div v-if="group.nodes.length" class="node-list"><div v-for="name in group.nodes" :key="name" class="node-row" :class="{ active: group.proxy.now === name }" :data-node-name="name"><button class="node-select" @click="select(group, name)"><span class="node-copy"><span class="node-name" :title="name">{{ name }}</span><span v-if="rawProxies[name]?.type" class="node-type">{{ rawProxies[name]?.type }}</span></span></button><button class="node-delay" :class="snapshot(name).className" :disabled="delayTestBusy" :title="t('单独测试该节点延迟')" @click="testOne(name)">{{ t(snapshot(name).text) }}</button></div></div>
+          <div v-if="group.nodes.length" class="node-list"><div v-for="name in group.nodes" :key="name" class="node-row" :class="{ active: group.proxy.now === name }" :data-node-name="name"><button class="node-select" @click="select(group, name)"><span class="node-copy"><span class="node-name" :title="name">{{ name }}</span><span v-if="rawProxies[name]?.type" class="node-type">{{ rawProxies[name]?.type }}</span></span></button><button class="node-delay" :class="snapshot(name).className" :disabled="delayTestBusy" :title="snapshot(name).error || t('单独测试该节点延迟')" @click="testOne(name)">{{ t(snapshot(name).text) }}</button></div></div>
           <div v-else class="proxy-group-empty">{{ t("没有匹配的节点") }}</div>
         </div>
       </section>
