@@ -119,12 +119,20 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
     <button class="ghost" @click="changeMode">{{ t(historyMode ? '实时日志' : '历史查询') }}</button><button class="ghost" @click="openSettings">{{ t('日志设置') }}</button>
     <button class="ghost" @click="clearHistory">{{ t(isCore ? '清空 Core 输出日志' : '清空历史日志') }}</button><button v-if="!historyMode" @click="toggle">{{ t(running ? '停止' : '继续') }}</button>
   </div></Teleport>
-  <div class="log-source-tools"><div class="log-source-switch" role="group" :aria-label="t('日志来源')"><button class="ghost" :class="{ active: !isCore }" :aria-pressed="!isCore" @click="changeSource('runtime')">{{ t('运行日志') }}</button><button class="ghost" :class="{ active: isCore }" :aria-pressed="isCore" @click="changeSource('core')">{{ t('Core 输出') }}</button></div><span class="muted">{{ sourceDescription }}</span></div>
   <form v-if="historyMode" class="log-history-tools" @submit.prevent="load()">
     <template v-if="!isCore"><label>{{ t('开始日期') }}<input v-model="from" type="date"></label><label>{{ t('结束日期') }}<input v-model="to" type="date"></label></template>
     <button :disabled="loading">{{ t('查询') }}</button><button type="button" class="ghost" :disabled="loading || pageIndex === 0" @click="newer">{{ t('较新一页') }}</button><button type="button" class="ghost" :disabled="loading || !nextCursor" @click="older">{{ t('更早一页') }}</button><span class="muted">{{ t(`第 ${pageIndex + 1} 页`) }}</span>
   </form>
-  <div class="log-summary"><span class="muted">{{ summary }}<template v-if="currentStats"> · {{ bytes(currentStats.size) }} / {{ bytes(currentStats.maxBytes) }}</template></span><label class="log-wrap-control"><span>{{ t('自动换行') }}</span><span class="switch quick-switch"><input v-model="wrapLines" type="checkbox"><span /></span></label></div>
+  <div class="log-summary">
+    <div class="log-summary-main">
+      <div class="log-source-switch" role="group" :aria-label="t('日志来源')" :title="sourceDescription">
+        <button type="button" :class="{ active: !isCore }" :aria-pressed="!isCore" @click="changeSource('runtime')">{{ t('运行日志') }}</button>
+        <button type="button" :class="{ active: isCore }" :aria-pressed="isCore" @click="changeSource('core')">{{ t('Core 输出') }}</button>
+      </div>
+      <span class="muted log-status-text" :title="summary + (currentStats ? ` · ${bytes(currentStats.size)} / ${bytes(currentStats.maxBytes)}` : '')">{{ summary }}<template v-if="currentStats"> · {{ bytes(currentStats.size) }} / {{ bytes(currentStats.maxBytes) }}</template></span>
+    </div>
+    <label class="log-wrap-control"><span>{{ t('自动换行') }}</span><span class="switch quick-switch"><input v-model="wrapLines" type="checkbox"><span /></span></label>
+  </div>
   <p v-if="isCore && currentStats?.error" class="error log-storage-error" role="alert">{{ currentStats.error }}</p>
   <div ref="box" class="logs logs-full persistent-horizontal-scrollbar" :class="{ 'wrap-lines': wrapLines, 'core-output': isCore }"><template v-if="isCore"><div v-for="line in visibleCore" :key="line.key" class="core-log-line"><HighlightText :text="line.message" :query="query" /><span v-if="line.truncated" class="muted"> {{ t('（此行过长，已截断）') }}</span></div></template><template v-else><div v-for="(item, index) in visible" :key="`${index}-${item.time}`" class="log-line" :class="`log-${item.level}`"><span><HighlightText :text="item.time" :query="query" /></span><span><HighlightText :text="item.level" :query="query" /></span><span><HighlightText :text="item.message" :query="query" /></span></div></template><div v-if="!(isCore ? visibleCore.length : visible.length) && !loading" class="empty">{{ t(error ? '日志读取失败，请重新读取' : queryDirty ? '筛选已更改，请点击查询' : query ? '没有匹配的日志' : isCore ? '暂无托管 Core 输出日志' : '暂无日志') }}</div></div>
   <SequenceFormDialog :open="settingsOpen" :title="t('日志设置')" @close="closeSettings">
@@ -150,7 +158,13 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
 </template>
 
 <style scoped>
-.log-source-tools{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px 28px;border-bottom:1px solid var(--line);font-size:12px}.log-source-switch{display:flex;gap:4px}.log-source-switch button{font-size:12px}.log-source-switch .active{color:var(--accent);border-color:var(--accent);background:rgba(124,156,255,.14)}.core-log-line{white-space:pre;min-height:22px;padding:2px 0}.wrap-lines .core-log-line{white-space:pre-wrap;overflow-wrap:anywhere}.log-storage-error{font-size:12px;margin:6px 28px}
+.log-summary-main{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.log-status-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log-source-switch{display:flex;gap:2px;flex:none;height:28px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--control-bg)}
+.log-source-switch button{height:22px;min-height:22px;padding:0 8px;border:0;border-radius:5px;background:transparent;color:var(--muted);font-size:11px;line-height:22px;white-space:nowrap}
+.log-source-switch button:hover{color:var(--text);background:rgba(124,156,255,.08)}
+.log-source-switch button.active{color:var(--accent);background:rgba(124,156,255,.14)}
+.core-log-line{white-space:pre;min-height:22px;padding:2px 0}.wrap-lines .core-log-line{white-space:pre-wrap;overflow-wrap:anywhere}.log-storage-error{font-size:12px;margin:6px 28px}
 .log-history-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 28px;border-bottom:1px solid var(--line)}
 .log-history-tools label{display:flex;align-items:center;gap:8px;font-size:12px}.log-history-tools input{width:150px}.log-history-tools button{font-size:12px}
 .log-policy-help{font-size:12px;line-height:1.6;margin:0 0 16px}.log-settings-form fieldset{border:1px solid var(--line);border-radius:10px;margin:0 0 16px;padding:14px}.log-settings-form legend{font-weight:600;font-size:14px;padding:0 5px}.log-settings-form p{font-size:12px;line-height:1.6;margin:10px 0}.log-policy-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.log-policy-fields label{display:flex;flex-direction:column;gap:6px;font-size:12px}.log-policy-fields input,.log-policy-fields select{width:100%;min-width:0}.log-settings-actions{width:100%;display:flex;justify-content:flex-end;gap:10px}.error{color:var(--bad);overflow-wrap:anywhere}
