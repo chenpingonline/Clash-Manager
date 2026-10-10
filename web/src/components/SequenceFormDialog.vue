@@ -2,7 +2,7 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { t } from '@/services/i18n'
 
-const props = defineProps<{ open: boolean; title: string; subtitle?: string; inlineSubtitle?: boolean; hideFooter?: boolean }>()
+const props = defineProps<{ open: boolean; title: string; subtitle?: string; inlineSubtitle?: boolean; hideFooter?: boolean; compact?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 const dialog = ref<HTMLDialogElement | null>(null), body = ref<HTMLElement | null>(null)
 watch(() => props.open, async open => {
@@ -31,7 +31,7 @@ onBeforeUnmount(() => dialog.value?.close())
 
 <template>
   <Teleport to="body">
-    <dialog ref="dialog" class="modal-card sequence-form-dialog" :aria-label="title" @cancel.prevent.stop="emit('close')" @keydown.esc.stop @keydown="keyboard" @click="backdrop">
+    <dialog ref="dialog" class="modal-card sequence-form-dialog" :class="{ 'sequence-form-dialog-compact': compact }" :aria-label="title" @cancel.prevent.stop="emit('close')" @keydown.esc.stop @keydown="keyboard" @click="backdrop">
       <template v-if="open">
         <header class="sequence-dialog-header"><div :class="{ 'sequence-dialog-title-inline': inlineSubtitle }"><h3>{{ title }}</h3><p v-if="subtitle">{{ subtitle }}</p></div><button type="button" class="ghost small" autofocus :aria-label="t('关闭')" @click="emit('close')">×</button></header>
         <div ref="body" class="sequence-dialog-body" tabindex="0" :aria-label="title"><slot /></div>
@@ -53,5 +53,11 @@ onBeforeUnmount(() => dialog.value?.close())
 .sequence-dialog-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid var(--line);padding-top:14px;margin-top:16px}
 .sequence-dialog-footer span{font-size:11px;line-height:1.5}.sequence-dialog-footer button{flex:none}
 .sequence-dialog-body:focus-visible,.sequence-dialog-header button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sequence-form-dialog-compact{width:min(640px,calc(100% - 32px));padding:16px}
+.sequence-form-dialog-compact .sequence-dialog-header{align-items:center;gap:12px;margin-bottom:10px}
+.sequence-form-dialog-compact .sequence-dialog-header h3{font-size:16px}
+.sequence-form-dialog-compact .sequence-dialog-header button{width:26px;height:26px;font-size:18px;border-radius:7px}
+.sequence-form-dialog-compact .sequence-dialog-body{max-height:min(70dvh,560px)}
+.sequence-form-dialog-compact .sequence-dialog-footer{gap:8px;padding-top:10px;margin-top:10px}
 @media(max-width:480px){.sequence-form-dialog{padding:16px}.sequence-dialog-footer{align-items:flex-end;gap:10px}}
 </style>

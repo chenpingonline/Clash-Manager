@@ -120,8 +120,15 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
     <button class="ghost" @click="clearHistory">{{ t(isCore ? '清空 Core 输出日志' : '清空历史日志') }}</button><button v-if="!historyMode" @click="toggle">{{ t(running ? '停止' : '继续') }}</button>
   </div></Teleport>
   <form v-if="historyMode" class="log-history-tools" @submit.prevent="load()">
-    <template v-if="!isCore"><label>{{ t('开始日期') }}<input v-model="from" type="date"></label><label>{{ t('结束日期') }}<input v-model="to" type="date"></label></template>
-    <button :disabled="loading">{{ t('查询') }}</button><button type="button" class="ghost" :disabled="loading || pageIndex === 0" @click="newer">{{ t('较新一页') }}</button><button type="button" class="ghost" :disabled="loading || !nextCursor" @click="older">{{ t('更早一页') }}</button><span class="muted">{{ t(`第 ${pageIndex + 1} 页`) }}</span>
+    <div class="log-history-query">
+      <template v-if="!isCore"><label>{{ t('开始日期') }}<input v-model="from" type="date"></label><label>{{ t('结束日期') }}<input v-model="to" type="date"></label></template>
+      <button type="submit" :disabled="loading">{{ t('查询') }}</button>
+    </div>
+    <div class="log-history-pagination">
+      <button type="button" class="ghost" :disabled="loading || pageIndex === 0" @click="newer">{{ t('较新一页') }}</button>
+      <button type="button" class="ghost" :disabled="loading || !nextCursor" @click="older">{{ t('更早一页') }}</button>
+      <span class="muted">{{ t(`第 ${pageIndex + 1} 页`) }}</span>
+    </div>
   </form>
   <div class="log-summary">
     <div class="log-summary-main">
@@ -134,8 +141,8 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
     <label class="log-wrap-control"><span>{{ t('自动换行') }}</span><span class="switch quick-switch"><input v-model="wrapLines" type="checkbox"><span /></span></label>
   </div>
   <p v-if="isCore && currentStats?.error" class="error log-storage-error" role="alert">{{ currentStats.error }}</p>
-  <div ref="box" class="logs logs-full persistent-horizontal-scrollbar" :class="{ 'wrap-lines': wrapLines, 'core-output': isCore }"><template v-if="isCore"><div v-for="line in visibleCore" :key="line.key" class="core-log-line"><HighlightText :text="line.message" :query="query" /><span v-if="line.truncated" class="muted"> {{ t('（此行过长，已截断）') }}</span></div></template><template v-else><div v-for="(item, index) in visible" :key="`${index}-${item.time}`" class="log-line" :class="`log-${item.level}`"><span><HighlightText :text="item.time" :query="query" /></span><span><HighlightText :text="item.level" :query="query" /></span><span><HighlightText :text="item.message" :query="query" /></span></div></template><div v-if="!(isCore ? visibleCore.length : visible.length) && !loading" class="empty">{{ t(error ? '日志读取失败，请重新读取' : queryDirty ? '筛选已更改，请点击查询' : query ? '没有匹配的日志' : isCore ? '暂无托管 Core 输出日志' : '暂无日志') }}</div></div>
-  <SequenceFormDialog :open="settingsOpen" :title="t('日志设置')" @close="closeSettings">
+  <div ref="box" class="logs logs-full persistent-horizontal-scrollbar" :class="{ 'wrap-lines': wrapLines, 'core-output': isCore }"><template v-if="isCore"><div v-for="line in visibleCore" :key="line.key" class="core-log-line"><HighlightText :text="line.message" :query="query" /><span v-if="line.truncated" class="muted"> {{ t('（此行过长，已截断）') }}</span></div></template><template v-else><div v-for="(item, index) in visible" :key="`${index}-${item.time}`" class="log-line" :class="`log-${item.level}`"><span :title="item.time"><HighlightText :text="item.time" :query="query" /></span><span><HighlightText :text="item.level" :query="query" /></span><span><HighlightText :text="item.message" :query="query" /></span></div></template><div v-if="!(isCore ? visibleCore.length : visible.length) && !loading" class="empty">{{ t(error ? '日志读取失败，请重新读取' : queryDirty ? '筛选已更改，请点击查询' : query ? '没有匹配的日志' : isCore ? '暂无托管 Core 输出日志' : '暂无日志') }}</div></div>
+  <SequenceFormDialog :open="settingsOpen" :title="t('日志设置')" compact @close="closeSettings">
     <p class="muted log-policy-help">{{ t('超过保留天数或容量上限时，自动清理最旧日志。保留天数为 0 时不限时间，仍受容量限制。') }}</p>
     <p v-if="settingsError" class="error" role="alert">{{ t(settingsError) }}</p><p v-if="settingsBusy && !draft" class="muted">{{ t('正在读取…') }}</p>
     <form v-if="draft && status" id="log-settings-form" class="log-settings-form" @submit.prevent="saveSettings">
@@ -148,9 +155,11 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
       <fieldset :disabled="settingsBusy"><legend>{{ t('托管 Core 输出日志') }}</legend>
         <div class="log-policy-fields"><label>{{ t('保留天数') }}<input v-model.number="draft.core.days" type="number" min="0" max="365" step="1" required></label><label>{{ t('容量上限（MiB）') }}<input v-model.number="draft.core.maxMiB" type="number" min="1" max="1024" step="1" required></label></div>
         <p class="muted">{{ t('管理本应用托管 Core 的 stdout / stderr，不包含外部 Core 或容器运行时日志。') }}</p>
-        <p v-if="status.core.available" class="muted">{{ t('已使用：') }}{{ bytes(status.core.size) }} · {{ t('最早文件更新时间：') }}{{ status.core.oldest ? displayLogTime(status.core.oldest) : t('暂无日志') }}</p>
         <p v-if="status.core.error" class="error" role="alert">{{ t(status.core.error) }}</p>
-        <button type="button" class="ghost danger" :disabled="!status.core.available" @click="clearCore">{{ t('清空 Core 输出日志') }}</button>
+        <div class="log-core-storage">
+          <p v-if="status.core.available" class="muted">{{ t('已使用：') }}{{ bytes(status.core.size) }} · {{ t('最早文件更新时间：') }}{{ status.core.oldest ? displayLogTime(status.core.oldest) : t('暂无日志') }}</p>
+          <button type="button" class="ghost danger" :disabled="!status.core.available" @click="clearCore">{{ t('清空 Core 输出日志') }}</button>
+        </div>
       </fieldset>
     </form><button v-else-if="!settingsBusy" class="ghost" @click="readSettings()">{{ t('重新读取') }}</button>
     <template #footer><div class="log-settings-actions"><button type="button" class="ghost" :disabled="settingsBusy" @click="closeSettings">{{ t('取消') }}</button><button type="submit" form="log-settings-form" :disabled="settingsBusy || !draft">{{ t('保存设置') }}</button></div></template>
@@ -165,8 +174,26 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
 .log-source-switch button:hover{color:var(--text);background:rgba(124,156,255,.08)}
 .log-source-switch button.active{color:var(--accent);background:rgba(124,156,255,.14)}
 .core-log-line{white-space:pre;min-height:22px;padding:2px 0}.wrap-lines .core-log-line{white-space:pre-wrap;overflow-wrap:anywhere}.log-storage-error{font-size:12px;margin:6px 28px}
-.log-history-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 28px;border-bottom:1px solid var(--line)}
-.log-history-tools label{display:flex;align-items:center;gap:8px;font-size:12px}.log-history-tools input{width:150px}.log-history-tools button{font-size:12px}
-.log-policy-help{font-size:12px;line-height:1.6;margin:0 0 16px}.log-settings-form fieldset{border:1px solid var(--line);border-radius:10px;margin:0 0 16px;padding:14px}.log-settings-form legend{font-weight:600;font-size:14px;padding:0 5px}.log-settings-form p{font-size:12px;line-height:1.6;margin:10px 0}.log-policy-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.log-policy-fields label{display:flex;flex-direction:column;gap:6px;font-size:12px}.log-policy-fields input,.log-policy-fields select{width:100%;min-width:0}.log-settings-actions{width:100%;display:flex;justify-content:flex-end;gap:10px}.error{color:var(--bad);overflow-wrap:anywhere}
-@media(max-width:540px){.log-history-tools{padding:10px 16px}.log-policy-fields{grid-template-columns:1fr 1fr}}
+.log-history-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;min-height:42px;padding:6px 28px;border-bottom:1px solid var(--line)}
+.log-history-query{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0}
+.log-history-tools label{display:flex;align-items:center;gap:6px;font-size:11px;white-space:nowrap}
+.log-history-tools input{width:132px;height:28px;min-height:28px;padding:0 8px;border-radius:7px;font-size:11px}
+.log-history-tools button{height:28px;min-height:28px;padding:0 10px;border-radius:7px;font-size:11px;line-height:26px;white-space:nowrap}
+.log-history-pagination{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:11px;white-space:nowrap}
+.log-history-pagination>span{margin-left:4px}
+.log-policy-help{font-size:11px;line-height:1.5;margin:0 0 10px}
+.log-settings-form fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 10px;padding:10px}
+.log-settings-form fieldset:last-child{margin-bottom:0}
+.log-settings-form legend{font-weight:600;font-size:13px;padding:0 4px}
+.log-settings-form p{font-size:11px;line-height:1.5;margin:6px 0;overflow-wrap:anywhere}
+.log-policy-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.log-policy-fields label{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.log-policy-fields input,.log-policy-fields select{width:100%;min-width:0;height:28px;padding:0 8px;border-radius:6px;font-size:12px}
+.log-core-storage{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:8px}
+.log-core-storage p{flex:1;min-width:200px;margin:0}
+.log-core-storage button,.log-settings-actions button{flex:none;height:28px;min-height:28px;padding:0 10px;border-radius:7px;font-size:11px;line-height:26px}
+.log-settings-actions{width:100%;display:flex;justify-content:flex-end;gap:8px}
+.error{color:var(--bad);overflow-wrap:anywhere}
+@media(max-width:680px){.log-history-tools{padding:6px 16px}}
+@media(max-width:540px){.log-policy-fields{grid-template-columns:1fr 1fr}}
 </style>

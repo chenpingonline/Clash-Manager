@@ -1,4 +1,3 @@
-import { getLocale } from './i18n'
 import type { LogItem } from '@/types/api'
 
 export interface NormalizedLog { time: string; level: string; message: string }
@@ -13,9 +12,11 @@ export function plainCoreOutput(message: string): string {
 }
 
 export function displayLogTime(value: unknown): string {
-  if (!value) return new Date().toLocaleString(getLocale(), { hour12: false })
-  const date = new Date(value as string | number)
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(getLocale(), { hour12: false })
+  const date = value === undefined || value === null || value === '' ? new Date() : new Date(value as string | number)
+  if (Number.isNaN(date.getTime())) return String(value)
+  // Use local time with a fixed width so live and historical rows align in either language.
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
 // Calendar boundaries follow the user's local timezone, including DST transitions.

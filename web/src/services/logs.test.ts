@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { containsLog, highlightParts, normalizeLog, plainCoreOutput } from './logs'
+import { containsLog, displayLogTime, highlightParts, normalizeLog, plainCoreOutput } from './logs'
 
 describe('log presentation', () => {
+  it('shows a complete local timestamp with padded calendar and clock fields', () => {
+    const local = new Date(2026, 0, 2, 3, 4, 5)
+    expect(displayLogTime(local.toISOString())).toBe('2026-01-02 03:04:05')
+    expect(normalizeLog({ time: local.getTime(), message: 'connected' }).time).toBe('2026-01-02 03:04:05')
+    expect(containsLog(normalizeLog({ time: local.toISOString() }), '2026-01-02')).toBe(true)
+  })
+
+  it('preserves invalid timestamps without inventing their calendar date', () => {
+    expect(displayLogTime('23:10:06')).toBe('23:10:06')
+    expect(displayLogTime('invalid')).toBe('invalid')
+    expect(displayLogTime(0)).toMatch(/^(1969|1970)-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+  })
+
   it('filters case-insensitively and normalizes warning', () => {
     const item = normalizeLog({ time: '2026-09-05T11:00:00Z', level: 'warning', message: 'ChatGPT.com [a+b] <img>' })
     expect(item.level).toBe('warn')
