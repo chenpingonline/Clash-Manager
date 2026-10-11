@@ -11,6 +11,9 @@ const submitting = ref(false)
 let csrfToken = ''
 const activeStages = ['queued', 'downloading', 'verifying', 'installing', 'restarting']
 const active = computed(() => submitting.value || activeStages.includes(status.value.stage) || (status.value.stage === 'success' && disconnected.value))
+// Persisted success is kept for the old page's version check and reload. It is
+// history, not ongoing progress, once that page has reconnected successfully.
+const progressVisible = computed(() => status.value.stage !== 'idle' && (status.value.stage !== 'success' || active.value))
 let timer: ReturnType<typeof setTimeout> | null = null
 let startedAt = 0
 
@@ -86,5 +89,5 @@ async function start(version: string) {
 }
 
 export function useAppInstall() {
-  return { status, supported, reason, disconnected, active, refresh, start }
+  return { status, supported, reason, disconnected, active, progressVisible, refresh, start }
 }
