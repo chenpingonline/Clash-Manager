@@ -54,6 +54,10 @@ func rank(value string) int {
 }
 
 func Normalize(line []byte) (Record, bool) {
+	return normalizeAt(line, time.Now())
+}
+
+func normalizeAt(line []byte, receivedAt time.Time) (Record, bool) {
 	line = bytes.TrimSpace(line)
 	if len(line) == 0 {
 		return Record{}, false
@@ -68,10 +72,7 @@ func Normalize(line []byte) (Record, bool) {
 		}
 		return ""
 	}
-	when := text("time")
-	if when == "" {
-		when = time.Now().UTC().Format(time.RFC3339Nano)
-	}
+	when := completeTimestamp(text("time"), receivedAt)
 	level := text("level")
 	if level == "" {
 		level = text("type")
@@ -84,6 +85,23 @@ func Normalize(line []byte) (Record, bool) {
 		message = string(line)
 	}
 	return Record{Time: when, Level: normalizeLevel(level), Message: message}, true
+}
+
+// Complete time-only Controller events while their arrival date is known.
+// Historical records without a date must not be assigned today's date.
+func completeTimestamp(value string, receivedAt time.Time) string {
+	if _, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return value
+	}
+	if clock, err := time.Parse("15:04:05", value); err == nil {
+		when := time.Date(receivedAt.Year(), receivedAt.Month(), receivedAt.Day(), clock.Hour(), clock.Minute(), clock.Second(), clock.Nanosecond(), receivedAt.Location())
+		// An event received just after midnight can belong to the previous day.
+		if when.Sub(receivedAt) > 12*time.Hour {
+			when = when.AddDate(0, 0, -1)
+		}
+		return when.Format(time.RFC3339Nano)
+	}
+	return receivedAt.UTC().Format(time.RFC3339Nano)
 }
 
 func (m *Manager) Configure(policy logstore.Policy, level string) error {
