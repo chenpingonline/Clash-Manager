@@ -17,7 +17,20 @@ import (
 	"strings"
 )
 
-const Repository = "chenpingonline/Clash-for-fnos"
+// Repository is pinned at build time for both the Web service and root updater.
+// It is never supplied by an API request or an environment variable on fnOS.
+var Repository = "chenpingonline/Clash-for-fnos"
+
+var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}$`)
+
+func ValidRepository(value string) bool {
+	if !repositoryPattern.MatchString(value) {
+		return false
+	}
+	_, name, _ := strings.Cut(value, "/")
+	return name != "." && name != ".."
+}
+
 const AppName = "clash-for-fnos"
 const MaxPackageSize int64 = 512 << 20
 

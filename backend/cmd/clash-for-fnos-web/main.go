@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/chenpingonline/Clash-Manager/backend/internal/appsettings"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/appupdate"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/logstore"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
@@ -107,8 +108,13 @@ func env(name, fallback string) string {
 }
 
 func loadConfig() config {
+	platform := runtimeenv.Platform()
+	releaseRepo := appupdate.Repository
+	if platform != "fnos" {
+		releaseRepo = env("CLASH_FOR_FNOS_RELEASE_REPO", releaseRepo)
+	}
 	return config{
-		platform:           runtimeenv.Platform(),
+		platform:           platform,
 		listenAddr:         env("LISTEN_ADDR", ""),
 		authUser:           env("APP_AUTH_USER", "admin"),
 		authPassword:       os.Getenv("APP_AUTH_PASSWORD"),
@@ -133,7 +139,7 @@ func loadConfig() config {
 		rulesSnapshotFile:  filepath.Join(runtimeenv.VarDir(), "rules-snapshot.json"),
 		ruleStateFile:      filepath.Join(runtimeenv.EtcDir(), "rule-state.json"),
 		exitLocationURL:    env("CLASH_EXIT_LOCATION_URL", "https://ipwho.is/?lang=zh-CN&fields=success,message,ip,country,country_code,region,city,timezone"),
-		releaseRepo:        env("CLASH_FOR_FNOS_RELEASE_REPO", "chenpingonline/Clash-for-fnos"),
+		releaseRepo:        releaseRepo,
 	}
 }
 

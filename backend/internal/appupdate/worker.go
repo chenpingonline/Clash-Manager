@@ -131,6 +131,9 @@ func Client() *http.Client {
 }
 
 func resolve(ctx context.Context, client *http.Client, target, arch string) (asset, error) {
+	if !ValidRepository(Repository) {
+		return asset{}, errors.New("构建时的更新仓库配置无效")
+	}
 	v, err := Version(target)
 	if err != nil {
 		return asset{}, err
