@@ -8,12 +8,14 @@ const supported = ref<boolean | null>(null)
 const reason = ref('')
 const disconnected = ref(false)
 const submitting = ref(false)
+let csrfToken = ''
 const activeStages = ['queued', 'downloading', 'verifying', 'installing', 'restarting']
 const active = computed(() => submitting.value || activeStages.includes(status.value.stage) || (status.value.stage === 'success' && disconnected.value))
 let timer: ReturnType<typeof setTimeout> | null = null
 let startedAt = 0
 
 function apply(result: AppInstallResponse) {
+  csrfToken = result.csrfToken || ''
   supported.value = result.supported
   reason.value = result.reason || ''
   status.value = result.status
@@ -62,7 +64,15 @@ async function start(version: string) {
   disconnected.value = false
   startedAt = Date.now()
   try {
-    apply(await api<AppInstallResponse>('/api/app/update', { ...jsonRequest('POST', { version }), signal: AbortSignal.timeout(20000) }))
+    // Read current status and the process nonce, without checking GitHub again.
+    const current = await api<AppInstallResponse>('/api/app/update/status', { signal: AbortSignal.timeout(5000) })
+    apply(current)
+    if (!current.supported) return
+    if (activeStages.includes(current.status.stage)) { schedule(); return }
+    const request = jsonRequest('POST', { version })
+    const headers = new Headers(request.headers)
+    if (csrfToken) headers.set('X-Clash-App-Update-Token', csrfToken)
+    apply(await api<AppInstallResponse>('/api/app/update', { ...request, headers, signal: AbortSignal.timeout(20000) }))
     schedule()
   } catch (cause) {
     // A lost response does not mean the independent system task did not start.

@@ -66,6 +66,9 @@ type config struct {
 }
 
 type gateway struct {
+	appUpdateTokenOnce sync.Once
+	appUpdateToken     string
+	appUpdateTokenErr  error
 	appUpdateMu        sync.RWMutex
 	appUpdateCheckMu   sync.Mutex
 	appUpdateCache     map[string]any
@@ -1466,6 +1469,7 @@ func run() error {
 	go gateway.watchRuleState(collectorContext)
 	server := &http.Server{
 		Handler:           gateway,
+		ConnContext:       nativeConnectionContext,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		MaxHeaderBytes:    1 << 20,

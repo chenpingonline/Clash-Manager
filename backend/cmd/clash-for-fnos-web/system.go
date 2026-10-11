@@ -43,9 +43,9 @@ func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, reques
 	case requestPath == "/api/app/check-update" && r.Method == http.MethodPost:
 		g.writeAppUpdateStatus(w, r, true)
 	case requestPath == "/api/app/update/status" && r.Method == http.MethodGet:
-		g.forwardHelper(w, r, http.MethodGet, "/app/update/status", nil, 10*time.Second)
+		g.writeAppInstallStatus(w, r)
 	case requestPath == "/api/app/update" && r.Method == http.MethodPost:
-		if !sameOrigin(r) {
+		if !g.appUpdateRequestAllowed(r) {
 			writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})
 			return true
 		}

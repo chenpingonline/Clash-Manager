@@ -367,6 +367,7 @@ export interface AppInstallStatus {
   updatedAt?: number
 }
 export interface AppInstallResponse {
+  csrfToken?: string
   supported: boolean
   reason?: string
   status: AppInstallStatus
