@@ -11,8 +11,9 @@ const open = ref(false), saving = ref(false), error = ref('')
 const mode = ref('all'), customAddress = ref('')
 const trigger = ref<HTMLButtonElement>(), form = ref<HTMLFormElement>(), modeInput = ref<HTMLSelectElement>()
 async function show() {
-  mode.value = props.modelValue === '*' ? 'all' : 'ip'
-  customAddress.value = props.modelValue === '*' ? '' : props.modelValue
+  const address = props.modelValue.trim() || '*'
+  mode.value = address === '*' ? 'all' : 'ip'
+  customAddress.value = address === '*' ? '' : address
   error.value = ''
   open.value = true
   await nextTick()
@@ -65,13 +66,13 @@ function modalKeydown(event: KeyboardEvent) {
     </div>
     <label class="switch"><input :id="inputId" type="checkbox" :checked="allowLan" :aria-label="t('允许局域网连接')" @change="emit('update:allowLan', ($event.target as HTMLInputElement).checked); emit('lanChange')"><span /></label>
   </div>
-  <BaseModal :open="open" :title="t('代理监听地址')" :show-header="false" :closable="!saving" card-class="proxy-bind-modal" @close="close">
+  <BaseModal :open="open" :title="t('代理监听网卡设置')" :show-header="false" :closable="!saving" card-class="proxy-bind-modal" @close="close">
     <form ref="form" tabindex="-1" @submit.prevent="saveAddress" @keydown="modalKeydown">
       <div class="settings-modal-header">
-        <h3>{{ t('代理监听地址') }}</h3>
+        <h3>{{ t('代理监听网卡设置') }}</h3>
         <div class="settings-modal-header-actions"><button class="ghost" type="button" :disabled="saving" @click="close">{{ t('取消') }}</button><button type="submit" :disabled="saving || !allowLan">{{ t(saving ? '保存中…' : '保存') }}</button></div>
       </div>
-      <p class="field-note">{{ t('控制代理端口监听的地址，不影响 Controller API。') }}</p>
+      <p class="field-note">{{ t('默认监听所有网卡，也可填写 NAS 本机的网卡 IP。') }}</p>
       <div class="bind-fields">
         <label class="bind-field"><span>{{ t('监听地址') }}</span><select ref="modeInput" v-model="mode" :disabled="saving || !allowLan" @change="error = ''"><option value="all">{{ t('所有网卡') }}</option><option value="ip">{{ t('本机网卡 IP') }}</option></select></label>
         <label v-if="mode === 'ip'" class="bind-field"><span>{{ t('指定监听 IP') }}</span><input v-model="customAddress" :disabled="saving || !allowLan" :placeholder="t('IPv4 或 IPv6 地址')" spellcheck="false" @input="error = ''"></label>
