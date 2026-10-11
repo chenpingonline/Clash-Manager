@@ -12,6 +12,7 @@ import SettingToggle from '@/components/settings/SettingToggle.vue'
 import { refreshCoreHealth } from '@/composables/useCoreHealth'
 import { useAutosave } from '@/composables/useAutosave'
 import { useAppUpdateNotice } from '@/composables/useAppUpdateNotice'
+import { useAppInstall } from '@/composables/useAppInstall'
 import { api, APP_PREFIX, errorMessage, jsonRequest } from '@/services/api'
 import { coreUpdateFailure, type CoreUpdateProgress } from '@/services/core-update'
 import { formatBytes, formatTime } from '@/services/format'
@@ -84,7 +85,7 @@ const system = ref<SystemStatus>({}), manager = reactive<ManagerSettings>({ noti
 const tunRouteExcludeText = ref('')
 const environment = ref<ProxyEnvironmentResponse>({}), proxyForm = reactive<ProxyEnvForm>({ enabled: true, followMixedPort: true, port: 7890, noProxy: 'localhost,127.0.0.1,::1', targets: { environment: true, profile: true, bashrc: true } })
 const proxyBypassInput = ref('')
-const appUpdate = ref<AppUpdateInfo>({}), icons = ref<AppIconsResponse>({}), selectedIcon = ref('cat-orbit'), tunSupported = ref(true), tunSupportText = ref('当前 Mihomo 具备 TUN 所需权限，可直接启用')
+const icons = ref<AppIconsResponse>({}), selectedIcon = ref('cat-orbit'), tunSupported = ref(true), tunSupportText = ref('当前 Mihomo 具备 TUN 所需权限，可直接启用')
 const geo = ref<GeoStatus>({}), geoForm = reactive({ autoUpdate: false, updateInterval: 24 }), geoBusy = ref(''), geoState = ref<'idle' | 'saving' | 'updating' | 'success' | 'error'>('idle'), geoMessage = ref('')
 const dnsText = reactive({ defaultNameserver: '', nameserver: '', fallback: '', proxyServerNameserver: '', directNameserver: '', fakeIpFilter: '', nameserverPolicy: '', fallbackIpCidr: '', fallbackDomain: '', hosts: '' })
 const netSave = useAutosave<NetworkSettingsResponse>('/api/network/settings', { progressEndpoint: '/api/network/settings/status', mergePending: true, onSaved: result => {
@@ -95,7 +96,9 @@ const netSave = useAutosave<NetworkSettingsResponse>('/api/network/settings', { 
     if (proxyForm.followMixedPort && syncedPort > 0) proxyForm.port = syncedPort
   }
 } }), dnsSave = useAutosave('/api/network/settings'), behaviorSave = useAutosave('/api/settings')
-const { available: appUpdateAvailable, applyResult: applyAppUpdateResult, check: checkAppUpdateNotice, setEnabled: setAppUpdateNoticeEnabled } = useAppUpdateNotice()
+const { available: appUpdateAvailable, info: appUpdate, applyResult: applyAppUpdateResult, check: checkAppUpdateNotice, setEnabled: setAppUpdateNoticeEnabled } = useAppUpdateNotice()
+const { status: appInstall, supported: appInstallSupported, reason: appInstallReason, disconnected: appInstallDisconnected, active: appInstallActive, refresh: refreshAppInstall, start: startAppInstall } = useAppInstall()
+const appInstallMessage = computed(() => appInstallDisconnected.value ? '正在等待应用重新连接…' : ({ idle: '', queued: '正在准备更新…', downloading: '正在下载更新…', verifying: '正在校验更新包…', installing: '正在安装更新，应用会短暂断开…', restarting: '正在启动新版应用…', success: '更新完成', error: '更新失败' })[appInstall.value.stage])
 const envSave = useAutosave<ProxyEnvironmentResponse>('/api/system/proxy-environment', { onSaved: result => { environment.value = result } })
 const netState = netSave.state, netMessage = netSave.message, dnsState = dnsSave.state, dnsMessage = dnsSave.message, behaviorState = behaviorSave.state, behaviorMessage = behaviorSave.message, envState = envSave.state, envMessage = envSave.message
 let closeTunProgressStream: (() => void) | null = null
@@ -282,7 +285,8 @@ async function load() {
     ])
     tunFeatures.value = net.tunFeatures || {}
     networkOffline.value = net.offline === true
-    system.value = sys; selectedCoreMode.value = sys.coreMode === 'external' ? 'external' : 'managed'; Object.assign(manager, settings, { healthcheckUrl: settings.healthcheckUrl || healthcheckPresets[0].url }); setAppUpdateNoticeEnabled(settings.notifyAppUpdates !== false); applyNetwork(net.settings || {}, Number(sys.managedMixedPort || 7890)); environment.value = proxy; appUpdate.value = update; icons.value = iconData; selectedIcon.value = iconData.selected || iconData.defaultId || 'cat-orbit'; geo.value = geoData; Object.assign(geoForm, { autoUpdate: geoData.settings?.autoUpdate === true, updateInterval: Number(geoData.settings?.updateInterval || 24) })
+    system.value = sys; selectedCoreMode.value = sys.coreMode === 'external' ? 'external' : 'managed'; Object.assign(manager, settings, { healthcheckUrl: settings.healthcheckUrl || healthcheckPresets[0].url }); setAppUpdateNoticeEnabled(settings.notifyAppUpdates !== false); applyNetwork(net.settings || {}, Number(sys.managedMixedPort || 7890)); environment.value = proxy; applyAppUpdateResult(update); icons.value = iconData; selectedIcon.value = iconData.selected || iconData.defaultId || 'cat-orbit'; geo.value = geoData; Object.assign(geoForm, { autoUpdate: geoData.settings?.autoUpdate === true, updateInterval: Number(geoData.settings?.updateInterval || 24) })
+    if (runtime.value.capabilities.appUpdates) void refreshAppInstall()
     const setting = proxy.management?.settings
     Object.assign(proxyForm, { enabled: setting?.enabled !== false, followMixedPort: setting?.followMixedPort !== false, port: Number(setting?.port || network.mixed.port || 7890), noProxy: setting?.noProxy || 'localhost,127.0.0.1,::1', targets: { environment: setting?.targets?.environment !== false, profile: setting?.targets?.profile !== false, bashrc: setting?.targets?.bashrc !== false } })
     tunSupported.value = net.tunCapability?.supported !== false; tunSupportText.value = net.tunCapability?.message || (tunSupported.value ? '当前 Mihomo 具备 TUN 所需权限，可直接启用' : !net.tunCapability?.tunDevice ? '当前系统没有 /dev/net/tun，暂不能启用 TUN' : '当前 Mihomo 不是 root 且没有 CAP_NET_ADMIN，暂不能启用 TUN')
@@ -375,6 +379,11 @@ function openAppUpdate() {
   const url = appUpdate.value.latest?.asset?.url || appUpdate.value.latest?.htmlUrl
   if (!url) return notify('未找到可用的更新下载地址', true)
   window.open(url, '_blank', 'noopener')
+}
+async function installAppUpdate() {
+  const target = appUpdate.value.latest?.tag
+  if (!target || appInstallActive.value) return
+  await startAppInstall(target)
 }
 type CoreUpdateInfo = { updateAvailable?: boolean; currentVersion?: string; canRestartService?: boolean; latest?: { tag?: string } }
 const coreUpdateInfo = ref<CoreUpdateInfo | null>(null)
@@ -739,8 +748,9 @@ onMounted(initialize)
                 </template>
               </div>
               <div class="update-row-actions">
-                <button v-if="appUpdate.updateAvailable" :disabled="busy === 'app-update'" @click="openAppUpdate">{{ t("下载更新") }}</button>
-                <button v-else class="ghost" :disabled="busy === 'app-update'" @click="checkAppUpdate">{{ t(busy === 'app-update' ? '检查中…' : '检查更新') }}</button>
+                <button v-if="appUpdate.updateAvailable && appInstallSupported !== false" :disabled="appInstallActive || appInstallSupported !== true" @click="installAppUpdate">{{ t(appInstallActive ? '更新中…' : appInstall.stage === 'error' ? '重试更新' : '立即更新') }}</button>
+                <button v-else-if="appUpdate.updateAvailable" @click="openAppUpdate">{{ t("下载更新") }}</button>
+                <button v-else class="ghost" :disabled="busy === 'app-update' || appInstallActive" @click="checkAppUpdate">{{ t(busy === 'app-update' ? '检查中…' : '检查更新') }}</button>
                 <a class="app-update-github" href="https://github.com/chenpingonline/Clash-for-fnos" target="_blank" rel="noopener noreferrer" :aria-label="t('打开 Clash for fnOS GitHub 仓库')" :title="t('GitHub 仓库')">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.3c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17 4.9 18 5.2 18 5.2c.7 1.7.3 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3Z" />
@@ -748,6 +758,15 @@ onMounted(initialize)
                 </a>
               </div>
             </div>
+            <div v-if="runtime.capabilities.appUpdates && appInstall.stage !== 'idle'" class="app-install-progress" role="status" aria-live="polite">
+              <div class="app-install-progress-head"><strong>{{ t(appInstallMessage) }}</strong><span v-if="appInstallActive">{{ appInstall.progress }}%</span></div>
+              <progress v-if="appInstallActive" :value="appInstall.progress" max="100" :aria-label="t('应用更新进度')" />
+              <small v-if="appInstall.stage === 'downloading' && appInstall.total">{{ formatBytes(appInstall.downloaded || 0) }} / {{ formatBytes(appInstall.total) }}</small>
+              <p v-if="appInstall.error" class="local-warning">{{ t(appInstall.error) }}</p>
+              <small v-if="appInstallActive">{{ t('更新期间请勿关闭 NAS，完成后页面会自动重新加载。') }}</small>
+              <button v-if="appInstall.stage === 'error'" class="changelog-link" @click="openAppUpdate">{{ t('下载 FPK 手动安装') }}</button>
+            </div>
+            <p v-if="appInstallReason && runtime.capabilities.appUpdates" class="hint">{{ t(appInstallReason) }}</p>
             <div v-if="runtime.capabilities.appUpdates" class="app-update-preference">
               <span class="app-update-preference-copy"><strong>{{ t("更新提示") }}</strong><small>{{ t("启动时自动检查，有新版本时显示提示") }}</small></span>
               <label class="switch" :title="t('启用更新提示')"><input v-model="manager.notifyAppUpdates" :aria-label="t('启用更新提示')" type="checkbox" @change="saveAppUpdatePreference"><span /></label>

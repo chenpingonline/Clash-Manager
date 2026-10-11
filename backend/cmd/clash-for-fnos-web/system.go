@@ -42,6 +42,18 @@ func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, reques
 		g.writeAppUpdateStatus(w, r, false)
 	case requestPath == "/api/app/check-update" && r.Method == http.MethodPost:
 		g.writeAppUpdateStatus(w, r, true)
+	case requestPath == "/api/app/update/status" && r.Method == http.MethodGet:
+		g.forwardHelper(w, r, http.MethodGet, "/app/update/status", nil, 10*time.Second)
+	case requestPath == "/api/app/update" && r.Method == http.MethodPost:
+		if !sameOrigin(r) {
+			writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})
+			return true
+		}
+		var body map[string]any
+		if !decodeJSONBody(w, r, &body) {
+			return true
+		}
+		g.forwardHelper(w, r, http.MethodPost, "/app/update/start", body, 15*time.Second)
 	case requestPath == "/api/network/settings" && r.Method == http.MethodGet:
 		g.networkSettings(w, r)
 	case requestPath == "/api/network/settings/status" && r.Method == http.MethodGet:
@@ -1120,8 +1132,16 @@ func selectFPKAsset(release githubRelease) any {
 func (g *gateway) appUpdateStatus(ctx context.Context, check bool) (map[string]any, error) {
 	result := map[string]any{"appName": "Clash for fnOS", "currentVersion": version, "platform": platformName(), "sourceConfigured": g.config.releaseRepo != "", "releaseRepo": nullableString(g.config.releaseRepo), "updateAvailable": nil, "latest": nil}
 	if !check || g.config.releaseRepo == "" {
+		g.appUpdateMu.RLock()
+		cached := g.appUpdateCache
+		g.appUpdateMu.RUnlock()
+		if cached != nil {
+			return cached, nil
+		}
 		return result, nil
 	}
+	g.appUpdateCheckMu.Lock()
+	defer g.appUpdateCheckMu.Unlock()
 	release, err := fetchRelease(ctx, g.config.releaseRepo)
 	if err != nil {
 		return nil, err
@@ -1129,6 +1149,9 @@ func (g *gateway) appUpdateStatus(ctx context.Context, check bool) (map[string]a
 	result["directRetry"] = release.DirectRetry
 	result["latest"] = map[string]any{"tag": release.TagName, "name": release.Name, "publishedAt": release.PublishedAt, "htmlUrl": release.HTMLURL, "asset": selectFPKAsset(release), "body": release.Body}
 	result["updateAvailable"] = compareVersion(release.TagName, version) > 0
+	g.appUpdateMu.Lock()
+	g.appUpdateCache = result
+	g.appUpdateMu.Unlock()
 	return result, nil
 }
 func (g *gateway) writeAppUpdateStatus(w http.ResponseWriter, r *http.Request, check bool) {

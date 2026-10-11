@@ -3,17 +3,23 @@ import { api } from '@/services/api'
 import type { AppUpdateInfo, ManagerSettings } from '@/types/api'
 
 const enabled = ref(true)
-const updateDetected = ref(false)
-const available = computed(() => enabled.value && updateDetected.value)
+const info = ref<AppUpdateInfo>({})
+const available = computed(() => enabled.value && info.value.sourceConfigured === true && info.value.updateAvailable === true)
+let pending: Promise<AppUpdateInfo> | null = null
 
 function applyResult(result: AppUpdateInfo) {
-  updateDetected.value = result.sourceConfigured === true && result.updateAvailable === true
+  const changedVersion = result.currentVersion && info.value.currentVersion && result.currentVersion !== info.value.currentVersion
+  if (changedVersion || result.sourceConfigured === false || typeof result.updateAvailable === 'boolean') info.value = result
+  else info.value = { ...result, ...info.value, currentVersion: result.currentVersion || info.value.currentVersion, platform: result.platform || info.value.platform }
 }
 
 async function check(signal?: AbortSignal) {
-  const result = await api<AppUpdateInfo>('/api/app/check-update', { method: 'POST', signal })
-  applyResult(result)
-  return result
+  if (pending) return pending
+  pending = api<AppUpdateInfo>('/api/app/check-update', { method: 'POST', signal }).then(result => {
+    applyResult(result)
+    return result
+  }).finally(() => { pending = null })
+  return pending
 }
 
 async function initialize(signal?: AbortSignal) {
@@ -28,5 +34,5 @@ function setEnabled(value: boolean) {
 }
 
 export function useAppUpdateNotice() {
-  return { available, enabled, applyResult, check, initialize, setEnabled }
+  return { available, enabled, info, applyResult, check, initialize, setEnabled }
 }

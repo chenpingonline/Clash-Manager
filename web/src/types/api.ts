@@ -357,6 +357,21 @@ export interface AppUpdateInfo {
   latest?: { tag?: string; name?: string; body?: string; publishedAt?: string; htmlUrl?: string; asset?: { name?: string; url?: string; size?: number } | null }
 }
 
+export interface AppInstallStatus {
+  stage: 'idle' | 'queued' | 'downloading' | 'verifying' | 'installing' | 'restarting' | 'success' | 'error'
+  targetVersion?: string
+  progress: number
+  downloaded?: number
+  total?: number
+  error?: string
+  updatedAt?: number
+}
+export interface AppInstallResponse {
+  supported: boolean
+  reason?: string
+  status: AppInstallStatus
+}
+
 export interface GeoAsset {
   key: 'geoip' | 'geosite' | 'mmdb' | 'asn' | string
   label?: string

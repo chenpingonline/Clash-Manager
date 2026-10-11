@@ -65,6 +65,9 @@ type config struct {
 }
 
 type gateway struct {
+	appUpdateMu        sync.RWMutex
+	appUpdateCheckMu   sync.Mutex
+	appUpdateCache     map[string]any
 	loginLimiter       loginLimiter
 	config             config
 	coreUpdateMu       sync.Mutex

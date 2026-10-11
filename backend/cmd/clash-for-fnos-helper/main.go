@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/appupdate"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/logstore"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/runtimeenv"
 	"io"
@@ -63,6 +64,7 @@ type transaction struct {
 }
 
 type helper struct {
+	appUpdateMu        sync.Mutex
 	coreLogs           *coreLogWriter
 	config             helperConfig
 	mu                 sync.Mutex
@@ -133,6 +135,8 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			result, err = h.geoStatus()
 		case "/app/icon/status":
 			result, err = h.iconStatus()
+		case "/app/update/status":
+			result, err = h.appUpdateStatus()
 		case "/system/proxy-environment":
 			result, err = h.proxyEnvironment()
 		default:
@@ -153,6 +157,8 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var result any
 	var err error
 	switch path {
+	case "/app/update/start":
+		result, err = h.startAppUpdate(body)
 	case "/logs/reload":
 		result, err = h.coreLogStatus()
 	case "/logs/clear":
@@ -361,6 +367,15 @@ func run() error {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--app-update-worker" {
+		if len(os.Args) != 5 {
+			log.Fatal("更新任务参数无效")
+		}
+		if err := appupdate.Worker(os.Args[2], os.Args[3], os.Args[4]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}

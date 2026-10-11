@@ -78,7 +78,7 @@ func (g *gateway) handleUnsupportedStandalone(w http.ResponseWriter, r *http.Req
 		writeJSON(w, 200, map[string]any{"currentVersion": version, "sourceConfigured": false, "platform": g.config.platform, "delivery": delivery})
 		return true
 	}
-	if strings.HasPrefix(path, "/api/app/icon") || path == "/api/system/proxy-environment" {
+	if strings.HasPrefix(path, "/api/app/icon") || strings.HasPrefix(path, "/api/app/update") || path == "/api/system/proxy-environment" {
 		writeJSON(w, 409, map[string]string{"error": "此功能仅适用于 fnOS 原生应用"})
 		return true
 	}

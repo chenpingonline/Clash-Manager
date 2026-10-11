@@ -1,0 +1,72 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({ api: vi.fn(), reload: vi.fn() }))
+vi.mock('@/services/api', () => ({ api: mocks.api, errorMessage: (e: unknown) => String(e), jsonRequest: (method: string, body: unknown) => ({ method, body: JSON.stringify(body) }) }))
+
+describe('app installation', () => {
+  beforeEach(() => {
+    vi.resetModules(); mocks.api.mockReset(); mocks.reload.mockReset(); vi.useFakeTimers()
+    vi.stubGlobal('window', { location: { reload: mocks.reload } })
+  })
+  afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals() })
+
+  it('keeps one installation running across service disconnection and reloads after version verification', async () => {
+    const { useAppInstall } = await import('./useAppInstall')
+    const { useAppUpdateNotice } = await import('./useAppUpdateNotice')
+    useAppUpdateNotice().applyResult({ currentVersion: '1.3.14', sourceConfigured: true, updateAvailable: true })
+    const update = useAppInstall()
+    mocks.api.mockResolvedValueOnce({ supported: true, status: { stage: 'idle', progress: 0 } })
+    await update.refresh()
+    mocks.api.mockResolvedValueOnce({ supported: true, status: { stage: 'queued', progress: 0, targetVersion: '1.3.15' } })
+    await update.start('v1.3.15')
+    await update.start('v1.3.15')
+    expect(mocks.api.mock.calls.filter(call => call[0] === '/api/app/update')).toHaveLength(1)
+    mocks.api.mockRejectedValueOnce(new Error('gateway restarting'))
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(update.active.value).toBe(true)
+    expect(update.disconnected.value).toBe(true)
+    mocks.api.mockResolvedValueOnce({ supported: true, status: { stage: 'success', progress: 100, targetVersion: '1.3.15' } }).mockResolvedValueOnce({ ok: true, version: '1.3.15' })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(update.status.value.stage).toBe('success')
+    expect(update.active.value).toBe(false)
+    expect(useAppUpdateNotice().available.value).toBe(false)
+    expect(mocks.reload).toHaveBeenCalledOnce()
+  })
+
+  it('reconciles a lost submission response instead of starting another task', async () => {
+    const { useAppInstall } = await import('./useAppInstall')
+    const update = useAppInstall()
+    mocks.api.mockResolvedValueOnce({ supported: true, status: { stage: 'idle', progress: 0 } })
+    await update.refresh()
+    mocks.api.mockRejectedValueOnce(new Error('lost response')).mockResolvedValueOnce({ supported: true, status: { stage: 'downloading', targetVersion: '1.3.15', progress: 20 } })
+    await update.start('v1.3.15')
+    expect(update.active.value).toBe(true)
+    expect(update.status.value.stage).toBe('downloading')
+    expect(mocks.api.mock.calls.filter(call => call[0] === '/api/app/update')).toHaveLength(1)
+  })
+
+  it('continues reconnecting when final health verification fails once', async () => {
+    const { useAppInstall } = await import('./useAppInstall')
+    const update = useAppInstall()
+    mocks.api.mockResolvedValueOnce({ supported: true, status: { stage: 'restarting', progress: 95 } })
+    await update.refresh()
+    mocks.api.mockResolvedValueOnce({ supported: true, status: { stage: 'success', progress: 100, targetVersion: '1.3.15' } }).mockRejectedValueOnce(new Error('health unavailable'))
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(update.active.value).toBe(true)
+    expect(update.disconnected.value).toBe(true)
+    mocks.api.mockResolvedValueOnce({ supported: true, status: { stage: 'success', progress: 100, targetVersion: '1.3.15' } }).mockResolvedValueOnce({ ok: true, version: '1.3.15' })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(update.active.value).toBe(false)
+  })
+
+  it('waits for the target version instead of treating the old gateway as success', async () => {
+    const { useAppInstall } = await import('./useAppInstall')
+    const update = useAppInstall()
+    mocks.api.mockResolvedValueOnce({ supported: true, status: { stage: 'restarting', progress: 95 } })
+    await update.refresh()
+    mocks.api.mockResolvedValueOnce({ supported: true, status: { stage: 'success', progress: 100, targetVersion: '1.3.15' } }).mockResolvedValueOnce({ ok: true, version: '1.3.14' })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(update.active.value).toBe(true)
+    expect(mocks.reload).not.toHaveBeenCalled()
+  })
+})

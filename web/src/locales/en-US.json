@@ -1567,5 +1567,15 @@
   "内核校验错误：{arg0}": "Core validation error: {arg0}",
   "配置未通过 Mihomo 校验，请展开详情查看原始错误。": "The configuration failed Mihomo validation. Expand the details to see the original error.",
   "请检查最近修改的配置；修正后重新应用。": "Review your recent configuration changes, fix the error, and apply again.",
-  "查看原始错误": "View original error"
+  "查看原始错误": "View original error",
+  "更新等待超时，请在飞牛应用中心检查状态": "Timed out waiting for the update. Check the app status in the fnOS App Center.",
+  "正在等待应用重新连接…": "Waiting for the app to reconnect…",
+  "正在下载更新…": "Downloading the update…",
+  "正在校验更新包…": "Verifying the update package…",
+  "正在安装更新，应用会短暂断开…": "Installing the update. The app will briefly disconnect…",
+  "正在启动新版应用…": "Starting the updated app…",
+  "更新完成": "Update complete",
+  "应用更新进度": "App update progress",
+  "更新期间请勿关闭 NAS，完成后页面会自动重新加载。": "Keep the NAS powered on during the update. The page will reload automatically when it finishes.",
+  "下载 FPK 手动安装": "Download FPK for manual installation"
 }
