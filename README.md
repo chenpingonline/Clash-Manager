@@ -61,7 +61,7 @@ Docker 与 Linux 界面按运行能力显示功能；fnOS 软件图标、FPK 更
 
 ---
 
-## 安装与部署
+## 部署方式
 
 | 部署方式 | 架构 | 使用场景 | 说明 |
 | --- | --- | --- | --- |
@@ -70,32 +70,136 @@ Docker 与 Linux 界面按运行能力显示功能；fnOS 软件图标、FPK 更
 | Linux DEB | amd64 / arm64 | Debian / Ubuntu 等 systemd 环境，使用原生服务 | [DEB 安装](packaging/deb/README.md) |
 | fnOS FPK | x86_64 / ARM64 | 飞牛桌面与宿主集成 | [Clash for fnOS](https://github.com/chenpingonline/Clash-for-fnos) |
 
-### Docker 快速开始
+### Docker 部署
 
-获取本仓库后，在根目录执行：
+镜像 `chenpingonline/clash-manager:latest` 支持 Linux amd64 / arm64，Docker 自动选择架构。以下配置可直接复制使用，无需下载完整源码；也可使用仓库中的 [Host Compose](docker/compose.yaml)、[Bridge Compose](docker/compose.bridge.yaml) 和 [环境变量示例](docker/.env.example)。
 
-```bash
-cp docker/.env.example docker/.env
-# 编辑 docker/.env，设置至少 8 字符的 APP_AUTH_PASSWORD。
-# 按实际端口占用修改 LISTEN_ADDR、APP_CONTROLLER_PORT、APP_MIXED_PORT。
-docker compose --env-file docker/.env -f docker/compose.yaml pull
-docker compose --env-file docker/.env -f docker/compose.yaml up -d
-```
-
-按 `.env.example` 的端口配置，打开 `http://宿主IP:17890`，使用 `admin` 和设置的密码登录。
-
-主镜像为 `chenpingonline/clash-manager`。默认 Compose 使用 `latest` 多架构标签，Docker 自动选择 amd64 / arm64；固定版本时在 `.env` 设置 `CLASH_IMAGE=chenpingonline/clash-manager:<已发布版本号>`。
-
-默认配置使用 **Linux Host 网络**，直接占用宿主端口，无需端口映射。TUN 需要宿主提供 `/dev/net/tun` 和 NET_ADMIN；导入可用配置后，在网页手动开启。普通代理可选择独立的 Bridge Compose。
-
-容器升级保留原数据目录，重新拉取镜像并创建容器：
+#### 1. 准备目录与登录密码
 
 ```bash
-docker compose --env-file docker/.env -f docker/compose.yaml pull
-docker compose --env-file docker/.env -f docker/compose.yaml up -d --force-recreate
+mkdir -p clash-manager
+cd clash-manager
 ```
 
-认证、持久化、端口冲突、Host / Bridge 与停止行为见 [Docker 使用说明](docker/README.md)。
+在此目录创建 `.env`，填入至少 **8 字符**的 `APP_AUTH_PASSWORD` 后保存；按宿主端口占用情况调整端口：
+
+```dotenv
+APP_AUTH_USER=admin
+APP_AUTH_PASSWORD=
+LISTEN_ADDR=:17890
+APP_CONTROLLER_PORT=19097
+APP_MIXED_PORT=17897
+```
+
+需要固定版本时，可在 `.env` 添加 `CLASH_IMAGE=chenpingonline/clash-manager:<已发布版本号>`；默认数据保存到此目录下的 `./data`，也可通过 `CLASH_DATA_DIR` 指定绝对路径。
+
+#### 2. 选择网络模式并保存 Compose 文件
+
+**Host：Linux 宿主代理与 TUN**
+
+将以下内容保存为同一目录下的 `compose.yaml`。Host 模式直接使用宿主端口，无需 `ports` 映射；宿主需要提供 `/dev/net/tun`，配置授予 NET_ADMIN 权限。
+
+```yaml
+# Default Linux/fnOS deployment; enable TUN manually in the Web UI.
+services:
+  clash:
+    image: ${CLASH_IMAGE:-chenpingonline/clash-manager:latest}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 40s
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      # Host 模式直接使用宿主端口，无需 ports 映射。
+      LISTEN_ADDR: "${LISTEN_ADDR:-:8080}"
+      # 非空端口变量在内核启动前生效，已有数据目录也会应用。
+      APP_CONTROLLER_PORT: "${APP_CONTROLLER_PORT:-}"
+      APP_MIXED_PORT: "${APP_MIXED_PORT:-}"
+      APP_AUTH_USER: ${APP_AUTH_USER:-admin}
+      APP_AUTH_PASSWORD: ${APP_AUTH_PASSWORD:?Set a password of at least 8 characters in .env}
+      # 与上方 network_mode 保持一致。
+      APP_NETWORK_SCOPE: host
+    volumes:
+      - "${CLASH_DATA_DIR:-./data}:/data"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+**Bridge：应用或设备主动使用 HTTP / SOCKS 代理**
+
+将以下内容保存为同一目录下的 `compose.bridge.yaml`。Bridge 通过端口映射提供网页和代理入口，不提供 TUN 设备或权限。
+
+```yaml
+# Standalone Bridge deployment for explicit HTTP/SOCKS proxy use.
+services:
+  clash:
+    image: ${CLASH_IMAGE:-chenpingonline/clash-manager:latest}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 40s
+    environment:
+      # 非空端口变量在内核启动前生效，已有数据目录也会应用。
+      APP_CONTROLLER_PORT: "${APP_CONTROLLER_PORT:-}"
+      APP_MIXED_PORT: "${APP_MIXED_PORT:-}"
+      APP_AUTH_USER: ${APP_AUTH_USER:-admin}
+      APP_AUTH_PASSWORD: ${APP_AUTH_PASSWORD:?Set a password of at least 8 characters in .env}
+      APP_NETWORK_SCOPE: container
+    ports:
+      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_PORT:-17890}:8080"
+      - "${PROXY_BIND_IP:-127.0.0.1}:${APP_MIXED_PORT:-7890}:${APP_MIXED_PORT:-7890}/tcp"
+      - "${PROXY_BIND_IP:-127.0.0.1}:${APP_MIXED_PORT:-7890}:${APP_MIXED_PORT:-7890}/udp"
+    volumes:
+      - "${CLASH_DATA_DIR:-./data}:/data"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+Bridge 默认仅允许本机访问。需要其他设备访问时，在 `.env` 添加 `WEB_BIND_IP=<宿主局域网IP>` 和 `PROXY_BIND_IP=<宿主局域网IP>`，并在网页网络设置中开启“允许局域网连接”。Bridge 网页的宿主端口由 `WEB_PORT` 控制（默认 17890），容器内为 8080；`LISTEN_ADDR` 仅用于 Host 模式。
+
+#### 3. 启动与访问
+
+选择一种模式启动，两个 Compose 文件独立使用：
+
+Host：
+
+```bash
+docker compose -f compose.yaml pull
+docker compose -f compose.yaml up -d
+```
+
+或 Bridge：
+
+```bash
+docker compose -f compose.bridge.yaml pull
+docker compose -f compose.bridge.yaml up -d
+```
+
+按上述 `.env`，Host 网页地址为 `http://宿主IP:17890`；Bridge 默认地址为 `http://127.0.0.1:17890`。使用 `admin` 与设置的密码登录，导入订阅或配置后使用代理；HTTP / SOCKS Mixed 端口为 **17897**。Host 首次安装的代理端口仅允许本机访问，其他设备使用时也需开启“允许局域网连接”。Controller 仅监听本机回环地址。
+
+Host 部署确认代理可用后，可在网页手动开启 TUN；首次安装默认关闭。Host TUN 适用于 Linux Docker Engine，macOS / Windows Docker Desktop 不能据此接管物理宿主流量。其他局域网设备需配置网关与转发才会经过宿主 TUN。
+
+#### 4. 升级与停止
+
+保留 `.env` 和 `data`，拉取镜像并重新创建容器。固定版本部署先修改 `CLASH_IMAGE`：
+
+```bash
+docker compose -f compose.yaml pull
+docker compose -f compose.yaml up -d --force-recreate
+
+# 停止并移除容器，保留绑定目录中的数据
+docker compose -f compose.yaml down
+```
+
+Bridge 部署将上述命令中的 `compose.yaml` 替换为 `compose.bridge.yaml`。认证、端口冲突、数据迁移、TUN 范围与停止行为见 [Docker 使用说明](docker/README.md)。
 
 ### Linux DEB
 
@@ -110,6 +214,12 @@ sudo cat /etc/clash-manager/password
 默认访问 `http://127.0.0.1:8080`，用户名 `admin`，首次安装生成随机密码。远程访问可使用 SSH 隧道。配置文件位于 `/etc/clash-manager/clash-manager.conf`，数据位于 `/var/lib/clash-manager`；升级保留数据、密码和用户修改的配置。
 
 支持环境、服务配置、升级、卸载与构建见 [DEB 使用说明](packaging/deb/README.md)。
+
+### fnOS FPK
+
+需要飞牛桌面入口和原生宿主集成时，使用 [Clash for fnOS](https://github.com/chenpingonline/Clash-for-fnos) 的 FPK。从该项目的 [Releases](https://github.com/chenpingonline/Clash-for-fnos/releases) 下载对应架构或通用 `all` 安装包，在 fnOS 应用中心手动安装，然后通过桌面图标打开管理界面。
+
+FPK 的安装、升级与宿主权限说明见 [fnOS 项目 README](https://github.com/chenpingonline/Clash-for-fnos#readme)。
 
 ---
 

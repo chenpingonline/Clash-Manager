@@ -61,7 +61,7 @@ See the [translation guide](docs/i18n.md) for terminology and maintenance.
 
 ---
 
-## Installation and deployment
+## Deployment options
 
 | Deployment | Architecture | Use case | Guide |
 | --- | --- | --- | --- |
@@ -70,32 +70,136 @@ See the [translation guide](docs/i18n.md) for terminology and maintenance.
 | Linux DEB | amd64 / arm64 | Native services on systemd-based Debian / Ubuntu environments | [DEB](packaging/deb/README.en.md) |
 | fnOS FPK | x86_64 / ARM64 | fnOS desktop and host integration | [Clash for fnOS](https://github.com/chenpingonline/Clash-for-fnos) |
 
-### Docker quick start
+### Docker deployment
 
-After obtaining this repository, run from its root:
+The `chenpingonline/clash-manager:latest` image supports Linux amd64 / arm64; Docker selects the architecture automatically. Copy the configurations below without downloading the full source, or use the repository's [Host Compose](docker/compose.yaml), [Bridge Compose](docker/compose.bridge.yaml) and [environment example](docker/.env.example).
 
-```bash
-cp docker/.env.example docker/.env
-# Set APP_AUTH_PASSWORD to at least 8 characters in docker/.env.
-# Adjust LISTEN_ADDR, APP_CONTROLLER_PORT and APP_MIXED_PORT for occupied ports.
-docker compose --env-file docker/.env -f docker/compose.yaml pull
-docker compose --env-file docker/.env -f docker/compose.yaml up -d
-```
-
-With the example port settings, open `http://HOST-IP:17890` and sign in as `admin` with your configured password.
-
-The primary image is `chenpingonline/clash-manager`. Default Compose uses the multi-architecture `latest` tag; Docker selects amd64 / arm64 automatically. To pin a published release, set `CLASH_IMAGE=chenpingonline/clash-manager:<published-version>` in `.env`.
-
-Default deployment uses **Linux Host networking**, directly binding host ports without port mappings. TUN requires host `/dev/net/tun` and NET_ADMIN. Import a valid configuration and enable TUN manually in the UI. Choose the separate Bridge Compose for explicit proxy use.
-
-Keep the existing data directory when upgrading, then pull and recreate:
+#### 1. Prepare a directory and login password
 
 ```bash
-docker compose --env-file docker/.env -f docker/compose.yaml pull
-docker compose --env-file docker/.env -f docker/compose.yaml up -d --force-recreate
+mkdir -p clash-manager
+cd clash-manager
 ```
 
-See the [Docker guide](docker/README.en.md) for authentication, persistence, port conflicts, Host / Bridge and shutdown behavior.
+Create `.env` in this directory, fill in `APP_AUTH_PASSWORD` with at least **8 characters**, and save it. Adjust ports to avoid existing host services:
+
+```dotenv
+APP_AUTH_USER=admin
+APP_AUTH_PASSWORD=
+LISTEN_ADDR=:17890
+APP_CONTROLLER_PORT=19097
+APP_MIXED_PORT=17897
+```
+
+To pin a release, add `CLASH_IMAGE=chenpingonline/clash-manager:<published-version>` to `.env`. Data defaults to `./data` in this directory; set `CLASH_DATA_DIR` to use an absolute path instead.
+
+#### 2. Choose a network mode and save the Compose file
+
+**Host: Linux host proxy and TUN**
+
+Save the following as `compose.yaml` in the same directory. Host mode binds host ports directly without `ports` mappings. The host must provide `/dev/net/tun`; the configuration grants NET_ADMIN.
+
+```yaml
+# Default Linux/fnOS deployment; enable TUN manually in the Web UI.
+services:
+  clash:
+    image: ${CLASH_IMAGE:-chenpingonline/clash-manager:latest}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 40s
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      # Host mode binds host ports directly, without ports mappings.
+      LISTEN_ADDR: "${LISTEN_ADDR:-:8080}"
+      # Non-empty port overrides apply before Core startup, including existing data.
+      APP_CONTROLLER_PORT: "${APP_CONTROLLER_PORT:-}"
+      APP_MIXED_PORT: "${APP_MIXED_PORT:-}"
+      APP_AUTH_USER: ${APP_AUTH_USER:-admin}
+      APP_AUTH_PASSWORD: ${APP_AUTH_PASSWORD:?Set a password of at least 8 characters in .env}
+      # Keep this consistent with network_mode above.
+      APP_NETWORK_SCOPE: host
+    volumes:
+      - "${CLASH_DATA_DIR:-./data}:/data"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+**Bridge: explicit HTTP / SOCKS proxy use by applications or devices**
+
+Save the following as `compose.bridge.yaml` in the same directory. Bridge publishes Web and proxy ports without providing a TUN device or permissions.
+
+```yaml
+# Standalone Bridge deployment for explicit HTTP/SOCKS proxy use.
+services:
+  clash:
+    image: ${CLASH_IMAGE:-chenpingonline/clash-manager:latest}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 40s
+    environment:
+      # Non-empty port overrides apply before Core startup, including existing data.
+      APP_CONTROLLER_PORT: "${APP_CONTROLLER_PORT:-}"
+      APP_MIXED_PORT: "${APP_MIXED_PORT:-}"
+      APP_AUTH_USER: ${APP_AUTH_USER:-admin}
+      APP_AUTH_PASSWORD: ${APP_AUTH_PASSWORD:?Set a password of at least 8 characters in .env}
+      APP_NETWORK_SCOPE: container
+    ports:
+      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_PORT:-17890}:8080"
+      - "${PROXY_BIND_IP:-127.0.0.1}:${APP_MIXED_PORT:-7890}:${APP_MIXED_PORT:-7890}/tcp"
+      - "${PROXY_BIND_IP:-127.0.0.1}:${APP_MIXED_PORT:-7890}:${APP_MIXED_PORT:-7890}/udp"
+    volumes:
+      - "${CLASH_DATA_DIR:-./data}:/data"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+Bridge allows local access by default. For other devices, add `WEB_BIND_IP=<host-LAN-IP>` and `PROXY_BIND_IP=<host-LAN-IP>` to `.env`, then enable **Allow LAN** in the Web network settings. Bridge's Web host port uses `WEB_PORT` (default 17890), with port 8080 inside the container. `LISTEN_ADDR` applies only to Host mode.
+
+#### 3. Start and access
+
+Choose one mode; use the two Compose files independently:
+
+Host:
+
+```bash
+docker compose -f compose.yaml pull
+docker compose -f compose.yaml up -d
+```
+
+Or Bridge:
+
+```bash
+docker compose -f compose.bridge.yaml pull
+docker compose -f compose.bridge.yaml up -d
+```
+
+With the `.env` above, Host Web is at `http://HOST-IP:17890`; Bridge defaults to `http://127.0.0.1:17890`. Sign in as `admin` with your configured password and import a profile or configuration. The HTTP / SOCKS Mixed port is **17897**. Initial Host proxy listeners accept only local connections; enable **Allow LAN** for other devices. Controller listens only on loopback.
+
+For Host deployment, confirm proxy connectivity before enabling TUN manually in the Web UI; TUN is disabled on first installation. Host TUN is intended for Linux Docker Engine. This configuration does not route the physical macOS / Windows host through Docker Desktop. Other LAN devices require gateway and forwarding configuration to use the host TUN.
+
+#### 4. Upgrade and stop
+
+Keep `.env` and `data`, then pull and recreate. For a pinned deployment, update `CLASH_IMAGE` first:
+
+```bash
+docker compose -f compose.yaml pull
+docker compose -f compose.yaml up -d --force-recreate
+
+# Stop and remove containers, retaining data in the bind-mounted directory
+docker compose -f compose.yaml down
+```
+
+For Bridge, replace `compose.yaml` with `compose.bridge.yaml` in these commands. See the [Docker guide](docker/README.en.md) for authentication, port conflicts, data migration, TUN scope and shutdown behavior.
 
 ### Linux DEB
 
@@ -110,6 +214,12 @@ sudo cat /etc/clash-manager/password
 The default URL is `http://127.0.0.1:8080`, with user `admin` and a randomly generated first-install password. Use an SSH tunnel for remote access. Configuration lives in `/etc/clash-manager/clash-manager.conf`; data lives in `/var/lib/clash-manager`. Upgrades preserve data, credentials and modified configuration.
 
 See the [DEB guide](packaging/deb/README.en.md) for target environments, services, upgrades, removal and builds.
+
+### fnOS FPK
+
+For fnOS desktop integration and native host support, use the [Clash for fnOS](https://github.com/chenpingonline/Clash-for-fnos) FPK. Download the matching architecture or universal `all` package from its [Releases](https://github.com/chenpingonline/Clash-for-fnos/releases), install it manually through fnOS App Center, and open the manager from its desktop icon.
+
+See the [fnOS project README](https://github.com/chenpingonline/Clash-for-fnos#readme) for installation, upgrades and host permissions.
 
 ---
 
