@@ -1191,3 +1191,20 @@ html[lang="en-US"] .dashboard-field-prefix{white-space:nowrap}
 .sequence-member-heading{display:flex;align-items:center;gap:6px;min-width:0;height:20px}
 .sequence-member-heading>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:600px){.sequence-group-fields>.sequence-member-field{grid-column:1 / -1}}
+
+/* Log syntax colors are scoped to the viewer and readable in both themes. */
+.logs{--log-protocol:#c4a7ff;--log-address:#67d5e8;--log-rule:#74d6a2;--log-policy:#8fb4ff;--log-error:#ff8796;--log-warn:#ffc66d}
+html[data-theme="light"] .logs{--log-protocol:#7c3aed;--log-address:#03698a;--log-rule:#187044;--log-policy:#245bc1;--log-error:#c42b40;--log-warn:#946000}
+.logs .log-token-protocol{color:var(--log-protocol);font-weight:600}
+.logs .log-token-address{color:var(--log-address)}
+.logs .log-token-rule{color:var(--log-rule)}
+.logs .log-token-policy{color:var(--log-policy)}
+.logs .log-token-error{color:var(--log-error);font-weight:600}
+.logs .log-token-warn{color:var(--log-warn);font-weight:600}
+.logs .log-token-level{color:var(--log-policy);font-weight:600}
+.logs .log-line>span:nth-child(2){font-weight:600}
+.logs .log-info>span:nth-child(2){color:var(--log-policy)}
+.logs mark{background:#71551b;color:#fff1bb;border-radius:2px}
+html[data-theme="light"] .logs mark{background:#ffdf80;color:#493300}
+html[data-theme="light"] .logs .log-warn{color:#946000}
+html[data-theme="light"] .logs .log-error{color:var(--log-error)}

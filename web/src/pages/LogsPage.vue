@@ -2,6 +2,7 @@
 import { t } from '@/services/i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import HighlightText from '@/components/HighlightText.vue'
+import LogMessage from '@/components/LogMessage.vue'
 import SequenceFormDialog from '@/components/SequenceFormDialog.vue'
 import { api, APP_PREFIX, errorMessage, isAbortError } from '@/services/api'
 import { containsLog, displayLogTime, logDateBoundary, normalizeLog, plainCoreOutput, type CoreLogLine, type NormalizedLog } from '@/services/logs'
@@ -141,7 +142,7 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
     <label class="log-wrap-control"><span>{{ t('自动换行') }}</span><span class="switch quick-switch"><input v-model="wrapLines" type="checkbox"><span /></span></label>
   </div>
   <p v-if="isCore && currentStats?.error" class="error log-storage-error" role="alert">{{ currentStats.error }}</p>
-  <div ref="box" class="logs logs-full persistent-horizontal-scrollbar" :class="{ 'wrap-lines': wrapLines, 'core-output': isCore }"><template v-if="isCore"><div v-for="line in visibleCore" :key="line.key" class="core-log-line"><HighlightText :text="line.message" :query="query" /><span v-if="line.truncated" class="muted"> {{ t('（此行过长，已截断）') }}</span></div></template><template v-else><div v-for="(item, index) in visible" :key="`${index}-${item.time}`" class="log-line" :class="`log-${item.level}`"><span :title="item.time"><HighlightText :text="item.time" :query="query" /></span><span><HighlightText :text="item.level" :query="query" /></span><span><HighlightText :text="item.message" :query="query" /></span></div></template><div v-if="!(isCore ? visibleCore.length : visible.length) && !loading" class="empty">{{ t(error ? '日志读取失败，请重新读取' : queryDirty ? '筛选已更改，请点击查询' : query ? '没有匹配的日志' : isCore ? '暂无托管 Core 输出日志' : '暂无日志') }}</div></div>
+  <div ref="box" class="logs logs-full persistent-horizontal-scrollbar" :class="{ 'wrap-lines': wrapLines, 'core-output': isCore }"><template v-if="isCore"><div v-for="line in visibleCore" :key="line.key" class="core-log-line"><LogMessage :text="line.message" :query="query" /><span v-if="line.truncated" class="muted"> {{ t('（此行过长，已截断）') }}</span></div></template><template v-else><div v-for="(item, index) in visible" :key="`${index}-${item.time}`" class="log-line" :class="`log-${item.level}`"><span :title="item.time"><HighlightText :text="item.time" :query="query" /></span><span><HighlightText :text="item.level" :query="query" /></span><span><LogMessage :text="item.message" :query="query" /></span></div></template><div v-if="!(isCore ? visibleCore.length : visible.length) && !loading" class="empty">{{ t(error ? '日志读取失败，请重新读取' : queryDirty ? '筛选已更改，请点击查询' : query ? '没有匹配的日志' : isCore ? '暂无托管 Core 输出日志' : '暂无日志') }}</div></div>
   <SequenceFormDialog :open="settingsOpen" :title="t('日志设置')" compact @close="closeSettings">
     <p class="muted log-policy-help">{{ t('超过保留天数或容量上限时，自动清理最旧日志。保留天数为 0 时不限时间，仍受容量限制。') }}</p>
     <p v-if="settingsError" class="error" role="alert">{{ t(settingsError) }}</p><p v-if="settingsBusy && !draft" class="muted">{{ t('正在读取…') }}</p>
