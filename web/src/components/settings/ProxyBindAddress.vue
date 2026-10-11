@@ -73,7 +73,7 @@ function modalKeydown(event: KeyboardEvent) {
       </div>
       <p class="field-note">{{ t('控制代理端口监听的地址，不影响 Controller API。') }}</p>
       <div class="bind-fields">
-        <label class="bind-field"><span>{{ t('监听地址') }}</span><select ref="modeInput" v-model="mode" :disabled="saving || !allowLan" @change="error = ''"><option value="all">{{ t('所有网卡') }}</option><option value="ip">{{ t('指定 IP') }}</option></select></label>
+        <label class="bind-field"><span>{{ t('监听地址') }}</span><select ref="modeInput" v-model="mode" :disabled="saving || !allowLan" @change="error = ''"><option value="all">{{ t('所有网卡') }}</option><option value="ip">{{ t('本机网卡 IP') }}</option></select></label>
         <label v-if="mode === 'ip'" class="bind-field"><span>{{ t('指定监听 IP') }}</span><input v-model="customAddress" :disabled="saving || !allowLan" :placeholder="t('IPv4 或 IPv6 地址')" spellcheck="false" @input="error = ''"></label>
       </div>
       <p v-if="error" class="error-text" role="alert">{{ t(error) }}</p>

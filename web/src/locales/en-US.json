@@ -1581,7 +1581,7 @@
   "代理监听地址": "Proxy listening address",
   "控制代理端口监听的地址，不影响 Controller API。": "Controls the address used by proxy ports, without changing the Controller API.",
   "所有网卡": "All interfaces",
-  "指定 IP": "Specific IP",
+  "本机网卡 IP": "Local NIC IP",
   "指定监听 IP": "Specific listening IP",
   "IPv4 或 IPv6 地址": "IPv4 or IPv6 address",
   "请输入监听 IP 地址": "Enter a listening IP address",
