@@ -367,6 +367,12 @@ func run() error {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--build-info" {
+		if err := appupdate.PrintBuildInfo(os.Stdout, version); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "--app-update-worker" {
 		if len(os.Args) != 5 {
 			log.Fatal("更新任务参数无效")

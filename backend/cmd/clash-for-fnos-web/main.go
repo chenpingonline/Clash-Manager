@@ -1503,6 +1503,12 @@ func run() error {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--build-info" {
+		if err := appupdate.PrintBuildInfo(os.Stdout, version); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if err := run(); err != nil && !errors.Is(err, io.EOF) {
 		log.Fatal(err)
 	}
