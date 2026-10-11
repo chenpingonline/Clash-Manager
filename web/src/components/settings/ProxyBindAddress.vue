@@ -72,8 +72,10 @@ function modalKeydown(event: KeyboardEvent) {
         <div class="settings-modal-header-actions"><button class="ghost" type="button" :disabled="saving" @click="close">{{ t('取消') }}</button><button type="submit" :disabled="saving || !allowLan">{{ t(saving ? '保存中…' : '保存') }}</button></div>
       </div>
       <p class="field-note">{{ t('控制代理端口监听的地址，不影响 Controller API。') }}</p>
-      <label class="bind-field"><span>{{ t('监听地址') }}</span><select ref="modeInput" v-model="mode" :disabled="saving || !allowLan" @change="error = ''"><option value="all">{{ t('所有网卡') }}</option><option value="ip">{{ t('指定 IP') }}</option></select></label>
-      <label v-if="mode === 'ip'" class="bind-field"><span>{{ t('指定监听 IP') }}</span><input v-model="customAddress" :disabled="saving || !allowLan" :placeholder="t('IPv4 或 IPv6 地址')" spellcheck="false" @input="error = ''"></label>
+      <div class="bind-fields">
+        <label class="bind-field"><span>{{ t('监听地址') }}</span><select ref="modeInput" v-model="mode" :disabled="saving || !allowLan" @change="error = ''"><option value="all">{{ t('所有网卡') }}</option><option value="ip">{{ t('指定 IP') }}</option></select></label>
+        <label v-if="mode === 'ip'" class="bind-field"><span>{{ t('指定监听 IP') }}</span><input v-model="customAddress" :disabled="saving || !allowLan" :placeholder="t('IPv4 或 IPv6 地址')" spellcheck="false" @input="error = ''"></label>
+      </div>
       <p v-if="error" class="error-text" role="alert">{{ t(error) }}</p>
     </form>
   </BaseModal>
@@ -87,10 +89,13 @@ function modalKeydown(event: KeyboardEvent) {
 .lan-description { font-size: 10px; line-height: 1.45; color: var(--muted); }
 .bind-trigger.ghost { display: inline-flex; align-items: center; justify-content: center; padding: 3px 6px; min-height: 24px; font-size: 10px; white-space: nowrap; border-radius: 6px; color: var(--accent); }
 .bind-trigger.ghost:disabled { color: var(--muted); }
-.bind-field { display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: center; gap: 10px; margin-top: 14px; }
+.bind-fields { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-top: 12px; }
+.bind-field { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
 .bind-field span { font-size: 12px; white-space: nowrap; }
-.bind-field select, .bind-field input { width: 100%; min-width: 0; }
+.bind-field select, .bind-field input { height: 28px; min-width: 0; padding: 4px 8px; border-radius: 7px; font-size: 12px; }
+.bind-field select { width: 110px; flex: none; }
+.bind-field input { width: 180px; }
 .field-note { margin: 14px 0; font-size: 11px; line-height: 1.6; color: var(--muted); }
 .error-text { margin-bottom: 0; }
-:global(.proxy-bind-modal) { width: min(460px, 100%); }
+:global(.proxy-bind-modal) { width: min(520px, 100%); }
 </style>
