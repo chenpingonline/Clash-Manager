@@ -1330,6 +1330,10 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 	if err != nil {
 		return nil, err
 	}
+	patch, err := normalizeUserPatch(input)
+	if err != nil {
+		return nil, err
+	}
 	for _, key := range []string{"controller", "mixed", "socks", "http", "redir", "tproxy"} {
 		value, exists := input[key]
 		if !exists {
@@ -1416,6 +1420,11 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 		}
 		raw = replaceTopLevel(raw, key, renderYAML(key, value))
 	}
+	content, err := configyaml.EnsureLANBindAddress([]byte(raw))
+	if err != nil {
+		return nil, err
+	}
+	raw = string(content)
 	if err := validateNetworkPorts(raw, active["content"].(string), active["offline"] == true); err != nil {
 		return nil, err
 	}
@@ -1436,11 +1445,6 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 		}
 		h.mu.Unlock()
 		prepared["saveOnlyReason"] = "tun-disabled"
-	}
-	patch, patchErr := normalizeUserPatch(input)
-	if patchErr != nil {
-		_, _ = h.rollbackConfig(ctx, prepared["txId"].(string))
-		return nil, patchErr
 	}
 	h.attachUserSettings(prepared, patch)
 	prepared["previousContent"] = active["content"]

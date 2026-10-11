@@ -55,6 +55,7 @@ func (h *helper) attachUserSettings(prepared map[string]any, patch map[string]an
 		tx.UserSettings = patch
 	}
 }
+
 func normalizeUserPatch(input map[string]any) (map[string]any, error) {
 	patch := map[string]any{}
 	ports := map[string]string{"controller": "external-controller", "mixed": "mixed-port", "socks": "socks-port", "http": "port", "redir": "redir-port", "tproxy": "tproxy-port"}
@@ -71,7 +72,11 @@ func normalizeUserPatch(input map[string]any) (map[string]any, error) {
 				patch[target] = 0
 			}
 		} else if key == "allowLan" {
-			patch["allow-lan"] = value
+			enabled, ok := value.(bool)
+			if !ok {
+				return nil, fail(400, "局域网连接设置必须为布尔值")
+			}
+			patch["allow-lan"] = enabled
 		} else if key == "core" {
 			if core, ok := value.(map[string]any); ok {
 				for k, v := range core {
@@ -122,6 +127,10 @@ func (h *helper) composeUserSettings(input map[string]any) (map[string]any, erro
 	content, err := configyaml.MergeOverrides([]byte(stringField(input, "content")), settings)
 	if err != nil {
 		return nil, fmt.Errorf("合并用户设置失败: %w", err)
+	}
+	content, err = configyaml.EnsureLANBindAddress(content)
+	if err != nil {
+		return nil, fmt.Errorf("处理局域网绑定地址失败: %w", err)
 	}
 	return map[string]any{"content": string(content)}, nil
 }
