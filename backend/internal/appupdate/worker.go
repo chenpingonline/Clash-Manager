@@ -21,13 +21,15 @@ const StateDir = "/var/tmp/clash-for-fnos-update"
 const UnitName = "clash-for-fnos-update"
 
 type Status struct {
-	Stage         string `json:"stage"`
-	TargetVersion string `json:"targetVersion,omitempty"`
-	Progress      int    `json:"progress"`
-	Downloaded    int64  `json:"downloaded,omitempty"`
-	Total         int64  `json:"total,omitempty"`
-	Error         string `json:"error,omitempty"`
-	UpdatedAt     int64  `json:"updatedAt"`
+	Stage           string `json:"stage"`
+	TargetVersion   string `json:"targetVersion,omitempty"`
+	Progress        int    `json:"progress"`
+	Downloaded      int64  `json:"downloaded,omitempty"`
+	Total           int64  `json:"total,omitempty"`
+	Error           string `json:"error,omitempty"`
+	UpdatedAt       int64  `json:"updatedAt"`
+	AppCenterTaskID string `json:"appCenterTaskId,omitempty"`
+	OutcomeUnknown  bool   `json:"outcomeUnknown,omitempty"`
 }
 
 func (s Status) Active() bool {
@@ -246,14 +248,25 @@ func Worker(target, current, varDir string) (resultErr error) {
 		if resultErr != nil {
 			status.Stage = "error"
 			status.Error = resultErr.Error()
+			status.OutcomeUnknown = errors.Is(resultErr, errUpgradeUnknown)
 			_ = WriteStatus(StateDir, status)
 		}
 	}()
 	if !Newer(target, current) {
 		return errors.New("目标版本必须高于当前版本")
 	}
+	// Logs belong to this task. Installation and recovery must not overwrite
+	// each other's evidence or leave a previous task's output behind.
+	for _, name := range []string{"install.log", "start.log", "health.log"} {
+		if err := os.Remove(filepath.Join(StateDir, name)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 	defer cancel()
+	if err := CheckUpgradeAPI(ctx); err != nil {
+		return err
+	}
 	client := Client()
 	defer client.CloseIdleConnections()
 	a, err := resolve(ctx, client, target, runtime.GOARCH)
@@ -280,16 +293,31 @@ func Worker(target, current, varDir string) (resultErr error) {
 	if err != nil {
 		return err
 	}
-	return installVerified(ctx, filename, a.Digest, target, runtime.GOARCH,
+	var healthDetail string
+	err = installVerified(ctx, filename, a.Digest, target, runtime.GOARCH,
 		func(stage string, progress int) error {
 			status.Stage = stage
 			status.Progress = progress
 			status.Error = ""
 			return WriteStatus(StateDir, status)
 		},
-		func() error { return runCLI(ctx, "install-fpk", filename) },
+		func() error {
+			return upgradeAppCenter(ctx, filename, target, func(id string) error {
+				status.AppCenterTaskID = id
+				return WriteStatus(StateDir, status)
+			})
+		},
 		func() error { return runCLI(ctx, "start", AppName) },
-		func(timeout time.Duration) bool { return waitHealthy(ctx, varDir, target, timeout) })
+		func(timeout time.Duration) bool {
+			var healthy bool
+			healthy, healthDetail = waitHealthy(ctx, varDir, target, timeout)
+			_ = os.WriteFile(filepath.Join(StateDir, "health.log"), []byte(healthDetail+"\n"), 0o600)
+			return healthy
+		})
+	if err != nil && status.Stage == "restarting" && healthDetail != "" {
+		return fmt.Errorf("%w（%s）", err, healthDetail)
+	}
+	return err
 }
 
 // installVerified centralizes the security boundary: no App Center command runs
@@ -339,12 +367,28 @@ func (w *limitedOutput) Write(p []byte) (int, error) {
 }
 
 func runCLI(ctx context.Context, args ...string) error {
+	return runCLIIn(ctx, StateDir, args...)
+}
+
+func runCLIIn(ctx context.Context, dir string, args ...string) error {
+	if len(args) == 0 || (args[0] != "install-fpk" && args[0] != "start") {
+		return errors.New("不支持的飞牛应用操作")
+	}
 	cmd := exec.CommandContext(ctx, "appcenter-cli", args...)
 	var output limitedOutput
 	cmd.Stdout = &output
 	cmd.Stderr = &output
 	err := cmd.Run()
-	_ = os.WriteFile(filepath.Join(StateDir, "install.log"), output.body, 0o600)
+	logName := "install.log"
+	if args[0] == "start" {
+		logName = "start.log"
+	}
+	logErr := os.WriteFile(filepath.Join(dir, logName), output.body, 0o600)
+	// Some command-line tools report a business error on stdout while exiting
+	// successfully. An explicit error line must never advance to restart.
+	if err == nil && cliReportedError(output.body) {
+		err = errors.New("应用中心返回错误")
+	}
 	if err != nil {
 		message := strings.TrimSpace(string(output.body))
 		if len(message) > 2048 {
@@ -352,35 +396,70 @@ func runCLI(ctx context.Context, args ...string) error {
 		}
 		return fmt.Errorf("飞牛应用操作失败: %v %s", err, message)
 	}
-	return nil
+	return logErr
 }
 
-func waitHealthy(ctx context.Context, varDir, target string, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
+func cliReportedError(output []byte) bool {
+	for _, line := range strings.Split(string(output), "\n") {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "[error]") {
+			return true
+		}
+	}
+	return false
+}
+
+func waitHealthy(ctx context.Context, varDir, target string, timeout time.Duration) (bool, string) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{Timeout: 2 * time.Second}).DialContext(ctx, "unix", filepath.Join(varDir, "clash-for-fnos.sock"))
 	}}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 3 * time.Second}
-	for time.Now().Before(deadline) && ctx.Err() == nil {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost/api/health", nil)
-		response, err := client.Do(req)
+	detail := "健康检查未完成"
+	for ctx.Err() == nil {
+		version, err := probeHealth(ctx, client, target)
 		if err == nil {
-			var health struct {
-				OK      bool   `json:"ok"`
-				Version string `json:"version"`
-			}
-			err = json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&health)
-			response.Body.Close()
-			if err == nil && response.StatusCode == 200 && health.OK && strings.TrimPrefix(health.Version, "v") == strings.TrimPrefix(target, "v") {
-				return true
-			}
+			return true, "运行版本 " + version
+		}
+		if ctx.Err() == nil {
+			detail = err.Error()
 		}
 		select {
 		case <-ctx.Done():
-			return false
+			return false, detail
 		case <-time.After(time.Second):
 		}
 	}
-	return false
+	return false, detail
+}
+
+func probeHealth(ctx context.Context, client *http.Client, target string) (string, error) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://localhost/api/health", nil)
+	response, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("无法连接应用健康接口: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("应用健康接口返回 HTTP %d", response.StatusCode)
+	}
+	var health struct {
+		OK      bool   `json:"ok"`
+		Version string `json:"version"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&health); err != nil {
+		return "", errors.New("应用健康接口返回无效数据")
+	}
+	if !health.OK {
+		return "", errors.New("应用健康接口尚未就绪")
+	}
+	v, err := Version(health.Version)
+	if err != nil {
+		return "", errors.New("应用健康接口没有有效版本")
+	}
+	if v != strings.TrimPrefix(target, "v") {
+		return v, fmt.Errorf("当前运行版本 %s，目标版本 %s", v, strings.TrimPrefix(target, "v"))
+	}
+	return v, nil
 }

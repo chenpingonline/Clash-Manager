@@ -25,6 +25,10 @@ func appUpdateAvailability() (bool, string) {
 			return false, "系统缺少更新工具: " + name
 		}
 	}
+	info, err := os.Stat(appupdate.AppCenterSocket)
+	if err != nil || info.Mode()&os.ModeSocket == 0 {
+		return false, "系统缺少飞牛应用中心的本机升级接口"
+	}
 	return true, ""
 }
 
@@ -42,6 +46,10 @@ func (h *helper) appUpdateStatus() (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
+		if status.OutcomeUnknown && strings.TrimPrefix(status.TargetVersion, "v") == strings.TrimPrefix(version, "v") {
+			status.Stage, status.Progress, status.Error, status.OutcomeUnknown = "success", 100, "", false
+			_ = appupdate.WriteStatus(appupdate.StateDir, status)
+		}
 		// A power loss or systemd timeout leaves the last persisted stage behind.
 		// Check the unit after a grace period so a new helper does not mistake
 		// the expected stop/restart gap for an interrupted task.
@@ -51,8 +59,14 @@ func (h *helper) appUpdateStatus() (map[string]any, error) {
 			contextErr := ctx.Err()
 			cancel()
 			if err != nil && contextErr == nil {
+				// A stopped worker does not imply that the daemon stopped its
+				// submitted upgrade. Keep uncertain mutations from being retried.
+				status.OutcomeUnknown = status.AppCenterTaskID != "" || status.Stage == "installing"
 				status.Stage = "error"
-				status.Error = "更新任务已中断，请重试或在飞牛应用中心检查状态"
+				status.Error = "更新任务已中断，请在飞牛应用中心检查状态"
+				if status.OutcomeUnknown {
+					status.Error = "更新任务已中断，应用中心升级结果尚未确认，请先检查任务，勿重复提交"
+				}
 				_ = appupdate.WriteStatus(appupdate.StateDir, status)
 			}
 		}
@@ -86,6 +100,9 @@ func (h *helper) startAppUpdate(body map[string]any) (any, error) {
 	}
 	if previous.Active() {
 		return nil, errors.New("已有更新任务正在运行")
+	}
+	if previous.OutcomeUnknown {
+		return nil, errors.New("上次应用中心升级结果尚未确认，请先在飞牛应用中心检查任务，勿重复提交")
 	}
 	// Check systemd as well: the successful worker can still be exiting while
 	// its persisted result is already readable.
