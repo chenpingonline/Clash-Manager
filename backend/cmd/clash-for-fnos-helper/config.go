@@ -982,6 +982,7 @@ func replaceTopLevel(raw, key, rendered string) string {
 	lines := strings.Split(raw, "\n")
 	out := []string{}
 	skip := false
+	replaced := false
 	for _, line := range lines {
 		trim := strings.TrimSpace(line)
 		indent := len(line) - len(strings.TrimLeft(line, " "))
@@ -989,6 +990,10 @@ func replaceTopLevel(raw, key, rendered string) string {
 			skip = false
 		}
 		if !skip && indent == 0 && strings.HasPrefix(trim, key+":") {
+			if !replaced && rendered != "" {
+				out = append(out, rendered)
+			}
+			replaced = true
 			skip = true
 			continue
 		}
@@ -997,7 +1002,7 @@ func replaceTopLevel(raw, key, rendered string) string {
 		}
 	}
 	base := strings.TrimRight(strings.Join(out, "\n"), "\n")
-	if rendered == "" {
+	if replaced || rendered == "" {
 		if base == "" {
 			return ""
 		}
@@ -1359,9 +1364,16 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 	raw := active["content"].(string)
 	previousTunEnabled := yamlNestedBoolean(raw, "tun", "enable", false)
 	previousController, _, _ := parseController(raw)
-	mapping := map[string]string{"controller": "external-controller", "mixed": "mixed-port", "socks": "socks-port", "http": "port", "redir": "redir-port", "tproxy": "tproxy-port", "allowLan": "allow-lan", "bindAddress": "bind-address", "core": "", "tun": "tun", "dns": "dns"}
+	// Existing keys stay in place; missing keys are appended in this fixed order.
+	mapping := []struct{ api, key string }{
+		{"controller", "external-controller"}, {"mixed", "mixed-port"},
+		{"socks", "socks-port"}, {"http", "port"}, {"redir", "redir-port"},
+		{"tproxy", "tproxy-port"}, {"allowLan", "allow-lan"},
+		{"bindAddress", "bind-address"}, {"core", ""}, {"dns", "dns"}, {"tun", "tun"},
+	}
 	settings := map[string]any{}
-	for api, key := range mapping {
+	for _, field := range mapping {
+		api, key := field.api, field.key
 		value, ok := input[api]
 		if !ok {
 			continue

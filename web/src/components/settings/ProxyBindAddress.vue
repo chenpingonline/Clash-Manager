@@ -85,10 +85,11 @@ function modalKeydown(event: KeyboardEvent) {
 .lan-title { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
 .lan-title label, .lan-description { cursor: pointer; }
 .lan-description { font-size: 10px; line-height: 1.45; color: var(--muted); }
-.bind-trigger { display: inline-flex; align-items: center; justify-content: center; padding: 3px 6px; min-height: 24px; font-size: 10px; white-space: nowrap; border-radius: 6px; color: var(--accent); }
-.bind-field { display: grid; gap: 6px; margin-top: 14px; }
-.bind-field span { font-size: 12px; }
-.bind-field select, .bind-field input { width: 100%; }
+.bind-trigger.ghost { display: inline-flex; align-items: center; justify-content: center; padding: 3px 6px; min-height: 24px; font-size: 10px; white-space: nowrap; border-radius: 6px; color: var(--accent); }
+.bind-trigger.ghost:disabled { color: var(--muted); }
+.bind-field { display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: center; gap: 10px; margin-top: 14px; }
+.bind-field span { font-size: 12px; white-space: nowrap; }
+.bind-field select, .bind-field input { width: 100%; min-width: 0; }
 .field-note { margin: 14px 0; font-size: 11px; line-height: 1.6; color: var(--muted); }
 .error-text { margin-bottom: 0; }
 :global(.proxy-bind-modal) { width: min(460px, 100%); }

@@ -63,6 +63,7 @@ func MergeOverrides(raw []byte, overrides map[string]any) ([]byte, error) {
 			continue
 		}
 		previous := root.Content[index+1]
+		preserveMappingOrder(previous, value)
 		value.HeadComment = previous.HeadComment
 		value.Anchor = previous.Anchor
 		*previous = *value
@@ -74,4 +75,35 @@ func MergeOverrides(raw []byte, overrides map[string]any) ([]byte, error) {
 		return nil, err
 	}
 	return output.Bytes(), encoder.Close()
+}
+
+// Keep surviving keys where they were. Encode(map) sorts new keys, so the
+// remaining replacement keys are appended deterministically. Sequences are
+// never reordered: rule priority, group order and group members stay intact.
+func preserveMappingOrder(previous, replacement *yaml.Node) {
+	if previous.Kind == yaml.AliasNode {
+		previous = previous.Alias
+	}
+	if previous == nil || previous.Kind != yaml.MappingNode || replacement.Kind != yaml.MappingNode {
+		return
+	}
+	indices := make(map[string]int, len(replacement.Content)/2)
+	for i := 0; i < len(replacement.Content); i += 2 {
+		indices[replacement.Content[i].Value] = i
+	}
+	ordered := make([]*yaml.Node, 0, len(replacement.Content))
+	for i := 0; i < len(previous.Content); i += 2 {
+		key := previous.Content[i]
+		if j, exists := indices[key.Value]; exists {
+			preserveMappingOrder(previous.Content[i+1], replacement.Content[j+1])
+			ordered = append(ordered, replacement.Content[j], replacement.Content[j+1])
+			delete(indices, key.Value)
+		}
+	}
+	for i := 0; i < len(replacement.Content); i += 2 {
+		if _, exists := indices[replacement.Content[i].Value]; exists {
+			ordered = append(ordered, replacement.Content[i], replacement.Content[i+1])
+		}
+	}
+	replacement.Content = ordered
 }
