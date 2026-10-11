@@ -170,9 +170,13 @@ func (c *appCenter) upgrade(ctx context.Context, filename, target string, record
 	if submitted.ID == "" {
 		return errors.New("应用中心未返回更新包暂存任务 ID")
 	}
+	if c.log != nil {
+		_, _ = fmt.Fprintf(c.log, "downloadTaskId=%q targetVersion=%q\n", submitted.ID, target)
+	}
 	var staged centerStage
 	failures := 0
 	for {
+		staged = centerStage{}
 		err := c.call(stageCtx, "/rpc/v1/download/status", map[string]any{"downloadTaskId": submitted.ID}, &staged)
 		if err != nil {
 			var failure *centerError
@@ -198,8 +202,24 @@ func (c *appCenter) upgrade(ctx context.Context, filename, target string, record
 	}
 	// Recheck the daemon's package identity even though the archive was already
 	// verified. Never let a staging mix-up upgrade a different application.
-	if staged.AppName != AppName || strings.TrimPrefix(staged.Version, "v") != target || staged.PackageType != "file" || !staged.Installed {
-		return errors.New("应用中心识别的应用、版本或安装状态与更新目标不匹配")
+	if c.log != nil {
+		data, _ := json.Marshal(staged)
+		_, _ = fmt.Fprintf(c.log, "stagedPackage=%s\n", data)
+	}
+	if staged.AppName != AppName {
+		return fmt.Errorf("应用中心识别的应用名 %q 与目标 %q 不匹配", staged.AppName, AppName)
+	}
+	if strings.TrimPrefix(staged.Version, "v") != target {
+		return fmt.Errorf("应用中心识别的版本 %q 与目标 %q 不匹配", staged.Version, target)
+	}
+	if !staged.Installed {
+		return errors.New("应用中心没有将更新目标识别为已安装应用，已中止升级")
+	}
+	// packageSourceType describes where the FPK came from (a local file).
+	// packageType identifies the daemon's parsed package kind (e.g. path).
+	// Only the daemon can supply that routing value; these are not the same enum.
+	if staged.PackageType == "" || strings.TrimSpace(staged.PackageType) != staged.PackageType {
+		return fmt.Errorf("应用中心返回的包类型 %q 无效", staged.PackageType)
 	}
 	var info struct {
 		Wizard struct {
@@ -207,7 +227,7 @@ func (c *appCenter) upgrade(ctx context.Context, filename, target string, record
 			HasWizard bool `json:"hasWizard"`
 		} `json:"wizardInfo"`
 	}
-	update := map[string]any{"appName": AppName, "updateVersion": target, "packageType": "file", "language": "zh-CN"}
+	update := map[string]any{"appName": AppName, "updateVersion": target, "packageType": staged.PackageType, "language": "zh-CN"}
 	if err := c.call(ctx, "/rpc/v1/update/info", update, &info); err != nil {
 		return fmt.Errorf("应用中心升级前检查失败: %w", err)
 	}

@@ -1,6 +1,7 @@
 package appupdate
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -41,13 +43,14 @@ func centerReply(w http.ResponseWriter, code int, data any) {
 }
 
 func readyStage() map[string]any {
-	return map[string]any{"status": 2, "appName": AppName, "version": "1.3.16", "packageType": "file", "installed": true}
+	return map[string]any{"status": 2, "appName": AppName, "version": "1.3.16", "packageType": "path", "installed": true}
 }
 
 func TestCenterUpgradeUsesDaemonAndExistingVolume(t *testing.T) {
 	filename, digest := fixture(t, "", "")
 	var mu sync.Mutex
 	var routes []string
+	var statusPolls atomic.Int32
 	c := fakeCenter(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		routes = append(routes, r.URL.Path)
@@ -69,9 +72,19 @@ func TestCenterUpgradeUsesDaemonAndExistingVolume(t *testing.T) {
 			if body["downloadTaskId"] != "download-one" {
 				t.Errorf("staging ID: %#v", body)
 			}
-			centerReply(w, 0, readyStage())
+			// fnOS reports a file source but a path package. Replay the initial
+			// running response and the finished shape observed on the user's NAS.
+			if statusPolls.Add(1) == 1 {
+				centerReply(w, 0, map[string]any{"status": 1, "message": "running", "progress": 0, "packageType": "path", "packageSourceType": "file", "path": "", "appName": "", "version": "", "installed": false})
+			} else {
+				stage := readyStage()
+				stage["packageSourceType"] = "file"
+				stage["path"] = "/vol3/appcenter-downloads/clash-for-fnos-1.3.16-tpk"
+				stage["installedInfo"] = map[string]any{"version": "1.3.15", "status": "running", "canUpgrade": true}
+				centerReply(w, 0, stage)
+			}
 		case "/rpc/v1/update/info", "/rpc/v1/update/task":
-			if body["appName"] != AppName || body["updateVersion"] != "1.3.16" || body["packageType"] != "file" {
+			if body["appName"] != AppName || body["updateVersion"] != "1.3.16" || body["packageType"] != "path" {
 				t.Errorf("update identity: %#v", body)
 			}
 			if r.URL.Path == "/rpc/v1/update/info" {
@@ -96,6 +109,8 @@ func TestCenterUpgradeUsesDaemonAndExistingVolume(t *testing.T) {
 			w.WriteHeader(404)
 		}
 	}))
+	var log bytes.Buffer
+	c.log = &log
 	c.installedVersion = func() (string, error) { return "1.3.16", nil }
 	var recorded string
 	err := installVerified(context.Background(), filename, digest, "1.3.16", "amd64", func(string, int) error { return nil }, func() error {
@@ -107,9 +122,12 @@ func TestCenterUpgradeUsesDaemonAndExistingVolume(t *testing.T) {
 	if recorded != "upgrade-one" {
 		t.Fatalf("recorded ID = %q", recorded)
 	}
+	if !strings.Contains(log.String(), `downloadTaskId="download-one"`) || !strings.Contains(log.String(), `"packageType":"path"`) {
+		t.Fatalf("missing staging diagnostics: %s", log.String())
+	}
 	mu.Lock()
 	defer mu.Unlock()
-	want := []string{"/rpc/v1/download/task", "/rpc/v1/download/status", "/rpc/v1/update/info", "/rpc/v1/update/task", "/rpc/v1/common/status"}
+	want := []string{"/rpc/v1/download/task", "/rpc/v1/download/status", "/rpc/v1/download/status", "/rpc/v1/update/info", "/rpc/v1/update/task", "/rpc/v1/common/status"}
 	if !reflect.DeepEqual(routes, want) {
 		t.Fatalf("routes = %v", routes)
 	}
@@ -125,6 +143,9 @@ func TestCenterRejectsStagingMismatchBeforeUpgrade(t *testing.T) {
 				case "/rpc/v1/download/status":
 					stage := readyStage()
 					stage[field] = "wrong"
+					if field == "packageType" {
+						stage[field] = ""
+					}
 					if field == "installed" {
 						stage[field] = false
 					}
