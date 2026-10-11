@@ -7,17 +7,43 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 )
 
-const Repository = "chenpingonline/Clash-for-fnos"
+// Repository is pinned at build time for both the Web service and root updater.
+// It is never supplied by an API request or an environment variable on fnOS.
+var Repository = "chenpingonline/Clash-for-fnos"
+
+var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}$`)
+
+func ValidRepository(value string) bool {
+	if !repositoryPattern.MatchString(value) {
+		return false
+	}
+	_, name, _ := strings.Cut(value, "/")
+	return name != "." && name != ".."
+}
+
+// PrintBuildInfo reports the linked updater source without starting services.
+func PrintBuildInfo(w io.Writer, version string) error {
+	if !ValidRepository(Repository) {
+		return errors.New("构建时的更新仓库配置无效")
+	}
+	return json.NewEncoder(w).Encode(map[string]string{
+		"appName": AppName, "version": version, "updateRepository": Repository,
+		"goos": runtime.GOOS, "goarch": runtime.GOARCH,
+	})
+}
+
 const AppName = "clash-for-fnos"
 const MaxPackageSize int64 = 512 << 20
 

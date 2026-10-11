@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/chenpingonline/Clash-Manager/backend/internal/appsettings"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/appupdate"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/logstore"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
@@ -65,6 +66,9 @@ type config struct {
 }
 
 type gateway struct {
+	appUpdateTokenOnce sync.Once
+	appUpdateToken     string
+	appUpdateTokenErr  error
 	appUpdateMu        sync.RWMutex
 	appUpdateCheckMu   sync.Mutex
 	appUpdateCache     map[string]any
@@ -107,8 +111,13 @@ func env(name, fallback string) string {
 }
 
 func loadConfig() config {
+	platform := runtimeenv.Platform()
+	releaseRepo := appupdate.Repository
+	if platform != "fnos" {
+		releaseRepo = env("CLASH_FOR_FNOS_RELEASE_REPO", releaseRepo)
+	}
 	return config{
-		platform:           runtimeenv.Platform(),
+		platform:           platform,
 		listenAddr:         env("LISTEN_ADDR", ""),
 		authUser:           env("APP_AUTH_USER", "admin"),
 		authPassword:       os.Getenv("APP_AUTH_PASSWORD"),
@@ -133,7 +142,7 @@ func loadConfig() config {
 		rulesSnapshotFile:  filepath.Join(runtimeenv.VarDir(), "rules-snapshot.json"),
 		ruleStateFile:      filepath.Join(runtimeenv.EtcDir(), "rule-state.json"),
 		exitLocationURL:    env("CLASH_EXIT_LOCATION_URL", "https://ipwho.is/?lang=zh-CN&fields=success,message,ip,country,country_code,region,city,timezone"),
-		releaseRepo:        env("CLASH_FOR_FNOS_RELEASE_REPO", "chenpingonline/Clash-for-fnos"),
+		releaseRepo:        releaseRepo,
 	}
 }
 
@@ -1460,6 +1469,7 @@ func run() error {
 	go gateway.watchRuleState(collectorContext)
 	server := &http.Server{
 		Handler:           gateway,
+		ConnContext:       nativeConnectionContext,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		MaxHeaderBytes:    1 << 20,
@@ -1497,6 +1507,12 @@ func run() error {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--build-info" {
+		if err := appupdate.PrintBuildInfo(os.Stdout, version); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if err := run(); err != nil && !errors.Is(err, io.EOF) {
 		log.Fatal(err)
 	}

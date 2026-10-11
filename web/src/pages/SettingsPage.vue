@@ -97,7 +97,7 @@ const netSave = useAutosave<NetworkSettingsResponse>('/api/network/settings', { 
   }
 } }), dnsSave = useAutosave('/api/network/settings'), behaviorSave = useAutosave('/api/settings')
 const { available: appUpdateAvailable, info: appUpdate, applyResult: applyAppUpdateResult, check: checkAppUpdateNotice, setEnabled: setAppUpdateNoticeEnabled } = useAppUpdateNotice()
-const { status: appInstall, supported: appInstallSupported, reason: appInstallReason, disconnected: appInstallDisconnected, active: appInstallActive, refresh: refreshAppInstall, start: startAppInstall } = useAppInstall()
+const { status: appInstall, supported: appInstallSupported, reason: appInstallReason, disconnected: appInstallDisconnected, active: appInstallActive, progressVisible: appInstallProgressVisible, refresh: refreshAppInstall, start: startAppInstall } = useAppInstall()
 const appInstallMessage = computed(() => appInstallDisconnected.value ? '正在等待应用重新连接…' : ({ idle: '', queued: '正在准备更新…', downloading: '正在下载更新…', verifying: '正在校验更新包…', installing: '正在安装更新，应用会短暂断开…', restarting: '正在启动新版应用…', success: '更新完成', error: '更新失败' })[appInstall.value.stage])
 const envSave = useAutosave<ProxyEnvironmentResponse>('/api/system/proxy-environment', { onSaved: result => { environment.value = result } })
 const netState = netSave.state, netMessage = netSave.message, dnsState = dnsSave.state, dnsMessage = dnsSave.message, behaviorState = behaviorSave.state, behaviorMessage = behaviorSave.message, envState = envSave.state, envMessage = envSave.message
@@ -758,7 +758,7 @@ onMounted(initialize)
                 </a>
               </div>
             </div>
-            <div v-if="runtime.capabilities.appUpdates && appInstall.stage !== 'idle'" class="app-install-progress" role="status" aria-live="polite">
+            <div v-if="runtime.capabilities.appUpdates && appInstallProgressVisible" class="app-install-progress" role="status" aria-live="polite">
               <div class="app-install-progress-head"><strong>{{ t(appInstallMessage) }}</strong><span v-if="appInstallActive">{{ appInstall.progress }}%</span></div>
               <progress v-if="appInstallActive" :value="appInstall.progress" max="100" :aria-label="t('应用更新进度')" />
               <small v-if="appInstall.stage === 'downloading' && appInstall.total">{{ formatBytes(appInstall.downloaded || 0) }} / {{ formatBytes(appInstall.total) }}</small>
