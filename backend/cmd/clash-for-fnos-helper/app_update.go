@@ -42,13 +42,9 @@ func (h *helper) appUpdateStatus() (map[string]any, error) {
 			return nil, err
 		}
 		var err error
-		status, err = appupdate.ReadStatus(appupdate.StateDir)
+		status, err = appupdate.ReadStatusForVersion(appupdate.StateDir, version)
 		if err != nil {
 			return nil, err
-		}
-		if status.OutcomeUnknown && strings.TrimPrefix(status.TargetVersion, "v") == strings.TrimPrefix(version, "v") {
-			status.Stage, status.Progress, status.Error, status.OutcomeUnknown = "success", 100, "", false
-			_ = appupdate.WriteStatus(appupdate.StateDir, status)
 		}
 		// A power loss or systemd timeout leaves the last persisted stage behind.
 		// Check the unit after a grace period so a new helper does not mistake
@@ -94,7 +90,7 @@ func (h *helper) startAppUpdate(body map[string]any) (any, error) {
 	if err = appupdate.Prepare(appupdate.StateDir); err != nil {
 		return nil, err
 	}
-	previous, err := appupdate.ReadStatus(appupdate.StateDir)
+	previous, err := appupdate.ReadStatusForVersion(appupdate.StateDir, version)
 	if err != nil {
 		return nil, err
 	}
