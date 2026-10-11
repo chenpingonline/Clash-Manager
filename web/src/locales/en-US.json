@@ -1577,5 +1577,15 @@
   "更新完成": "Update complete",
   "应用更新进度": "App update progress",
   "更新期间请勿关闭 NAS，完成后页面会自动重新加载。": "Keep the NAS powered on during the update. The page will reload automatically when it finishes.",
-  "下载 FPK 手动安装": "Download FPK for manual installation"
+  "下载 FPK 手动安装": "Download FPK for manual installation",
+  "代理监听地址": "Proxy listening address",
+  "控制代理端口监听的地址，不影响 Controller API。": "Controls the address used by proxy ports, without changing the Controller API.",
+  "所有网卡": "All interfaces",
+  "指定 IP": "Specific IP",
+  "指定监听 IP": "Specific listening IP",
+  "IPv4 或 IPv6 地址": "IPv4 or IPv6 address",
+  "请输入监听 IP 地址": "Enter a listening IP address",
+  "代理监听地址必须为 IP 地址或 *": "The proxy listening address must be an IP address or *",
+  "监听地址": "Bind address",
+  "监听设置": "Listen settings"
 }

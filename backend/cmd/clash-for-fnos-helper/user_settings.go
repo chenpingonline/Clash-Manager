@@ -77,6 +77,12 @@ func normalizeUserPatch(input map[string]any) (map[string]any, error) {
 				return nil, fail(400, "局域网连接设置必须为布尔值")
 			}
 			patch["allow-lan"] = enabled
+		} else if key == "bindAddress" {
+			address, err := normalizeProxyBindAddress(value)
+			if err != nil {
+				return nil, err
+			}
+			patch["bind-address"] = address
 		} else if key == "core" {
 			if core, ok := value.(map[string]any); ok {
 				for k, v := range core {
@@ -128,7 +134,7 @@ func (h *helper) composeUserSettings(input map[string]any) (map[string]any, erro
 	if err != nil {
 		return nil, fmt.Errorf("合并用户设置失败: %w", err)
 	}
-	content, err = configyaml.EnsureLANBindAddress(content)
+	content, err = ensureLANBindWithPreferences(content, settings)
 	if err != nil {
 		return nil, fmt.Errorf("处理局域网绑定地址失败: %w", err)
 	}

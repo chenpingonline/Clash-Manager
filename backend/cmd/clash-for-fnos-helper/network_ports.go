@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 )
 
 type networkListener struct{ network, address, label string }
@@ -35,7 +36,7 @@ func networkListeners(raw string) []networkListener {
 	if yamlBoolean(raw, "allow-lan", false) {
 		host = "0.0.0.0"
 		if bind, ok := yamlScalarValue(raw, "bind-address"); ok && bind != "" && bind != "*" {
-			host = bind
+			host = strings.TrimSuffix(strings.TrimPrefix(bind, "["), "]")
 		}
 	}
 	for _, item := range []struct {

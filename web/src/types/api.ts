@@ -327,7 +327,7 @@ export interface DnsSetting {
 export interface NetworkSetting {
   controller?: { host?: string; port?: number }
   mixed?: PortSetting; socks?: PortSetting; http?: PortSetting; redir?: PortSetting; tproxy?: PortSetting
-  allowLan?: boolean; dnsEnabled?: boolean; dnsOverrideEnabled?: boolean; dns?: DnsSetting
+  allowLan?: boolean; bindAddress?: string; dnsEnabled?: boolean; dnsOverrideEnabled?: boolean; dns?: DnsSetting
   core?: { ipv6?: boolean; unifiedDelay?: boolean }; tun?: TunSetting
 }
 export interface TunFeatures { coreVersion?: string; defaultStack?: '' | 'gvisor' | 'mips'; mips?: boolean; congestionController?: boolean }

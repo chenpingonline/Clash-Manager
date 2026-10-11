@@ -278,7 +278,7 @@ func (h *helper) checkManagedPorts() error {
 	if yamlBoolean(string(raw), "allow-lan", false) {
 		host = "0.0.0.0"
 		if bind, ok := yamlScalarValue(string(raw), "bind-address"); ok && bind != "" && bind != "*" {
-			host = bind
+			host = strings.TrimSuffix(strings.TrimPrefix(bind, "["), "]")
 		}
 	}
 	for _, key := range []string{"mixed-port", "port", "socks-port", "redir-port", "tproxy-port"} {
@@ -1359,7 +1359,7 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 	raw := active["content"].(string)
 	previousTunEnabled := yamlNestedBoolean(raw, "tun", "enable", false)
 	previousController, _, _ := parseController(raw)
-	mapping := map[string]string{"controller": "external-controller", "mixed": "mixed-port", "socks": "socks-port", "http": "port", "redir": "redir-port", "tproxy": "tproxy-port", "allowLan": "allow-lan", "core": "", "tun": "tun", "dns": "dns"}
+	mapping := map[string]string{"controller": "external-controller", "mixed": "mixed-port", "socks": "socks-port", "http": "port", "redir": "redir-port", "tproxy": "tproxy-port", "allowLan": "allow-lan", "bindAddress": "bind-address", "core": "", "tun": "tun", "dns": "dns"}
 	settings := map[string]any{}
 	for api, key := range mapping {
 		value, ok := input[api]
@@ -1367,6 +1367,14 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 			continue
 		}
 		settings[api] = value
+		if api == "bindAddress" {
+			address, err := normalizeProxyBindAddress(value)
+			if err != nil {
+				return nil, err
+			}
+			raw = replaceTopLevel(raw, key, renderYAML(key, address))
+			continue
+		}
 		if api == "controller" {
 			port := int(numberFromMap(value, "port", 9090))
 			raw = replaceTopLevel(raw, key, fmt.Sprintf("external-controller: 127.0.0.1:%d", port))
@@ -1420,11 +1428,21 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 		}
 		raw = replaceTopLevel(raw, key, renderYAML(key, value))
 	}
-	content, err := configyaml.EnsureLANBindAddress([]byte(raw))
+	h.mu.Lock()
+	preferences, _, err := h.readUserSettings()
+	h.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	if address, explicit := patch["bind-address"]; explicit {
+		preferences["bind-address"] = address
+	}
+	content, err := ensureLANBindWithPreferences([]byte(raw), preferences)
 	if err != nil {
 		return nil, err
 	}
 	raw = string(content)
+	settings["bindAddress"] = proxyBindAddressFromConfig(raw)
 	if err := validateNetworkPorts(raw, active["content"].(string), active["offline"] == true); err != nil {
 		return nil, err
 	}
@@ -1492,7 +1510,7 @@ func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 		}
 		return map[string]any{"enabled": true, "port": value}
 	}
-	settings := map[string]any{"controller": map[string]any{"enabled": true, "port": controllerPort}, "mixed": port("mixed-port", mixed), "socks": port("socks-port", 7898), "http": port("port", 7899), "redir": port("redir-port", 7895), "tproxy": port("tproxy-port", 7896), "allowLan": yamlBoolean(raw, "allow-lan", false), "core": map[string]any{"ipv6": yamlBoolean(raw, "ipv6", true), "unifiedDelay": yamlBoolean(raw, "unified-delay", false)}, "tun": map[string]any{"enabled": yamlNestedBoolean(raw, "tun", "enable", false), "stack": yamlNestedString(raw, "tun", "stack", ""), "congestionController": yamlNestedString(raw, "tun", "congestion-controller", ""), "mtu": yamlNestedInteger(raw, "tun", "mtu", 1500), "routeExcludeAddress": yamlNestedStringList(raw, "tun", "route-exclude-address"), "autoRoute": yamlNestedBoolean(raw, "tun", "auto-route", true), "autoRedirect": yamlNestedBoolean(raw, "tun", "auto-redirect", true), "autoDetectInterface": yamlNestedBoolean(raw, "tun", "auto-detect-interface", true), "dnsHijack": yamlNestedBoolean(raw, "tun", "dns-hijack", false), "strictRoute": yamlNestedBoolean(raw, "tun", "strict-route", false)}}
+	settings := map[string]any{"controller": map[string]any{"enabled": true, "port": controllerPort}, "mixed": port("mixed-port", mixed), "socks": port("socks-port", 7898), "http": port("port", 7899), "redir": port("redir-port", 7895), "tproxy": port("tproxy-port", 7896), "allowLan": yamlBoolean(raw, "allow-lan", false), "bindAddress": proxyBindAddressFromConfig(raw), "core": map[string]any{"ipv6": yamlBoolean(raw, "ipv6", true), "unifiedDelay": yamlBoolean(raw, "unified-delay", false)}, "tun": map[string]any{"enabled": yamlNestedBoolean(raw, "tun", "enable", false), "stack": yamlNestedString(raw, "tun", "stack", ""), "congestionController": yamlNestedString(raw, "tun", "congestion-controller", ""), "mtu": yamlNestedInteger(raw, "tun", "mtu", 1500), "routeExcludeAddress": yamlNestedStringList(raw, "tun", "route-exclude-address"), "autoRoute": yamlNestedBoolean(raw, "tun", "auto-route", true), "autoRedirect": yamlNestedBoolean(raw, "tun", "auto-redirect", true), "autoDetectInterface": yamlNestedBoolean(raw, "tun", "auto-detect-interface", true), "dnsHijack": yamlNestedBoolean(raw, "tun", "dns-hijack", false), "strictRoute": yamlNestedBoolean(raw, "tun", "strict-route", false)}}
 	proc := h.primary()
 	tunDevice := fileExists("/dev/net/tun")
 	capability := resolveTunCapability(proc, tunDevice, os.Geteuid())

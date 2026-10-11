@@ -9,6 +9,7 @@ import TunStackFields from '@/components/settings/TunStackFields.vue'
 import HelpPopover from '@/components/HelpPopover.vue'
 import PortRow from '@/components/settings/PortRow.vue'
 import SettingToggle from '@/components/settings/SettingToggle.vue'
+import ProxyBindAddress from '@/components/settings/ProxyBindAddress.vue'
 import { refreshCoreHealth } from '@/composables/useCoreHealth'
 import { useAutosave } from '@/composables/useAutosave'
 import { useAppUpdateNotice } from '@/composables/useAppUpdateNotice'
@@ -25,7 +26,7 @@ import { runtime } from '@/services/runtime'
 type Section = 'core' | 'network' | 'dns' | 'tun' | 'advanced' | 'behavior' | 'update'
 type NetworkForm = {
   controller: PortSetting; mixed: PortSetting; socks: PortSetting; http: PortSetting; redir: PortSetting; tproxy: PortSetting
-  allowLan: boolean; core: { ipv6: boolean; unifiedDelay: boolean }; tun: Required<TunSetting>; dnsOverrideEnabled: boolean; dns: Required<DnsSetting>
+  allowLan: boolean; bindAddress: string; core: { ipv6: boolean; unifiedDelay: boolean }; tun: Required<TunSetting>; dnsOverrideEnabled: boolean; dns: Required<DnsSetting>
 }
 type ProxyEnvForm = { enabled: boolean; followMixedPort: boolean; port: number; noProxy: string; targets: { environment: boolean; profile: boolean; bashrc: boolean } }
 type TunOperationStatus = { active?: boolean; enabled?: boolean; stage?: string; message?: string }
@@ -35,7 +36,7 @@ const defaultDns: Required<DnsSetting> = {
   defaultNameserver: ['system', '223.6.6.6', '8.8.8.8', '2400:3200::1', '2001:4860:4860::8888'], nameserver: ['8.8.8.8', 'https://doh.pub/dns-query', 'https://dns.alidns.com/dns-query'], fallback: [], proxyServerNameserver: ['https://doh.pub/dns-query', 'https://dns.alidns.com/dns-query', 'tls://223.5.5.5'], directNameserver: [], fakeIpFilter: ['*.lan', '*.local', '*.arpa', 'time.*.com', 'ntp.*.com', '+.market.xiaomi.com', 'localhost.ptlogin2.qq.com', '*.msftncsi.com', 'www.msftconnecttest.com'], nameserverPolicy: [], fallbackGeoip: true, fallbackGeoipCode: 'CN', fallbackIpCidr: ['240.0.0.0/4', '0.0.0.0/32'], fallbackDomain: ['+.google.com', '+.facebook.com', '+.youtube.com'], hosts: [],
 }
 const defaultNetwork = (): NetworkForm => ({
-  controller: { enabled: true, port: 9090 }, mixed: { enabled: true, port: 7890 }, socks: { enabled: false, port: 7898 }, http: { enabled: false, port: 7899 }, redir: { enabled: false, port: 7895 }, tproxy: { enabled: false, port: 7896 }, allowLan: false,
+  controller: { enabled: true, port: 9090 }, mixed: { enabled: true, port: 7890 }, socks: { enabled: false, port: 7898 }, http: { enabled: false, port: 7899 }, redir: { enabled: false, port: 7895 }, tproxy: { enabled: false, port: 7896 }, allowLan: false, bindAddress: '*',
   core: { ipv6: true, unifiedDelay: false }, tun: { enabled: false, stack: '', congestionController: '', mtu: 1500, routeExcludeAddress: [], autoRoute: true, autoRedirect: true, autoDetectInterface: true, dnsHijack: false, strictRoute: false }, dnsOverrideEnabled: false, dns: structuredClone(defaultDns),
 })
 
@@ -89,6 +90,7 @@ const icons = ref<AppIconsResponse>({}), selectedIcon = ref('cat-orbit'), tunSup
 const geo = ref<GeoStatus>({}), geoForm = reactive({ autoUpdate: false, updateInterval: 24 }), geoBusy = ref(''), geoState = ref<'idle' | 'saving' | 'updating' | 'success' | 'error'>('idle'), geoMessage = ref('')
 const dnsText = reactive({ defaultNameserver: '', nameserver: '', fallback: '', proxyServerNameserver: '', directNameserver: '', fakeIpFilter: '', nameserverPolicy: '', fallbackIpCidr: '', fallbackDomain: '', hosts: '' })
 const netSave = useAutosave<NetworkSettingsResponse>('/api/network/settings', { progressEndpoint: '/api/network/settings/status', mergePending: true, onSaved: result => {
+  if (result.settings?.bindAddress) network.bindAddress = result.settings.bindAddress
   if (result.controller) manager.controller = result.controller
   if (result.proxyEnvironment) {
     environment.value = result.proxyEnvironment
@@ -164,10 +166,11 @@ function platformLabel(value?: string) {
   if (platform === 'arm' || platform === 'aarch64' || platform === 'arm64') return 'arm64'
   return value || '--'
 }
-function saveNetwork(key: 'controller' | 'mixed' | 'socks' | 'http' | 'redir' | 'tproxy' | 'allowLan' | 'ipv6' | 'unifiedDelay', delay = 250) {
+function saveNetwork(key: 'controller' | 'mixed' | 'socks' | 'http' | 'redir' | 'tproxy' | 'allowLan' | 'bindAddress' | 'ipv6' | 'unifiedDelay', delay = 250) {
   const payload: Record<string, unknown> = {}
   if (key === 'ipv6' || key === 'unifiedDelay') payload.core = { [key]: network.core[key] }
   else if (key === 'allowLan') payload.allowLan = network.allowLan
+  else if (key === 'bindAddress') payload.bindAddress = network.bindAddress
   else {
     payload[key] = { ...network[key], enabled: key === 'controller' || network[key].enabled }
     if (key === 'mixed' && network.mixed.enabled) {
@@ -178,6 +181,12 @@ function saveNetwork(key: 'controller' | 'mixed' | 'socks' | 'http' | 'redir' | 
   }
   netSave.queue(payload, delay)
 }
+async function saveProxyBindAddress(address: string) {
+  netSave.queue({ bindAddress: address }, 0)
+  await netSave.flush()
+  if (netState.value === 'error') throw new Error(netMessage.value)
+}
+
 function saveTunSettings(key: keyof Required<TunSetting>, delay = 250) {
   if (key === 'routeExcludeAddress') network.tun.routeExcludeAddress = lines(tunRouteExcludeText.value)
   const tun: Partial<TunSetting> = { [key]: network.tun[key] }
@@ -272,7 +281,7 @@ function applyNetwork(value: NetworkSetting, fallbackPort: number) {
   const defaults = defaultNetwork()
   Object.assign(network.controller, defaults.controller, value.controller || {})
   for (const key of ['mixed', 'socks', 'http', 'redir', 'tproxy'] as const) Object.assign(network[key], defaults[key], value[key] || {})
-  network.mixed.port ||= fallbackPort; network.allowLan = Boolean(value.allowLan); Object.assign(network.core, defaults.core, value.core || {}); Object.assign(network.tun, defaults.tun, value.tun || {}); tunRouteExcludeText.value = list(network.tun.routeExcludeAddress); network.dnsOverrideEnabled = value.dnsOverrideEnabled === true; Object.assign(network.dns, structuredClone(defaultDns), value.dns || {}); syncDnsText()
+  network.mixed.port ||= fallbackPort; network.allowLan = Boolean(value.allowLan); network.bindAddress = value.bindAddress || "*"; Object.assign(network.core, defaults.core, value.core || {}); Object.assign(network.tun, defaults.tun, value.tun || {}); tunRouteExcludeText.value = list(network.tun.routeExcludeAddress); network.dnsOverrideEnabled = value.dnsOverrideEnabled === true; Object.assign(network.dns, structuredClone(defaultDns), value.dns || {}); syncDnsText()
 }
 async function load() {
   loading.value = true
@@ -541,7 +550,7 @@ onMounted(initialize)
         <span class="settings-category-copy"><strong>{{ t(category.title) }}</strong><small>{{ t(category.description) }}</small></span><span class="settings-category-tail"><span v-if="category.key === 'update' && appUpdateAvailable" class="settings-update-notice" role="status"><span class="update-notice-dot" aria-hidden="true" />{{ t("有新版本") }}</span><span class="settings-accordion-chevron" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg></span></span>
       </button>
         <div v-if="open === category.key" class="settings-accordion-body">
-          <div v-if="category.key === 'network'" class="settings-accordion-panel network-card"><p v-if="networkOffline" class="hint">{{ t("Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。") }}</p><div class="port-list"><PortRow id="netController" v-model="network.controller" title="Controller API" :description="t('Mihomo REST API · Manager 使用 127.0.0.1 连接')" locked @change="saveNetwork('controller')" /><PortRow id="netMixed" v-model="network.mixed" :title="t('混合代理端口')" :description="t('同时接受 HTTP 与 SOCKS5 代理')" @change="saveNetwork('mixed')" /><PortRow id="netSocks" v-model="network.socks" :title="t('SOCKS5 代理端口')" :description="t('单独提供 SOCKS5 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('socks')" /><PortRow id="netHttp" v-model="network.http" :title="t('HTTP(S) 代理端口')" :description="t('单独提供 HTTP CONNECT/HTTP 代理')" :disabled="network.mixed.enabled" @change="saveNetwork('http')" /><PortRow id="netRedir" v-model="network.redir" :title="t('Redir 透明代理端口')" :description="t('Linux TCP REDIRECT 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('redir')" /><PortRow id="netTproxy" v-model="network.tproxy" :title="t('TProxy 透明代理端口')" :description="t('Linux TPROXY TCP/UDP 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('tproxy')" /></div><div class="network-options"><SettingToggle v-model="network.allowLan" :title="t('允许局域网连接')" :description="t('允许其他设备访问已启用的代理端口')" @change="saveNetwork('allowLan')" /><SettingToggle v-model="network.core.ipv6" :title="t('全局 IPv6')" :description="t('允许 Mihomo 接收和处理 IPv6 流量')" @change="saveNetwork('ipv6')" /><SettingToggle v-model="network.core.unifiedDelay" :title="t('统一延迟')" :description="t('使用统一 RTT 算法，使不同协议的测速更便于比较')" @change="saveNetwork('unifiedDelay')" /></div><div class="dns-autosave-state" :class="netState" role="status" aria-live="polite">{{ t(netMessage) }}</div></div>
+          <div v-if="category.key === 'network'" class="settings-accordion-panel network-card"><p v-if="networkOffline" class="hint">{{ t("Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。") }}</p><div class="port-list"><PortRow id="netController" v-model="network.controller" title="Controller API" :description="t('Mihomo REST API · Manager 使用 127.0.0.1 连接')" locked @change="saveNetwork('controller')" /><PortRow id="netMixed" v-model="network.mixed" :title="t('混合代理端口')" :description="t('同时接受 HTTP 与 SOCKS5 代理')" @change="saveNetwork('mixed')" /><PortRow id="netSocks" v-model="network.socks" :title="t('SOCKS5 代理端口')" :description="t('单独提供 SOCKS5 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('socks')" /><PortRow id="netHttp" v-model="network.http" :title="t('HTTP(S) 代理端口')" :description="t('单独提供 HTTP CONNECT/HTTP 代理')" :disabled="network.mixed.enabled" @change="saveNetwork('http')" /><PortRow id="netRedir" v-model="network.redir" :title="t('Redir 透明代理端口')" :description="t('Linux TCP REDIRECT 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('redir')" /><PortRow id="netTproxy" v-model="network.tproxy" :title="t('TProxy 透明代理端口')" :description="t('Linux TPROXY TCP/UDP 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('tproxy')" /></div><div class="network-options"><ProxyBindAddress :model-value="network.bindAddress" v-model:allow-lan="network.allowLan" :busy="netState === 'pending' || netState === 'saving'" :save="saveProxyBindAddress" @lan-change="saveNetwork('allowLan')" /><SettingToggle v-model="network.core.ipv6" :title="t('全局 IPv6')" :description="t('允许 Mihomo 接收和处理 IPv6 流量')" @change="saveNetwork('ipv6')" /><SettingToggle v-model="network.core.unifiedDelay" :title="t('统一延迟')" :description="t('使用统一 RTT 算法，使不同协议的测速更便于比较')" @change="saveNetwork('unifiedDelay')" /></div><div class="dns-autosave-state" :class="netState" role="status" aria-live="polite">{{ t(netMessage) }}</div></div>
 
           <div v-else-if="category.key === 'tun'" class="settings-accordion-panel tun-card" :class="{ 'tun-on': network.tun.enabled }">
             <div class="section-head">
