@@ -15,8 +15,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 func testHelper(t *testing.T) *helper {
@@ -166,19 +164,11 @@ func TestExplicitProxyEnableSurvivesStartupReconcile(t *testing.T) {
 	}
 }
 
-func TestTunWithoutMihomoDNSDisablesDNSHijack(t *testing.T) {
+func TestTunWithoutMihomoDNSRejectsDNSHijack(t *testing.T) {
 	raw := "mixed-port: 7890\ndns:\n  enable: false\ntun:\n  enable: false\n  dns-hijack:\n    - any:53\n"
-	guarded, changed, err := guardTunDNSHijack(raw, true)
-	if err != nil || !changed {
-		t.Fatalf("changed=%v err=%v", changed, err)
-	}
-	var document map[string]any
-	if err = yaml.Unmarshal([]byte(guarded), &document); err != nil {
-		t.Fatal(err)
-	}
-	tun, _ := document["tun"].(map[string]any)
-	if hijack, ok := tun["dns-hijack"].([]any); !ok || len(hijack) != 0 {
-		t.Fatalf("dns-hijack was not disabled: %#v", tun["dns-hijack"])
+	_, _, err := guardTunDNSHijack(raw, true)
+	if err == nil || !strings.Contains(err.Error(), "需要先启用 Mihomo DNS") {
+		t.Fatalf("expected DNS prerequisite error, got %v", err)
 	}
 
 	withDNS := "dns:\n  enable: true\ntun:\n  enable: false\n  dns-hijack:\n    - any:53\n"

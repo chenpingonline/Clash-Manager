@@ -429,6 +429,11 @@ func (g *gateway) applyConfig(ctx context.Context, raw []byte) error {
 }
 
 func applyConfigWithClient(ctx context.Context, client *mihomo.Client, raw []byte) error {
+	normalized, err := configyaml.NormalizeTunDNSHijack(raw)
+	if err != nil {
+		return err
+	}
+	raw = normalized
 	body, _ := json.Marshal(map[string]any{"path": "", "payload": string(raw)})
 	return mihomoRequest(ctx, client, http.MethodPut, "/configs?force=true", bytes.NewReader(body), 120*time.Second)
 }
@@ -436,6 +441,11 @@ func applyConfigWithClient(ctx context.Context, client *mihomo.Client, raw []byt
 // Preserve the authenticated live endpoint before replacing any config files.
 // A Mihomo hot reload does not recreate its Controller or rotate its Secret.
 func (g *gateway) prepareLiveConfig(ctx context.Context, raw []byte) ([]byte, *mihomo.Client, error) {
+	normalized, normalizeErr := configyaml.NormalizeTunDNSHijack(raw)
+	if normalizeErr != nil {
+		return nil, nil, normalizeErr
+	}
+	raw = normalized
 	current := &mihomo.Client{SettingsFile: g.config.settingsFile}
 	verify := func() (*mihomo.Client, error) {
 		client, err := current.Snapshot()

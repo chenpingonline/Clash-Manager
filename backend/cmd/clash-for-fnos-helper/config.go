@@ -807,6 +807,11 @@ func (h *helper) prepareConfigCandidate(ctx context.Context, content string, val
 	if strings.TrimSpace(content) == "" || len(content) > maxBody || strings.IndexByte(content, 0) >= 0 {
 		return nil, fail(400, "配置内容无效")
 	}
+	normalized, err := configyaml.NormalizeTunDNSHijack([]byte(content))
+	if err != nil {
+		return nil, fail(400, err.Error())
+	}
+	content = string(normalized)
 	proc := h.primary()
 	target := h.config.managedConfig
 	if proc != nil && proc.ConfigPath != "" {
@@ -1149,7 +1154,7 @@ func normalizeTunForYAML(input map[string]any) (map[string]any, error) {
 	}
 	if enabled, ok := tun["dnsHijack"].(bool); ok {
 		if enabled {
-			tun["dnsHijack"] = []any{"any:53"}
+			tun["dnsHijack"] = []any{"any:53", "tcp://any:53"}
 		} else {
 			tun["dnsHijack"] = []any{}
 		}
@@ -1301,8 +1306,16 @@ func (h *helper) prepareTunToggle(ctx context.Context, enabled bool) (map[string
 }
 
 func guardTunDNSHijack(raw string, enabled bool) (string, bool, error) {
+	normalized, err := configyaml.NormalizeTunDNSHijack([]byte(raw))
+	if err != nil {
+		return "", false, fail(400, err.Error())
+	}
+	raw = string(normalized)
 	if !enabled || yamlNestedBoolean(raw, "dns", "enable", false) {
 		return raw, false, nil
+	}
+	if tunDNSHijackEnabled(raw) {
+		return "", false, fail(409, "DNS 劫持需要先启用 Mihomo DNS，请在 DNS 设置中启用并应用，或关闭 DNS 劫持后重试")
 	}
 	// dns-hijack forwards port 53 to Mihomo's DNS module. Without an enabled
 	// DNS section (common before the first subscription is applied), that turns
@@ -1455,6 +1468,14 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 	}
 	raw = string(content)
 	settings["bindAddress"] = proxyBindAddressFromConfig(raw)
+	_, changesTun := input["tun"]
+	_, changesDNS := input["dns"]
+	if (changesTun || changesDNS) && yamlNestedBoolean(raw, "tun", "enable", false) {
+		if _, _, err := guardTunDNSHijack(raw, true); err != nil {
+			return nil, err
+		}
+	}
+	settings["dnsEnabled"] = yamlNestedBoolean(raw, "dns", "enable", false)
 	if err := validateNetworkPorts(raw, active["content"].(string), active["offline"] == true); err != nil {
 		return nil, err
 	}
@@ -1507,6 +1528,17 @@ func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 		return nil, err
 	}
 	raw := active["content"].(string)
+	// Parse once: large subscription configs may contain thousands of proxies.
+	var document map[string]any
+	if err := yaml.Unmarshal([]byte(raw), &document); err != nil {
+		return nil, err
+	}
+	nestedBoolean := func(block, key string, fallback bool) bool {
+		section, _ := document[block].(map[string]any)
+		return yamlBooleanValue(section[key], fallback)
+	}
+	tun, _ := document["tun"].(map[string]any)
+	hijack, _ := tun["dns-hijack"].([]any)
 	controller, _, mixed := parseController(raw)
 	controllerPort := 9090
 	if _, portText, ok := strings.Cut(controller, ":"); ok {
@@ -1522,7 +1554,8 @@ func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 		}
 		return map[string]any{"enabled": true, "port": value}
 	}
-	settings := map[string]any{"controller": map[string]any{"enabled": true, "port": controllerPort}, "mixed": port("mixed-port", mixed), "socks": port("socks-port", 7898), "http": port("port", 7899), "redir": port("redir-port", 7895), "tproxy": port("tproxy-port", 7896), "allowLan": yamlBoolean(raw, "allow-lan", false), "bindAddress": proxyBindAddressFromConfig(raw), "core": map[string]any{"ipv6": yamlBoolean(raw, "ipv6", true), "unifiedDelay": yamlBoolean(raw, "unified-delay", false)}, "tun": map[string]any{"enabled": yamlNestedBoolean(raw, "tun", "enable", false), "stack": yamlNestedString(raw, "tun", "stack", ""), "congestionController": yamlNestedString(raw, "tun", "congestion-controller", ""), "mtu": yamlNestedInteger(raw, "tun", "mtu", 1500), "routeExcludeAddress": yamlNestedStringList(raw, "tun", "route-exclude-address"), "autoRoute": yamlNestedBoolean(raw, "tun", "auto-route", true), "autoRedirect": yamlNestedBoolean(raw, "tun", "auto-redirect", true), "autoDetectInterface": yamlNestedBoolean(raw, "tun", "auto-detect-interface", true), "dnsHijack": yamlNestedBoolean(raw, "tun", "dns-hijack", false), "strictRoute": yamlNestedBoolean(raw, "tun", "strict-route", false)}}
+	settings := map[string]any{"controller": map[string]any{"enabled": true, "port": controllerPort}, "mixed": port("mixed-port", mixed), "socks": port("socks-port", 7898), "http": port("port", 7899), "redir": port("redir-port", 7895), "tproxy": port("tproxy-port", 7896), "allowLan": yamlBoolean(raw, "allow-lan", false), "bindAddress": proxyBindAddressFromConfig(raw), "core": map[string]any{"ipv6": yamlBoolean(raw, "ipv6", true), "unifiedDelay": yamlBoolean(raw, "unified-delay", false)}, "tun": map[string]any{"enabled": nestedBoolean("tun", "enable", false), "stack": yamlNestedString(raw, "tun", "stack", ""), "congestionController": yamlNestedString(raw, "tun", "congestion-controller", ""), "mtu": yamlNestedInteger(raw, "tun", "mtu", 1500), "routeExcludeAddress": yamlNestedStringList(raw, "tun", "route-exclude-address"), "autoRoute": nestedBoolean("tun", "auto-route", true), "autoRedirect": nestedBoolean("tun", "auto-redirect", true), "autoDetectInterface": nestedBoolean("tun", "auto-detect-interface", true), "dnsHijack": len(hijack) > 0, "strictRoute": nestedBoolean("tun", "strict-route", false)}}
+	settings["dnsEnabled"] = nestedBoolean("dns", "enable", false)
 	proc := h.primary()
 	tunDevice := fileExists("/dev/net/tun")
 	capability := resolveTunCapability(proc, tunDevice, os.Geteuid())
@@ -1620,8 +1653,40 @@ func yamlNestedString(raw, block, key, fallback string) string {
 func yamlNestedInteger(raw, block, key string, fallback int) int {
 	return yamlInteger(yamlBlock(raw, block), key, fallback)
 }
+
+// Decode nested values as YAML so flow mappings, aliases and indentation work.
+func yamlNestedValue(raw, block, key string) any {
+	var document map[string]any
+	if err := yaml.Unmarshal([]byte(raw), &document); err != nil {
+		return nil
+	}
+	section, _ := document[block].(map[string]any)
+	return section[key]
+}
 func yamlNestedBoolean(raw, block, key string, fallback bool) bool {
-	return yamlBoolean(yamlBlock(raw, block), key, fallback)
+	return yamlBooleanValue(yamlNestedValue(raw, block, key), fallback)
+}
+func yamlBooleanValue(value any, fallback bool) bool {
+	switch value := value.(type) {
+	case bool:
+		return value
+	case string:
+		switch strings.ToLower(value) {
+		case "true", "yes", "on", "1":
+			return true
+		case "false", "no", "off", "0":
+			return false
+		}
+	case int:
+		if value == 0 || value == 1 {
+			return value == 1
+		}
+	}
+	return fallback
+}
+func tunDNSHijackEnabled(raw string) bool {
+	items, _ := yamlNestedValue(raw, "tun", "dns-hijack").([]any)
+	return len(items) > 0
 }
 func yamlNestedStringList(raw, block, key string) []any {
 	lines := strings.Split(yamlBlock(raw, block), "\n")

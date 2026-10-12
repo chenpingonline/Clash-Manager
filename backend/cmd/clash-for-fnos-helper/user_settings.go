@@ -138,6 +138,10 @@ func (h *helper) composeUserSettings(input map[string]any) (map[string]any, erro
 	if err != nil {
 		return nil, fmt.Errorf("处理局域网绑定地址失败: %w", err)
 	}
+	content, err = configyaml.NormalizeTunDNSHijack(content)
+	if err != nil {
+		return nil, fail(400, err.Error())
+	}
 	return map[string]any{"content": string(content)}, nil
 }
 

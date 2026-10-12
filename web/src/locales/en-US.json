@@ -320,7 +320,7 @@
   "让指定目标网段绕过 TUN 自动路由": "Bypass TUN auto routes for specified destination subnets",
   "仅在开启“自动路由”时生效。支持 IPv4/IPv6 CIDR，每行填写一个。": "Only applies when Auto route is enabled. Enter one IPv4/IPv6 CIDR per line.",
   "每行一个 IPv4/IPv6 CIDR；留空表示不额外排除。": "One IPv4/IPv6 CIDR per line. Leave empty for no additional exclusions.",
-  "开启 DNS 劫持前建议先启用 Mihomo DNS。": "Enable Mihomo DNS before enabling DNS hijack.",
+  "DNS 劫持需要先启用 Mihomo DNS，请在 DNS 设置中启用并应用。": "DNS hijack requires Mihomo DNS. Enable and apply it in DNS settings first.",
   "注意": "Note",
   "TUN 会修改 fnOS 的系统路由与 DNS 流向。默认关闭；配置不可用时可能影响 NAS 访问互联网。": "TUN changes fnOS system routes and DNS traffic. It is off by default. Invalid settings may affect the NAS internet connection.",
   "托管配置 YAML": "Managed YAML configuration",

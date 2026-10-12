@@ -26,7 +26,7 @@ import { runtime } from '@/services/runtime'
 type Section = 'core' | 'network' | 'dns' | 'tun' | 'advanced' | 'behavior' | 'update'
 type NetworkForm = {
   controller: PortSetting; mixed: PortSetting; socks: PortSetting; http: PortSetting; redir: PortSetting; tproxy: PortSetting
-  allowLan: boolean; bindAddress: string; core: { ipv6: boolean; unifiedDelay: boolean }; tun: Required<TunSetting>; dnsOverrideEnabled: boolean; dns: Required<DnsSetting>
+  allowLan: boolean; bindAddress: string; core: { ipv6: boolean; unifiedDelay: boolean }; tun: Required<TunSetting>; dnsOverrideEnabled: boolean; dnsEnabled: boolean; dns: Required<DnsSetting>
 }
 type ProxyEnvForm = { enabled: boolean; followMixedPort: boolean; port: number; noProxy: string; targets: { environment: boolean; profile: boolean; bashrc: boolean } }
 type TunOperationStatus = { active?: boolean; enabled?: boolean; stage?: string; message?: string }
@@ -37,7 +37,7 @@ const defaultDns: Required<DnsSetting> = {
 }
 const defaultNetwork = (): NetworkForm => ({
   controller: { enabled: true, port: 9090 }, mixed: { enabled: true, port: 7890 }, socks: { enabled: false, port: 7898 }, http: { enabled: false, port: 7899 }, redir: { enabled: false, port: 7895 }, tproxy: { enabled: false, port: 7896 }, allowLan: false, bindAddress: '*',
-  core: { ipv6: true, unifiedDelay: false }, tun: { enabled: false, stack: '', congestionController: '', mtu: 1500, routeExcludeAddress: [], autoRoute: true, autoRedirect: true, autoDetectInterface: true, dnsHijack: false, strictRoute: false }, dnsOverrideEnabled: false, dns: structuredClone(defaultDns),
+  core: { ipv6: true, unifiedDelay: false }, tun: { enabled: false, stack: '', congestionController: '', mtu: 1500, routeExcludeAddress: [], autoRoute: true, autoRedirect: true, autoDetectInterface: true, dnsHijack: false, strictRoute: false }, dnsOverrideEnabled: false, dnsEnabled: false, dns: structuredClone(defaultDns),
 })
 
 const requestedSectionValue = new URLSearchParams(location.hash.split('?')[1] || '').get('section')
@@ -90,6 +90,7 @@ const icons = ref<AppIconsResponse>({}), selectedIcon = ref('cat-orbit'), tunSup
 const geo = ref<GeoStatus>({}), geoForm = reactive({ autoUpdate: false, updateInterval: 24 }), geoBusy = ref(''), geoState = ref<'idle' | 'saving' | 'updating' | 'success' | 'error'>('idle'), geoMessage = ref('')
 const dnsText = reactive({ defaultNameserver: '', nameserver: '', fallback: '', proxyServerNameserver: '', directNameserver: '', fakeIpFilter: '', nameserverPolicy: '', fallbackIpCidr: '', fallbackDomain: '', hosts: '' })
 const netSave = useAutosave<NetworkSettingsResponse>('/api/network/settings', { progressEndpoint: '/api/network/settings/status', mergePending: true, onSaved: result => {
+  if (typeof result.settings?.dnsEnabled === 'boolean') network.dnsEnabled = result.settings.dnsEnabled
   if (result.settings?.bindAddress) network.bindAddress = result.settings.bindAddress
   if (result.controller) manager.controller = result.controller
   if (result.proxyEnvironment) {
@@ -97,7 +98,7 @@ const netSave = useAutosave<NetworkSettingsResponse>('/api/network/settings', { 
     const syncedPort = Number(result.proxyEnvironment.management?.settings?.port || 0)
     if (proxyForm.followMixedPort && syncedPort > 0) proxyForm.port = syncedPort
   }
-} }), dnsSave = useAutosave('/api/network/settings'), behaviorSave = useAutosave('/api/settings')
+} }), dnsSave = useAutosave<NetworkSettingsResponse>('/api/network/settings', { onSaved: result => { if (typeof result.settings?.dnsEnabled === 'boolean') network.dnsEnabled = result.settings.dnsEnabled } }), behaviorSave = useAutosave('/api/settings')
 const { available: appUpdateAvailable, info: appUpdate, applyResult: applyAppUpdateResult, check: checkAppUpdateNotice, setEnabled: setAppUpdateNoticeEnabled } = useAppUpdateNotice()
 const { status: appInstall, supported: appInstallSupported, reason: appInstallReason, disconnected: appInstallDisconnected, active: appInstallActive, progressVisible: appInstallProgressVisible, refresh: refreshAppInstall, start: startAppInstall } = useAppInstall()
 const appInstallMessage = computed(() => appInstallDisconnected.value ? '正在等待应用重新连接…' : ({ idle: '', queued: '正在准备更新…', downloading: '正在下载更新…', verifying: '正在校验更新包…', installing: '正在安装更新，应用会短暂断开…', restarting: '正在启动新版应用…', success: '更新完成', error: '更新失败' })[appInstall.value.stage])
@@ -281,7 +282,7 @@ function applyNetwork(value: NetworkSetting, fallbackPort: number) {
   const defaults = defaultNetwork()
   Object.assign(network.controller, defaults.controller, value.controller || {})
   for (const key of ['mixed', 'socks', 'http', 'redir', 'tproxy'] as const) Object.assign(network[key], defaults[key], value[key] || {})
-  network.mixed.port ||= fallbackPort; network.allowLan = Boolean(value.allowLan); network.bindAddress = value.bindAddress || "*"; Object.assign(network.core, defaults.core, value.core || {}); Object.assign(network.tun, defaults.tun, value.tun || {}); tunRouteExcludeText.value = list(network.tun.routeExcludeAddress); network.dnsOverrideEnabled = value.dnsOverrideEnabled === true; Object.assign(network.dns, structuredClone(defaultDns), value.dns || {}); syncDnsText()
+  network.mixed.port ||= fallbackPort; network.allowLan = Boolean(value.allowLan); network.bindAddress = value.bindAddress || "*"; Object.assign(network.core, defaults.core, value.core || {}); Object.assign(network.tun, defaults.tun, value.tun || {}); tunRouteExcludeText.value = list(network.tun.routeExcludeAddress); network.dnsEnabled = value.dnsEnabled === true; network.dnsOverrideEnabled = value.dnsOverrideEnabled === true; Object.assign(network.dns, structuredClone(defaultDns), value.dns || {}); syncDnsText()
 }
 async function load() {
   loading.value = true
@@ -575,7 +576,7 @@ onMounted(initialize)
               <textarea v-model="tunRouteExcludeText" placeholder="192.168.0.0/16&#10;10.0.0.0/8&#10;fc00::/7" :disabled="tunSwitching || !tunSupported || !network.tun.autoRoute" @change="saveTunSettings('routeExcludeAddress', 80)" @input="saveTunSettings('routeExcludeAddress', 1000)" />
               <span class="field-note">{{ t("每行一个 IPv4/IPv6 CIDR；留空表示不额外排除。") }}</span>
             </div>
-            <div v-if="network.tun.enabled && network.tun.dnsHijack && !network.dns.enable" class="tun-capability warn"><strong>DNS</strong><span>{{ t("开启 DNS 劫持前建议先启用 Mihomo DNS。") }}</span></div>
+            <div v-if="network.tun.enabled && network.tun.dnsHijack && !network.dnsEnabled" class="tun-capability warn"><strong>DNS</strong><span>{{ t("DNS 劫持需要先启用 Mihomo DNS，请在 DNS 设置中启用并应用。") }}</span></div>
             <div class="tun-note"><strong>{{ t("注意") }}</strong><span>{{ t(runtime.platform === 'linux' ? 'TUN 会修改 Linux 主机的系统路由与 DNS 流向。' : runtime.platform === 'docker' ? 'TUN 修改所在网络命名空间的路由。Host 网络下作用于宿主；Bridge 网络下作用于容器。' : 'TUN 会修改 fnOS 的系统路由与 DNS 流向。') }}{{ t("默认关闭；配置不可用时可能影响访问互联网。") }}</span></div>
           </div>
 
