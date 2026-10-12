@@ -7,6 +7,7 @@ import BaseModal from '@/components/BaseModal.vue'
 import ConfigErrorNotice from '@/components/ConfigErrorNotice.vue'
 import { describeConfigError } from '@/services/config-error'
 import ProfileExtensionEditor from '@/components/ProfileExtensionEditor.vue'
+import RuleImportModal from '@/components/RuleImportModal.vue'
 import { api, errorMessage, isAbortError, jsonRequest } from '@/services/api'
 import { formatBytes, formatTime, normalizeSubscriptionInfo } from '@/services/format'
 import { streamProfileJob } from '@/services/profile-jobs'
@@ -22,6 +23,12 @@ const items = ref<ProfileItem[]>([]), discovery = ref<LocalDiscoveryResponse>({}
 const profileJobs = reactive<Record<string, ProfileJob>>({})
 const extensionProfile = ref<ProfileItem | null>(null), extensionKind = ref<ProfileExtensionKind | null>(null)
 const extensionGlobal = ref(false)
+const ruleImportOpen = ref(false), ruleImportProfile = ref<ProfileItem | null>(null)
+function openRuleImport(item?: ProfileItem) {
+  closeEditMenu()
+  ruleImportProfile.value = item || null
+  ruleImportOpen.value = true
+}
 const openEditMenuId = ref('')
 const form = reactive<RemoteForm>(emptyForm()), fileName = ref('本地配置'), selectedFile = ref<File | null>(null)
 const importedPaths = computed(() => new Set(items.value.map(item => item.sourcePath).filter(Boolean)))
@@ -177,7 +184,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="card section"><div class="actions"><button class="small" @click="openRemote()">{{ t("添加订阅") }}</button><button class="ghost small" @click="modal = 'file'">{{ t("从当前电脑导入 YAML") }}</button></div><p class="profile-source-note">{{ t("订阅可包含节点、代理组和分流规则。软件默认不会额外添加代理组或分流规则；你设置的订阅增强和全局增强也会参与生成最终配置。") }}</p></div>
+  <div class="card section"><div class="actions"><button class="small" @click="openRemote()">{{ t("添加订阅") }}</button><button class="ghost small" @click="modal = 'file'">{{ t("从当前电脑导入 YAML") }}</button><button class="ghost small" @click="openRuleImport()">{{ t('导入规则集') }}</button></div><p class="profile-source-note">{{ t("订阅可包含节点、代理组和分流规则。软件默认不会额外添加代理组或分流规则；你设置的订阅增强和全局增强也会参与生成最终配置。") }}</p></div>
   <div class="card section">
     <div class="section-head"><div><h2>{{ t("配置列表") }}</h2></div></div>
     <AsyncState :loading="loading" :error="t(error)">
@@ -213,6 +220,7 @@ onBeforeUnmount(() => {
               </button>
               <div v-if="openEditMenuId === item.id" class="profile-edit-popover" role="menu">
                 <button type="button" role="menuitem" @click="openExtension(item, 'rules')">{{ t("编辑规则") }}</button>
+                <button type="button" role="menuitem" @click="openRuleImport(item)">{{ t('导入规则集') }}</button>
                 <button type="button" role="menuitem" @click="openExtension(item, 'proxies')">{{ t("编辑节点") }}</button>
                 <button type="button" role="menuitem" @click="openExtension(item, 'groups')">{{ t("编辑代理组") }}</button>
                 <button type="button" role="menuitem" @click="openExtension(item, 'override')">{{ t("扩展覆写配置") }}</button>
@@ -251,4 +259,5 @@ onBeforeUnmount(() => {
 <BaseModal :open="modal === 'remote'" :title="t(editing ? '编辑订阅' : '添加远程订阅')" @close="modal = null"><div class="hint" style="margin-bottom:14px">{{ t(editing ? '修改订阅信息后保存；订阅内容将在下次更新时重新下载。' : '填写远程订阅信息，添加后会立即尝试下载一次。') }}</div><div class="form-grid"><div class="field"><label>{{ t("名称") }}</label><input v-model="form.name" :placeholder="t('例如：机场订阅')"></div><div class="field"><label>{{ t("更新间隔（分钟）") }}</label><input v-model.number="form.intervalMinutes" type="number" min="5"></div><div class="field full"><label>{{ t("订阅 URL") }}</label><input v-model="form.url" placeholder="https://..."></div><div class="field full"><div class="hint">{{ t("自动更新顺序：直连 → 当前 Mihomo mixed-port → 系统 HTTP/HTTPS 代理。") }}</div></div><div class="field profile-checkbox-field"><label class="profile-checkbox-label"><input v-model="form.autoUpdate" type="checkbox"><span>{{ t("自动更新") }}</span></label></div><div class="field profile-checkbox-field"><label class="profile-checkbox-label"><input v-model="form.autoApply" type="checkbox"><span>{{ t("当前配置更新后自动应用") }}</span></label></div></div><div class="actions" style="margin-top:16px"><button class="small" :disabled="busyId === 'remote'" @click="saveRemote">{{ t(busyId === 'remote' ? '处理中…' : editing ? '保存修改' : '添加订阅') }}</button><button class="ghost small" @click="modal = null">{{ t("取消") }}</button></div></BaseModal>
   <BaseModal :open="modal === 'file'" :title="t('从当前电脑导入 YAML')" @close="modal = null"><div class="hint" style="margin-bottom:12px">{{ t("这里选择的是当前浏览器所在电脑上的文件；服务端本机配置请使用页面底部的自动扫描。") }}</div><div class="field"><label>{{ t("名称") }}</label><input v-model="fileName"></div><div class="field" style="margin-top:10px"><label>{{ t("选择文件") }}</label><input type="file" accept=".yaml,.yml,.txt" @change="selectedFile = ($event.target as HTMLInputElement).files?.[0] || null"></div><div class="actions" style="margin-top:16px"><button :disabled="busyId === 'file'" @click="importFile">{{ t(busyId === 'file' ? '处理中…' : '导入') }}</button><button class="ghost" @click="modal = null">{{ t("取消") }}</button></div></BaseModal>
   <ProfileExtensionEditor :open="Boolean(extensionKind && (extensionGlobal || extensionProfile))" :profile="extensionProfile" :kind="extensionKind" :global="extensionGlobal" @saved="extensionSaved" @close="closeExtension" />
+  <RuleImportModal :open="ruleImportOpen" :profile="ruleImportProfile" @close="ruleImportOpen = false" @saved="loadProfiles" />
 </template>

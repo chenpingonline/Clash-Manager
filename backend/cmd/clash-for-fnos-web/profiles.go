@@ -292,6 +292,9 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 	if id == "" || strings.Contains(id, "/") {
 		return false
 	}
+	if hasOperation && strings.HasPrefix(operation, "rule-import/") {
+		return g.handleRuleImportAPI(w, r, id, strings.TrimPrefix(operation, "rule-import/"))
+	}
 	if hasOperation && strings.HasPrefix(operation, "extensions/") {
 		kind := strings.TrimPrefix(operation, "extensions/")
 		return g.handleProfileExtensionAPI(w, r, id, kind)

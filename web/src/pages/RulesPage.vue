@@ -4,6 +4,7 @@ import { countLabel, t } from '@/services/i18n'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import AsyncState from '@/components/AsyncState.vue'
 import BaseModal from '@/components/BaseModal.vue'
+import RuleImportModal from '@/components/RuleImportModal.vue'
 import RuleVirtualList from '@/components/RuleVirtualList.vue'
 import { api, errorMessage, jsonRequest } from '@/services/api'
 import { providerUpdatedText } from '@/services/format'
@@ -34,6 +35,7 @@ const rawRules = shallowRef<RulesResponse['rules']>([])
 const ruleScope = ref('')
 const query = ref('')
 const providerOpen = ref(false)
+const ruleImportOpen = ref(false)
 const providerLoading = ref(false)
 const providersLoaded = ref(false)
 const providerError = ref('')
@@ -162,6 +164,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
         <button v-if="query" type="button" class="search-clear" :aria-label="t('清空搜索')" @click="query = ''">×</button>
       </label>
       <button class="ghost rule-provider-trigger" @click="openProviders">{{ t("规则集") }} <span v-if="providersLoaded">{{ t(providerEntries.length) }}</span></button>
+      <button class="ghost" @click="ruleImportOpen = true">{{ t('导入规则集') }}</button>
       <button class="ghost" @click="helpOpen = true">{{ t("规则说明") }}</button>
     </div>
   </Teleport>
@@ -187,6 +190,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   <BaseModal :open="providerOpen" :title="t(`规则集 · ${providerEntries.length}`)" @close="providerOpen = false">
     <div class="provider-modal-head">
       <p>{{ t("管理当前配置中的 Rule Providers；更新后会同步刷新生效规则。") }}</p>
+      <button class="ghost small" @click="providerOpen = false; ruleImportOpen = true">{{ t('导入规则集') }}</button>
       <button v-if="providerEntries.length" class="ghost small" :disabled="updating.size > 0" @click="updateAll">{{ t(updating.size ? '更新中…' : '全部更新') }}</button>
     </div>
     <AsyncState :loading="providerLoading" :error="t(providerError)">
@@ -201,4 +205,5 @@ onBeforeUnmount(() => window.clearTimeout(timer))
     </AsyncState>
     <div class="actions provider-modal-actions"><button class="ghost" @click="providerOpen = false">{{ t("关闭") }}</button></div>
   </BaseModal>
+  <RuleImportModal :open="ruleImportOpen" @close="ruleImportOpen = false" @saved="loadRules(false, true); loadProviders(false)" />
 </template>

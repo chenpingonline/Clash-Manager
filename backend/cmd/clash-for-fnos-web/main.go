@@ -81,6 +81,7 @@ type gateway struct {
 	configMu           sync.Mutex
 	networkMu          sync.Mutex
 	profileMu          sync.Mutex
+	ruleImportPreviews  map[string]*ruleImportPreview
 	jobMu              sync.Mutex
 	localScanMu        sync.Mutex
 	delayMu            sync.RWMutex

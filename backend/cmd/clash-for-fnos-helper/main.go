@@ -174,6 +174,8 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result, err = h.prepareRuntimeMode(r.Context(), stringField(body, "mode"))
 	case "/config/compose":
 		result, err = h.composeUserSettings(body)
+	case "/config/rule-asset":
+		result, err = h.saveRuleAsset(body)
 	case "/config/sync":
 		result, err = h.prepareConfigCandidate(r.Context(), stringField(body, "content"), !boolField(body, "skipValidation"), false)
 	case "/config/activate":
