@@ -82,8 +82,8 @@ function draw() {
   const styles = getComputedStyle(document.documentElement)
   const muted = styles.getPropertyValue('--muted').trim() || '#8f98aa'
   const line = styles.getPropertyValue('--line').trim() || '#242a36'
-  const upload = styles.getPropertyValue('--accent2').trim() || '#8f75ff'
-  const download = '#4b9cff'
+  const upload = styles.getPropertyValue('--traffic-upload').trim() || '#4285f4'
+  const download = styles.getPropertyValue('--traffic-download').trim() || '#329a9e'
   const now = Date.now()
   const range = rangeMinutes.value
   const windowStart = now - range * 60_000

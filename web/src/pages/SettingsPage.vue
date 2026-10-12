@@ -5,6 +5,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import ChangelogModal from '@/components/ChangelogModal.vue'
 import PortConflictHelp from '@/components/PortConflictHelp.vue'
 import AsyncState from '@/components/AsyncState.vue'
+import CollapseTransition from '@/components/CollapseTransition.vue'
 import TunStackFields from '@/components/settings/TunStackFields.vue'
 import HelpPopover from '@/components/HelpPopover.vue'
 import PortRow from '@/components/settings/PortRow.vue'
@@ -141,18 +142,8 @@ function mappings(value: string, kind: 'dns' | 'hosts'): DnsMapping[] | HostMapp
 function syncDnsText() {
   dnsText.defaultNameserver = list(network.dns.defaultNameserver); dnsText.nameserver = list(network.dns.nameserver); dnsText.fallback = list(network.dns.fallback); dnsText.proxyServerNameserver = list(network.dns.proxyServerNameserver); dnsText.directNameserver = list(network.dns.directNameserver); dnsText.fakeIpFilter = list(network.dns.fakeIpFilter); dnsText.nameserverPolicy = network.dns.nameserverPolicy.map(item => `${item.matcher} = ${item.servers.join('; ')}`).join('\n'); dnsText.fallbackIpCidr = list(network.dns.fallbackIpCidr); dnsText.fallbackDomain = list(network.dns.fallbackDomain); dnsText.hosts = network.dns.hosts.map(item => `${item.host} = ${item.values.join('; ')}`).join('\n')
 }
-async function toggleSection(section: Section, event: MouseEvent) {
-  const item = (event.currentTarget as HTMLElement).closest<HTMLElement>('.settings-accordion-item')
-  const expanding = open.value !== section
-  open.value = expanding ? section : null
-  if (!expanding) return
-  await nextTick()
-  if (open.value !== section || !item?.isConnected) return
-  const container = item.closest<HTMLElement>('.content')
-  if (container) {
-    const top = container.scrollTop + item.getBoundingClientRect().top - container.getBoundingClientRect().top - 12
-    container.scrollTo({ top: Math.max(0, top), behavior: 'instant' })
-  }
+function toggleSection(section: Section) {
+  open.value = open.value === section ? null : section
 }
 async function openSettingsSection(section: Section) {
   open.value = section
@@ -538,7 +529,7 @@ onMounted(initialize)
 
   <AsyncState :loading="loading" :error="t(error)">
     <div class="settings-home"><div class="settings-accordion-list">
-      <div v-for="category in categories" :id="category.key === 'tun' ? 'tun-settings' : undefined" :key="category.key" class="settings-accordion-item" :class="{ open: open === category.key }"><button class="settings-accordion-head" type="button" :aria-expanded="open === category.key" @click="toggleSection(category.key, $event)">
+      <div v-for="category in categories" :id="category.key === 'tun' ? 'tun-settings' : undefined" :key="category.key" class="settings-accordion-item" :class="{ open: open === category.key }"><button class="settings-accordion-head" type="button" :aria-expanded="open === category.key" @click="toggleSection(category.key)">
         <span class="settings-category-icon" :class="`icon-${category.key}`" aria-hidden="true">
           <svg v-if="category.key === 'core'" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /><rect x="9" y="9" width="6" height="6" rx="1" /><path d="M9 3v3m6-3v3M9 18v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3" /></svg>
           <svg v-else-if="category.key === 'network'" viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.5" /><circle cx="18" cy="7" r="2.5" /><circle cx="12" cy="17" r="2.5" /><path d="M8.5 7h7M7.3 9.2l3.4 5.6m6-5.6-3.4 5.6" /></svg>
@@ -550,7 +541,7 @@ onMounted(initialize)
         </span>
         <span class="settings-category-copy"><strong>{{ t(category.title) }}</strong><small>{{ t(category.description) }}</small></span><span class="settings-category-tail"><span v-if="category.key === 'update' && appUpdateAvailable" class="settings-update-notice" role="status"><span class="update-notice-dot" aria-hidden="true" />{{ t("有新版本") }}</span><span class="settings-accordion-chevron" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg></span></span>
       </button>
-        <div v-if="open === category.key" class="settings-accordion-body">
+        <CollapseTransition><div v-if="open === category.key" class="expand-panel"><div class="settings-accordion-body">
           <div v-if="category.key === 'network'" class="settings-accordion-panel network-card"><p v-if="networkOffline" class="hint">{{ t("Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。") }}</p><div class="port-list"><PortRow id="netController" v-model="network.controller" title="Controller API" :description="t('Mihomo REST API · Manager 使用 127.0.0.1 连接')" locked @change="saveNetwork('controller')" /><PortRow id="netMixed" v-model="network.mixed" :title="t('混合代理端口')" :description="t('同时接受 HTTP 与 SOCKS5 代理')" @change="saveNetwork('mixed')" /><PortRow id="netSocks" v-model="network.socks" :title="t('SOCKS5 代理端口')" :description="t('单独提供 SOCKS5 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('socks')" /><PortRow id="netHttp" v-model="network.http" :title="t('HTTP(S) 代理端口')" :description="t('单独提供 HTTP CONNECT/HTTP 代理')" :disabled="network.mixed.enabled" @change="saveNetwork('http')" /><PortRow id="netRedir" v-model="network.redir" :title="t('Redir 透明代理端口')" :description="t('Linux TCP REDIRECT 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('redir')" /><PortRow id="netTproxy" v-model="network.tproxy" :title="t('TProxy 透明代理端口')" :description="t('Linux TPROXY TCP/UDP 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('tproxy')" /></div><div class="network-options"><ProxyBindAddress :model-value="network.bindAddress" v-model:allow-lan="network.allowLan" :busy="netState === 'pending' || netState === 'saving'" :save="saveProxyBindAddress" @lan-change="saveNetwork('allowLan')" /><SettingToggle v-model="network.core.ipv6" :title="t('全局 IPv6')" :description="t('允许 Mihomo 接收和处理 IPv6 流量')" @change="saveNetwork('ipv6')" /><SettingToggle v-model="network.core.unifiedDelay" :title="t('统一延迟')" :description="t('使用统一 RTT 算法，使不同协议的测速更便于比较')" @change="saveNetwork('unifiedDelay')" /></div><div class="dns-autosave-state" :class="netState" role="status" aria-live="polite">{{ t(netMessage) }}</div></div>
 
           <div v-else-if="category.key === 'tun'" class="settings-accordion-panel tun-card" :class="{ 'tun-on': network.tun.enabled }">
@@ -784,7 +775,7 @@ onMounted(initialize)
 
             <p v-if="appUpdate.directRetry" class="hint">{{ t("常规请求失败，已通过不使用 HTTP/HTTPS 代理的重试获取更新信息。") }}</p>
           </div>
-        </div>
+        </div></div></CollapseTransition>
       </div>
     </div></div>
   </AsyncState>

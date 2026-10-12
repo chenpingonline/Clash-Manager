@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Link2 } from 'lucide-vue-next'
+import { Link2, Search } from 'lucide-vue-next'
 import { countLabel, t } from '@/services/i18n'
 
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import AsyncState from '@/components/AsyncState.vue'
+import CollapseTransition from '@/components/CollapseTransition.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import { useDelayTests } from '@/composables/useDelayTests'
 import { useGroupDelaySettings } from '@/composables/useGroupDelaySettings'
@@ -168,6 +169,10 @@ async function locateCurrent(group: ProxyGroup) {
   const card = Array.from(document.querySelectorAll<HTMLElement>('.proxy-card')).find(item => item.dataset.groupName === group.name)
   const row = Array.from(card?.querySelectorAll<HTMLElement>('.node-row') || []).find(item => item.dataset.nodeName === current)
   if (!row) return notify(`未找到当前节点：${current}`, true)
+  // Wait for the expanded height before computing the scroll destination.
+  await Promise.allSettled(Array.from(card?.querySelectorAll<HTMLElement>('.expand-panel') || [])
+    .flatMap(panel => panel.getAnimations().map(animation => animation.finished)))
+  if (!row.isConnected || !expanded.has(group.name)) return
   row.scrollIntoView({ block: 'center', behavior: 'smooth' })
   row.querySelector<HTMLElement>('.node-select')?.focus({ preventScroll: true })
 }
@@ -214,14 +219,14 @@ onMounted(() => { void delayTests.restore(); void load() })
   <Teleport defer to="#page-actions">
     <div class="proxy-topbar-tools">
       <div class="proxy-search">
-        <span aria-hidden="true">⌕</span>
+        <Search :size="14" :stroke-width="1.8" aria-hidden="true" />
         <input v-model="query" :placeholder="t('搜索代理组或节点')" :aria-label="t('搜索代理组或节点')" autocomplete="off">
         <button v-if="query" type="button" class="search-clear" :aria-label="t('清空搜索')" @click="query = ''">×</button>
       </div>
       <span class="search-result">{{ t(query ? `${filtered.length} 组 · ${visibleNodeCount} 个节点` : '') }}</span>
       <button class="ghost rule-provider-trigger" @click="openProviderManager">{{ t("策略组") }} <span v-if="providersLoaded">{{ t(providerEntries.length) }}</span></button>
       <button class="ghost" :disabled="loading || !groups.length" @click="toggleAll">{{ t(allExpanded ? '全部收起' : '全部展开') }}</button>
-      <button class="ghost" :disabled="loading || !groups.length || delayTestBusy" @click="testAllGroups">{{ t(delayTestBusy ? '测试中…' : '延迟测试') }}</button>
+      <button class="ghost primary" :disabled="loading || !groups.length || delayTestBusy" @click="testAllGroups">{{ t(delayTestBusy ? '测试中…' : '延迟测试') }}</button>
     </div>
   </Teleport>
 
@@ -247,7 +252,7 @@ onMounted(() => { void delayTests.restore(); void load() })
           </div>
         </div>
         <p v-if="delaySettings.error(group.name)" class="proxy-delay-error" role="alert">{{ t(delaySettings.error(group.name)) }}</p>
-        <div class="proxy-body">
+        <CollapseTransition><div v-show="expanded.has(group.name) || Boolean(query)" class="expand-panel"><div class="proxy-body">
           <div class="proxy-group-filter">
             <label class="proxy-filter-search"><span>{{ t("筛选") }}</span><input :value="groupFilter(group.name)" :aria-label="t(`${group.name} 筛选节点`)" :placeholder="t('输入节点名称')" @input="updateGroupFilter(group.name, $event)"></label>
             <button v-if="groupFilter(group.name)" class="ghost small" @click="groupFilters.delete(group.name)">{{ t("清除") }}</button>
@@ -256,7 +261,7 @@ onMounted(() => { void delayTests.restore(); void load() })
           </div>
           <div v-if="group.nodes.length" class="node-list"><div v-for="name in group.nodes" :key="name" class="node-row" :class="{ active: group.proxy.now === name }" :data-node-name="name"><button class="node-select" @click="select(group, name)"><span class="node-copy"><span class="node-name" :title="name">{{ name }}</span><span v-if="rawProxies[name]?.type" class="node-type">{{ rawProxies[name]?.type }}</span></span></button><button class="node-delay" :class="snapshot(name, group.name).className" :disabled="delayTestBusy" :title="snapshot(name, group.name).error || t('单独测试该节点延迟')" @click="testOne(name, group.name)">{{ t(snapshot(name, group.name).text) }}</button></div></div>
           <div v-else class="proxy-group-empty">{{ t("没有匹配的节点") }}</div>
-        </div>
+        </div></div></CollapseTransition>
       </section>
     </div>
   </AsyncState>

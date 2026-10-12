@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import LoginGate from './components/LoginGate.vue'
 import './styles.css'
+import './ui-polish.css'
 
 const app = createApp(LoginGate)
 app.config.errorHandler = (error) => {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Search } from 'lucide-vue-next'
 import { t } from '@/services/i18n'
 
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -143,6 +144,7 @@ onBeforeUnmount(() => { alive = false; request?.abort() })
   <Teleport defer to="#page-actions">
     <div class="config-tools">
       <div class="config-search-wrap">
+        <Search :size="14" :stroke-width="1.8" aria-hidden="true" />
         <input v-model="query" type="search" class="config-search" :placeholder="t('搜索配置')" :aria-label="t('搜索配置内容')" @keydown="searchKeydown">
         <span v-if="query.trim()" class="config-search-count" role="status">{{ t(matchCount ? `${activeMatch}/${matchCount}` : '0/0') }}</span>
       </div>
@@ -150,7 +152,7 @@ onBeforeUnmount(() => { alive = false; request?.abort() })
       <button class="ghost config-search-nav" type="button" :disabled="!matchCount" :aria-label="t('下一个匹配项')" :title="t('下一个匹配项（Enter）')" @click="moveMatch(1)">↓</button>
       <button class="ghost" type="button" @click="format = format === 'formatted' ? 'compact' : 'formatted'">{{ t(format === 'formatted' ? '压缩' : '格式化') }}</button>
       <button class="ghost" type="button" :disabled="copying || !config?.content" @click="copyConfig">{{ t("复制配置") }}</button>
-      <button v-if="config?.mode === 'managed'" class="ghost" type="button" @click="editing = true">{{ t("编辑配置") }}</button>
+      <button v-if="config?.mode === 'managed'" class="ghost primary" type="button" @click="editing = true">{{ t("编辑配置") }}</button>
     </div>
   </Teleport>
   <AsyncState :loading="loading" :error="t(error)">

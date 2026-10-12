@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Search } from 'lucide-vue-next'
 import { t } from '@/services/i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import HighlightText from '@/components/HighlightText.vue'
@@ -114,11 +115,11 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
 
 <template>
   <Teleport defer to="#page-actions"><div class="log-tools">
-    <input v-model="query" type="search" class="log-search" :placeholder="t(historyMode ? '搜索保留的历史日志' : '搜索最近日志')" :aria-label="t('搜索日志')" @keydown.enter="historyMode && load()">
+    <div class="log-search-wrap"><Search :size="14" :stroke-width="1.8" aria-hidden="true" /><input v-model="query" type="search" class="log-search" :placeholder="t(historyMode ? '搜索保留的历史日志' : '搜索最近日志')" :aria-label="t('搜索日志')" @keydown.enter="historyMode && load()"></div>
     <select v-model.number="limit" class="log-limit-select" :aria-label="t('显示行数')" @change="(isCore || historyMode) && load()"><option v-for="value in [100, 200, 500, 800, 2000]" :key="value" :value="value">{{ value }} {{ t('行') }}</option></select>
     <select v-if="!isCore" v-model="level" class="log-level-select" :aria-label="t('显示级别')" @change="load()"><option v-for="value in ['debug', 'info', 'warning', 'error']" :key="value">{{ value }}</option></select>
     <button class="ghost" @click="changeMode">{{ t(historyMode ? '实时日志' : '历史查询') }}</button><button class="ghost" @click="openSettings">{{ t('日志设置') }}</button>
-    <button class="ghost" @click="clearHistory">{{ t(isCore ? '清空 Core 输出日志' : '清空历史日志') }}</button><button v-if="!historyMode" @click="toggle">{{ t(running ? '停止' : '继续') }}</button>
+    <button class="ghost danger" @click="clearHistory">{{ t(isCore ? '清空 Core 输出日志' : '清空历史日志') }}</button><button v-if="!historyMode" class="ghost primary" @click="toggle">{{ t(running ? '停止' : '继续') }}</button>
   </div></Teleport>
   <form v-if="historyMode" class="log-history-tools" @submit.prevent="load()">
     <div class="log-history-query">

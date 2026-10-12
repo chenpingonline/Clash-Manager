@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Search } from 'lucide-vue-next'
 import { countLabel, t } from '@/services/i18n'
 
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
@@ -159,12 +160,12 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   <Teleport defer to="#page-actions">
     <div class="rule-topbar-tools">
       <label class="rule-search">
-        <span aria-hidden="true">⌕</span>
+        <Search :size="14" :stroke-width="1.8" aria-hidden="true" />
         <input v-model="query" :placeholder="t('搜索规则、类型或策略')" :aria-label="t('搜索规则、类型或策略')" autocomplete="off">
         <button v-if="query" type="button" class="search-clear" :aria-label="t('清空搜索')" @click="query = ''">×</button>
       </label>
       <button class="ghost rule-provider-trigger" @click="openProviders">{{ t("规则集") }} <span v-if="providersLoaded">{{ t(providerEntries.length) }}</span></button>
-      <button class="ghost" @click="ruleImportOpen = true">{{ t('导入规则集') }}</button>
+      <button class="ghost primary" @click="ruleImportOpen = true">{{ t('导入规则集') }}</button>
       <button class="ghost" @click="helpOpen = true">{{ t("规则说明") }}</button>
     </div>
   </Teleport>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { t } from '@/services/i18n'
 
-import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
+import { RefreshCw } from 'lucide-vue-next'
 import NavIcon from '@/components/NavIcon.vue'
 import ToastHost from '@/components/ToastHost.vue'
 import LanguageSelect from '@/components/LanguageSelect.vue'
@@ -42,6 +43,19 @@ const current = ref<PageName>(readPage())
 const refreshKey = ref(0)
 const activePageRef = ref<{ refreshPage?: () => void | Promise<void> } | null>(null)
 const pageRefreshing = ref(false)
+const contentRef = ref<HTMLElement | null>(null)
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
+let pageAnimation: Animation | null = null
+function cancelPageMotion() { pageAnimation?.cancel(); pageAnimation = null }
+watch(current, () => {
+  cancelPageMotion()
+  if (reducedMotion.matches || !contentRef.value) return
+  // Animate the existing scroll surface, without overlapping page mounts or Teleports.
+  pageAnimation = contentRef.value.animate([
+    { opacity: 0.65, transform: 'translateY(4px)' },
+    { opacity: 1, transform: 'translateY(0)' },
+  ], { duration: 200, easing: 'cubic-bezier(.22, 1, .36, 1)' })
+}, { flush: 'post' })
 const activePage = computed(() => pages.find(item => item.name === current.value) || pages[0]!)
 const { footer, refresh } = useCoreHealth()
 const { available: appUpdateAvailable, initialize: initializeAppUpdateNotice } = useAppUpdateNotice()
@@ -125,6 +139,7 @@ async function checkAppUpdateSilently() {
 }
 
 onMounted(() => {
+  reducedMotion.addEventListener('change', cancelPageMotion)
   window.addEventListener('hashchange', onHashChange)
   window.addEventListener('keydown', blockBrowserHistoryShortcut, true)
   window.addEventListener('pointerdown', blockBrowserMouseNavigation, true)
@@ -136,6 +151,8 @@ onMounted(() => {
   if (runtime.value.capabilities.appIcons) api<AppIconsResponse>('/api/app/icons').then(value => syncIcon(value.selected || value.defaultId || 'cat-orbit')).catch(() => syncIcon('cat-orbit'))
 })
 onBeforeUnmount(() => {
+  reducedMotion.removeEventListener('change', cancelPageMotion)
+  cancelPageMotion()
   window.removeEventListener('hashchange', onHashChange)
   window.removeEventListener('keydown', blockBrowserHistoryShortcut, true)
   window.removeEventListener('pointerdown', blockBrowserMouseNavigation, true)
@@ -169,9 +186,12 @@ onBeforeUnmount(() => {
       <div class="topbar-title"><h1>{{ t(activePage.label) }}</h1><div id="page-title-meta" class="page-title-meta" /></div>
       <div class="top-actions">
         <LanguageSelect v-if="current === 'settings'" />
-        <button v-if="runtime.platform !== 'fnos'" class="ghost" @click="logout">{{ t("退出登录") }}</button><div id="page-actions" class="page-actions" /><button class="ghost" :disabled="pageRefreshing" :aria-busy="pageRefreshing" @click="refreshActivePage">{{ t(pageRefreshing ? '刷新中…' : '刷新') }}</button></div>
+        <button v-if="runtime.platform !== 'fnos'" class="ghost" @click="logout">{{ t("退出登录") }}</button>
+        <div id="page-actions" class="page-actions" />
+        <button class="ghost page-refresh" :disabled="pageRefreshing" :aria-busy="pageRefreshing" @click="refreshActivePage"><RefreshCw :size="14" :stroke-width="1.8" aria-hidden="true" /><span>{{ t(pageRefreshing ? '刷新中…' : '刷新') }}</span></button>
+      </div>
     </header>
-    <section class="content" :class="{ 'config-content': current === 'config', 'logs-content': current === 'logs', 'rules-content': current === 'rules' }" @scroll.passive="markScrollActivity">
+    <section ref="contentRef" class="content" :class="{ 'config-content': current === 'config', 'logs-content': current === 'logs', 'rules-content': current === 'rules' }" @scroll.passive="markScrollActivity">
       <component :is="activePage.component" :key="`${current}-${refreshKey}`" ref="activePageRef" />
     </section>
   </main>

@@ -5,11 +5,13 @@ const emit = defineEmits<{ close: [] }>()
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="modal" role="presentation" @click.self="props.closable && emit('close')">
-      <section class="modal-card" :class="props.cardClass" role="dialog" aria-modal="true" :aria-label="title" :inert="inert || undefined" :aria-hidden="inert || undefined">
-        <template v-if="showHeader"><slot name="header"><h3>{{ title }}</h3></slot></template>
-        <slot />
-      </section>
-    </div>
+    <Transition name="modal-motion">
+      <div v-if="open" class="modal" role="presentation" @click.self="props.closable && emit('close')">
+        <section class="modal-card" :class="props.cardClass" role="dialog" aria-modal="true" :aria-label="title" :inert="inert || undefined" :aria-hidden="inert || undefined">
+          <template v-if="showHeader"><slot name="header"><h3>{{ title }}</h3></slot></template>
+          <slot />
+        </section>
+      </div>
+    </Transition>
   </Teleport>
 </template>
