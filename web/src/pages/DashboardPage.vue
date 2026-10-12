@@ -9,7 +9,8 @@ import SystemProxyCard from '@/components/SystemProxyCard.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
 import { refreshCoreHealth, updateCoreBootstrap } from '@/composables/useCoreHealth'
 import { useDelayTests } from '@/composables/useDelayTests'
-import { compactUTCOffset, formatQuotaPercent, listeningPorts, memorySample, orderedProxyGroups, profileSource, subscriptionQuota, type DashboardProxyGroup } from '@/services/dashboard'
+import { useDashboardGroup } from '@/composables/useDashboardGroup'
+import { compactUTCOffset, formatQuotaPercent, isManualProxyGroup, listeningPorts, memorySample, orderedProxyGroups, profileSource, subscriptionQuota, type DashboardProxyGroup } from '@/services/dashboard'
 import { useOperationProgress } from '@/composables/useOperationProgress'
 import { api, APP_PREFIX, errorMessage, isAbortError, jsonRequest } from '@/services/api'
 import { formatBytes, formatTime } from '@/services/format'
@@ -57,7 +58,7 @@ const connectionStatsFailed = ref(false)
 const streamedMemory = ref<number | null>(null)
 const groups = ref<DashboardProxyGroup[]>([])
 const rawProxies = ref<ProxiesResponse['proxies']>({})
-const selectedGroupName = ref('')
+const { selectedGroupName, chooseGroup: rememberGroup, reconcileGroups } = useDashboardGroup()
 const profiles = ref<ProfileItem[]>([])
 const exitLocation = ref<ExitLocationResponse | null>(null)
 const proxyError = ref('')
@@ -225,7 +226,7 @@ async function fetchProxies() {
     rawProxies.value = data.proxies || {}
     if (data.delayContext) delayTests.setContext(data.delayContext)
     groups.value = orderedProxyGroups(data)
-    if (!groups.value.some(group => group.name === selectedGroupName.value)) selectedGroupName.value = groups.value[0]?.name || ''
+    reconcileGroups(groups.value.map(group => group.name))
     syncCurrentDelay()
     proxyError.value = ''
     return true
@@ -306,10 +307,11 @@ async function loadDashboardDetails(reapplyNode = false) {
   await Promise.all([loadProxies(), loadProfiles()])
   if (stopped || proxyError.value) return
   const group = currentGroup.value
-  if (reapplyNode && group?.proxy.now) {
+  if (reapplyNode && group?.proxy.now && isManualProxyGroup(group.proxy)) {
     nodeSelecting.value = true
     try {
-      // Reapply even when the selected name is unchanged, just like an explicit selection.
+      // Reapply manual selectors only. PUT on URLTest pins its current node
+      // and silently replaces automatic selection with a fixed choice.
       await applyNode(group.name, group.proxy.now)
     } catch (cause) {
       locationError.value = `重新应用当前节点失败：${errorMessage(cause)}`
@@ -435,7 +437,7 @@ function startDashboardStream() {
 function chooseGroup(name: string) {
   closeGroupMenu()
   closeNodeMenu()
-  selectedGroupName.value = name
+  rememberGroup(name)
   syncCurrentDelay()
 }
 

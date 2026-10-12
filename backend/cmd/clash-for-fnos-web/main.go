@@ -796,7 +796,7 @@ func (g *gateway) restoreSelections(ctx context.Context) {
 	all, _ := payload["proxies"].(map[string]any)
 	for group, node := range selected {
 		raw, ok := all[group].(map[string]any)
-		if !ok {
+		if !ok || !strings.EqualFold(fmt.Sprint(raw["type"]), "selector") {
 			continue
 		}
 		nodes, _ := raw["all"].([]any)

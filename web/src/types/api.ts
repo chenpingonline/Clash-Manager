@@ -317,6 +317,8 @@ export interface AppIconsResponse {
 }
 
 export interface PortSetting { enabled?: boolean; port?: number }
+export interface ProxyAccount { username: string; password: string }
+export interface ProxyAuthentication { accounts: ProxyAccount[]; skipAuthPrefixes: string[] }
 export interface TunSetting {
   enabled?: boolean
   stack?: '' | 'mixed' | 'system' | 'gvisor' | 'mips'
@@ -343,6 +345,7 @@ export interface NetworkSetting {
   controller?: { host?: string; port?: number }
   mixed?: PortSetting; socks?: PortSetting; http?: PortSetting; redir?: PortSetting; tproxy?: PortSetting
   allowLan?: boolean; bindAddress?: string; dnsEnabled?: boolean; dnsOverrideEnabled?: boolean; dns?: DnsSetting
+  proxyAuthentication?: ProxyAuthentication
   core?: { ipv6?: boolean; unifiedDelay?: boolean }; tun?: TunSetting
 }
 export interface TunFeatures { coreVersion?: string; defaultStack?: '' | 'gvisor' | 'mips'; mips?: boolean; congestionController?: boolean }

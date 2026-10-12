@@ -732,7 +732,7 @@ func TestStartupRestoresOnlyValidSavedSelections(t *testing.T) {
 	selected := make(chan string, 1)
 	controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/proxies" {
-			_, _ = io.WriteString(w, `{"proxies":{"Group":{"all":["A","B"]}}}`)
+			_, _ = io.WriteString(w, `{"proxies":{"Group":{"type":"Selector","all":["A","B","Auto"]},"Auto":{"type":"URLTest","all":["A","B"]}}}`)
 			return
 		}
 		if r.Method == http.MethodPut && r.URL.Path == "/proxies/Group" {
@@ -740,6 +740,9 @@ func TestStartupRestoresOnlyValidSavedSelections(t *testing.T) {
 			selected <- string(body)
 			w.WriteHeader(http.StatusNoContent)
 			return
+		}
+		if r.Method == http.MethodPut {
+			t.Errorf("restoration must not pin an automatic or missing group: %s", r.URL.Path)
 		}
 		http.NotFound(w, r)
 	}))
@@ -749,12 +752,12 @@ func TestStartupRestoresOnlyValidSavedSelections(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"controller": controller.URL, "persistSelections": true})
 	_ = os.WriteFile(settingsFile, body, 0o600)
 	selectedFile := filepath.Join(directory, "selected.json")
-	_ = os.WriteFile(selectedFile, []byte(`{"Group":"B","Missing":"A"}`), 0o600)
+	_ = os.WriteFile(selectedFile, []byte(`{"Group":"Auto","Auto":"A","Missing":"A"}`), 0o600)
 	handler := newGateway(config{settingsFile: settingsFile, selectedFile: selectedFile, mihomoLogFile: filepath.Join(directory, "log")})
 	handler.restoreSelections(context.Background())
 	select {
 	case value := <-selected:
-		if value != `{"name":"B"}` {
+		if value != `{"name":"Auto"}` {
 			t.Fatalf("unexpected body: %s", value)
 		}
 	default:

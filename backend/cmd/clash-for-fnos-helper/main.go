@@ -177,7 +177,7 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/config/rule-asset":
 		result, err = h.saveRuleAsset(body)
 	case "/config/sync":
-		result, err = h.prepareConfigCandidate(r.Context(), stringField(body, "content"), !boolField(body, "skipValidation"), false)
+		result, err = h.prepareStartupConfig(r.Context(), stringField(body, "content"), !boolField(body, "skipValidation"))
 	case "/config/activate":
 		result, err = h.activateConfig(r.Context(), stringField(body, "txId"))
 	case "/config/validate":

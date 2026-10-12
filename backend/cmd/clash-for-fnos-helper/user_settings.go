@@ -83,6 +83,22 @@ func normalizeUserPatch(input map[string]any) (map[string]any, error) {
 				return nil, err
 			}
 			patch["bind-address"] = address
+		} else if key == "proxyAuthentication" {
+			raw, err := json.Marshal(value)
+			if err != nil {
+				return nil, fail(400, "代理认证设置格式无效")
+			}
+			var auth configyaml.ProxyAuthentication
+			if string(raw) == "null" || json.Unmarshal(raw, &auth) != nil || auth.Accounts == nil || auth.SkipAuthPrefixes == nil {
+				return nil, fail(400, "代理认证设置格式无效")
+			}
+			authPatch, err := auth.Overrides()
+			if err != nil {
+				return nil, fail(400, err.Error())
+			}
+			for key, value := range authPatch {
+				patch[key] = value
+			}
 		} else if key == "core" {
 			if core, ok := value.(map[string]any); ok {
 				for k, v := range core {

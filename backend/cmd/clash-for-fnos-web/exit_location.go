@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/mihomo"
 )
 
@@ -74,6 +75,21 @@ func (g *gateway) writeExitLocation(w http.ResponseWriter, r *http.Request, miho
 	transport.Proxy = nil // A direct fallback must not inherit stale system proxy variables.
 	proxyURL, via := runtimeProxy(configs)
 	if proxyURL != nil {
+		// /configs does not expose Mihomo's credentials. Read the owning active
+		// startup YAML through Helper, including hand-written authentication.
+		raw, _, readErr := g.activeStartupConfig(r.Context())
+		if readErr != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "读取代理认证配置失败，请检查 Helper 与当前启动配置"})
+			return
+		}
+		auth, parseErr := configyaml.ParseProxyAuthentication(raw)
+		if parseErr != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "代理认证配置格式无效"})
+			return
+		}
+		if len(auth.Accounts) > 0 {
+			proxyURL.User = url.UserPassword(auth.Accounts[0].Username, auth.Accounts[0].Password)
+		}
 		transport.Proxy = http.ProxyURL(proxyURL)
 	}
 	locationClient := &http.Client{Transport: transport, Timeout: 8 * time.Second}
@@ -86,10 +102,19 @@ func (g *gateway) writeExitLocation(w http.ResponseWriter, r *http.Request, miho
 	request.Header.Set("User-Agent", "Clash-for-fnOS/"+version)
 	response, err := locationClient.Do(request)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "出口位置更新失败: " + err.Error()})
+		message := "出口位置更新失败: " + err.Error()
+		if proxyURL != nil && proxyURL.User != nil {
+			// net/http errors can contain a proxy URL; never return credentials.
+			message = "出口位置更新失败，无法通过已配置的认证代理连接"
+		}
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": message})
 		return
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusProxyAuthRequired {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "代理认证失败，请检查用户名、密码与免认证网段"})
+		return
+	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": fmt.Sprintf("出口位置更新失败: HTTP %d", response.StatusCode)})
 		return

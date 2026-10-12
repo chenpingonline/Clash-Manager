@@ -1383,6 +1383,7 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 		{"socks", "socks-port"}, {"http", "port"}, {"redir", "redir-port"},
 		{"tproxy", "tproxy-port"}, {"allowLan", "allow-lan"},
 		{"bindAddress", "bind-address"}, {"core", ""}, {"dns", "dns"}, {"tun", "tun"},
+		{"proxyAuthentication", ""},
 	}
 	settings := map[string]any{}
 	for _, field := range mapping {
@@ -1392,6 +1393,16 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 			continue
 		}
 		settings[api] = value
+		if api == "proxyAuthentication" {
+			merged, err := configyaml.MergeOverrides([]byte(raw), map[string]any{
+				"authentication": patch["authentication"], "skip-auth-prefixes": patch["skip-auth-prefixes"],
+			})
+			if err != nil {
+				return nil, err
+			}
+			raw = string(merged)
+			continue
+		}
 		if api == "bindAddress" {
 			address, err := normalizeProxyBindAddress(value)
 			if err != nil {
@@ -1556,6 +1567,11 @@ func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 	}
 	settings := map[string]any{"controller": map[string]any{"enabled": true, "port": controllerPort}, "mixed": port("mixed-port", mixed), "socks": port("socks-port", 7898), "http": port("port", 7899), "redir": port("redir-port", 7895), "tproxy": port("tproxy-port", 7896), "allowLan": yamlBoolean(raw, "allow-lan", false), "bindAddress": proxyBindAddressFromConfig(raw), "core": map[string]any{"ipv6": yamlBoolean(raw, "ipv6", true), "unifiedDelay": yamlBoolean(raw, "unified-delay", false)}, "tun": map[string]any{"enabled": nestedBoolean("tun", "enable", false), "stack": yamlNestedString(raw, "tun", "stack", ""), "congestionController": yamlNestedString(raw, "tun", "congestion-controller", ""), "mtu": yamlNestedInteger(raw, "tun", "mtu", 1500), "routeExcludeAddress": yamlNestedStringList(raw, "tun", "route-exclude-address"), "autoRoute": nestedBoolean("tun", "auto-route", true), "autoRedirect": nestedBoolean("tun", "auto-redirect", true), "autoDetectInterface": nestedBoolean("tun", "auto-detect-interface", true), "dnsHijack": len(hijack) > 0, "strictRoute": nestedBoolean("tun", "strict-route", false)}}
 	settings["dnsEnabled"] = nestedBoolean("dns", "enable", false)
+	auth, err := configyaml.ProxyAuthenticationFromDocument(document)
+	if err != nil {
+		return nil, err
+	}
+	settings["proxyAuthentication"] = auth
 	proc := h.primary()
 	tunDevice := fileExists("/dev/net/tun")
 	capability := resolveTunCapability(proc, tunDevice, os.Geteuid())

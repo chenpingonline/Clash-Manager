@@ -11,6 +11,7 @@ import HelpPopover from '@/components/HelpPopover.vue'
 import PortRow from '@/components/settings/PortRow.vue'
 import SettingToggle from '@/components/settings/SettingToggle.vue'
 import ProxyBindAddress from '@/components/settings/ProxyBindAddress.vue'
+import ProxyAuthenticationSettings from '@/components/settings/ProxyAuthentication.vue'
 import { refreshCoreHealth } from '@/composables/useCoreHealth'
 import { useAutosave } from '@/composables/useAutosave'
 import { useAppUpdateNotice } from '@/composables/useAppUpdateNotice'
@@ -20,7 +21,7 @@ import { coreUpdateFailure, type CoreUpdateProgress } from '@/services/core-upda
 import { formatBytes, formatTime } from '@/services/format'
 import { openStatusStream } from '@/services/status-stream'
 import { notify } from '@/services/toast'
-import type { AppIconsResponse, AppUpdateInfo, CoreMode, DnsMapping, DnsSetting, GeoAsset, GeoStatus, HostMapping, ManagerSettings, NetworkSetting, NetworkSettingsResponse, PortSetting, ProxyEnvironmentResponse, SystemStatus, TunFeatures, TunSetting } from '@/types/api'
+import type { AppIconsResponse, AppUpdateInfo, CoreMode, DnsMapping, DnsSetting, GeoAsset, GeoStatus, HostMapping, ManagerSettings, NetworkSetting, NetworkSettingsResponse, PortSetting, ProxyAuthentication, ProxyEnvironmentResponse, SystemStatus, TunFeatures, TunSetting } from '@/types/api'
 
 import { runtime } from '@/services/runtime'
 
@@ -85,6 +86,22 @@ const secretVisible = ref(false)
 const secretLoading = ref(false)
 const system = ref<SystemStatus>({}), manager = reactive<ManagerSettings>({ notifyAppUpdates: true, healthcheckUrl: 'http://cp.cloudflare.com/generate_204', healthcheckTimeout: 5000 }), network = reactive<NetworkForm>(defaultNetwork())
 const tunRouteExcludeText = ref('')
+const proxyAuthentication = ref<ProxyAuthentication>({ accounts: [], skipAuthPrefixes: [] })
+const authSaving = ref(false)
+async function loadProxyAuthentication() {
+  const result = await api<NetworkSettingsResponse>('/api/network/settings')
+  if (!result.settings?.proxyAuthentication) throw new Error('读取代理认证配置失败')
+  proxyAuthentication.value = result.settings.proxyAuthentication
+  return proxyAuthentication.value
+}
+async function saveProxyAuthentication(value: ProxyAuthentication) {
+  authSaving.value = true
+  try {
+    const result = await api<NetworkSettingsResponse>('/api/network/settings', jsonRequest('PUT', { proxyAuthentication: value }))
+    proxyAuthentication.value = result.settings?.proxyAuthentication || value
+    notify(result.activation === 'saved-only' ? '代理认证配置已保存，启动 Core 后生效' : '代理认证设置已保存并生效')
+  } finally { authSaving.value = false }
+}
 const environment = ref<ProxyEnvironmentResponse>({}), proxyForm = reactive<ProxyEnvForm>({ enabled: true, followMixedPort: true, port: 7890, noProxy: 'localhost,127.0.0.1,::1', targets: { environment: true, profile: true, bashrc: true } })
 const proxyBypassInput = ref('')
 const icons = ref<AppIconsResponse>({}), selectedIcon = ref('cat-orbit'), tunSupported = ref(true), tunSupportText = ref('当前 Mihomo 具备 TUN 所需权限，可直接启用')
@@ -270,6 +287,7 @@ function proxyBypassKeydown(event: KeyboardEvent) {
 function removeProxyBypass(index: number) { updateProxyBypass(proxyBypassItems.value.filter((_, itemIndex) => itemIndex !== index)) }
 
 function applyNetwork(value: NetworkSetting, fallbackPort: number) {
+  proxyAuthentication.value = value.proxyAuthentication || { accounts: [], skipAuthPrefixes: [] }
   const defaults = defaultNetwork()
   Object.assign(network.controller, defaults.controller, value.controller || {})
   for (const key of ['mixed', 'socks', 'http', 'redir', 'tproxy'] as const) Object.assign(network[key], defaults[key], value[key] || {})
@@ -542,7 +560,7 @@ onMounted(initialize)
         <span class="settings-category-copy"><strong>{{ t(category.title) }}</strong><small>{{ t(category.description) }}</small></span><span class="settings-category-tail"><span v-if="category.key === 'update' && appUpdateAvailable" class="settings-update-notice" role="status"><span class="update-notice-dot" aria-hidden="true" />{{ t("有新版本") }}</span><span class="settings-accordion-chevron" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg></span></span>
       </button>
         <CollapseTransition><div v-if="open === category.key" class="expand-panel"><div class="settings-accordion-body">
-          <div v-if="category.key === 'network'" class="settings-accordion-panel network-card"><p v-if="networkOffline" class="hint">{{ t("Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。") }}</p><div class="port-list"><PortRow id="netController" v-model="network.controller" title="Controller API" :description="t('Mihomo REST API · Manager 使用 127.0.0.1 连接')" locked @change="saveNetwork('controller')" /><PortRow id="netMixed" v-model="network.mixed" :title="t('混合代理端口')" :description="t('同时接受 HTTP 与 SOCKS5 代理')" @change="saveNetwork('mixed')" /><PortRow id="netSocks" v-model="network.socks" :title="t('SOCKS5 代理端口')" :description="t('单独提供 SOCKS5 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('socks')" /><PortRow id="netHttp" v-model="network.http" :title="t('HTTP(S) 代理端口')" :description="t('单独提供 HTTP CONNECT/HTTP 代理')" :disabled="network.mixed.enabled" @change="saveNetwork('http')" /><PortRow id="netRedir" v-model="network.redir" :title="t('Redir 透明代理端口')" :description="t('Linux TCP REDIRECT 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('redir')" /><PortRow id="netTproxy" v-model="network.tproxy" :title="t('TProxy 透明代理端口')" :description="t('Linux TPROXY TCP/UDP 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('tproxy')" /></div><div class="network-options"><ProxyBindAddress :model-value="network.bindAddress" v-model:allow-lan="network.allowLan" :busy="netState === 'pending' || netState === 'saving'" :save="saveProxyBindAddress" @lan-change="saveNetwork('allowLan')" /><SettingToggle v-model="network.core.ipv6" :title="t('全局 IPv6')" :description="t('允许 Mihomo 接收和处理 IPv6 流量')" @change="saveNetwork('ipv6')" /><SettingToggle v-model="network.core.unifiedDelay" :title="t('统一延迟')" :description="t('使用统一 RTT 算法，使不同协议的测速更便于比较')" @change="saveNetwork('unifiedDelay')" /></div><div class="dns-autosave-state" :class="netState" role="status" aria-live="polite">{{ t(netMessage) }}</div></div>
+          <div v-if="category.key === 'network'" class="settings-accordion-panel network-card"><p v-if="networkOffline" class="hint">{{ t("Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。") }}</p><div class="port-list"><PortRow id="netController" v-model="network.controller" title="Controller API" :description="t('Mihomo REST API · Manager 使用 127.0.0.1 连接')" locked @change="saveNetwork('controller')" /><PortRow id="netMixed" v-model="network.mixed" :title="t('混合代理端口')" :description="t('同时接受 HTTP 与 SOCKS5 代理')" @change="saveNetwork('mixed')" /><PortRow id="netSocks" v-model="network.socks" :title="t('SOCKS5 代理端口')" :description="t('单独提供 SOCKS5 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('socks')" /><PortRow id="netHttp" v-model="network.http" :title="t('HTTP(S) 代理端口')" :description="t('单独提供 HTTP CONNECT/HTTP 代理')" :disabled="network.mixed.enabled" @change="saveNetwork('http')" /><PortRow id="netRedir" v-model="network.redir" :title="t('Redir 透明代理端口')" :description="t('Linux TCP REDIRECT 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('redir')" /><PortRow id="netTproxy" v-model="network.tproxy" :title="t('TProxy 透明代理端口')" :description="t('Linux TPROXY TCP/UDP 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('tproxy')" /></div><div class="network-options"><ProxyAuthenticationSettings :model-value="proxyAuthentication" :busy="authSaving || netState === 'pending' || netState === 'saving'" :load="loadProxyAuthentication" :save="saveProxyAuthentication" /><ProxyBindAddress :model-value="network.bindAddress" v-model:allow-lan="network.allowLan" :busy="netState === 'pending' || netState === 'saving'" :save="saveProxyBindAddress" @lan-change="saveNetwork('allowLan')" /><SettingToggle v-model="network.core.ipv6" :title="t('全局 IPv6')" :description="t('允许 Mihomo 接收和处理 IPv6 流量')" @change="saveNetwork('ipv6')" /><SettingToggle v-model="network.core.unifiedDelay" :title="t('统一延迟')" :description="t('使用统一 RTT 算法，使不同协议的测速更便于比较')" @change="saveNetwork('unifiedDelay')" /></div><div class="dns-autosave-state" :class="netState" role="status" aria-live="polite">{{ t(netMessage) }}</div></div>
 
           <div v-else-if="category.key === 'tun'" class="settings-accordion-panel tun-card" :class="{ 'tun-on': network.tun.enabled }">
             <div class="section-head">

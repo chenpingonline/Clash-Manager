@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { bucketTrafficSamples, compactUTCOffset, formatQuotaPercent, listeningPorts, memorySample, orderedProxyGroups, profileSource, stabilizeTrafficScale, subscriptionQuota, trafficCurveSegment, trafficSampleIndexAtTime, trafficScaleMaximum, trafficTooltipLeft } from './dashboard'
+import { bucketTrafficSamples, compactUTCOffset, formatQuotaPercent, isManualProxyGroup, listeningPorts, memorySample, orderedProxyGroups, profileSource, stabilizeTrafficScale, subscriptionQuota, trafficCurveSegment, trafficSampleIndexAtTime, trafficScaleMaximum, trafficTooltipLeft } from './dashboard'
 
 describe('dashboard presentation data', () => {
+  it('reapplies manual groups without pinning automatic groups on reopening', () => {
+    expect(isManualProxyGroup({ type: 'Selector', all: ['Automatic'], now: 'Automatic' })).toBe(true)
+    for (const type of ['URLTest', 'Fallback', 'LoadBalance', 'Direct', '']) expect(isManualProxyGroup({ type, now: 'A' })).toBe(false)
+  })
   it('keeps Mihomo group order before remaining groups', () => {
     const groups = orderedProxyGroups({
       groupOrder: ['节点选择'],

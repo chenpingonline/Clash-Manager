@@ -6,6 +6,10 @@ export interface DashboardProxyGroup {
   proxy: ProxyNode
 }
 
+export function isManualProxyGroup(proxy: ProxyNode): boolean {
+  return String(proxy.type || '').toLowerCase() === 'selector'
+}
+
 export function orderedProxyGroups(data: ProxiesResponse): DashboardProxyGroup[] {
   const entries = Object.entries(data.proxies || {}).filter(([, proxy]) => Boolean(proxy.all?.length))
   const available = new Map(entries)
