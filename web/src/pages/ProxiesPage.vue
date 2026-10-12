@@ -1,16 +1,18 @@
 <script setup lang="ts">
+import { Link2 } from 'lucide-vue-next'
 import { countLabel, t } from '@/services/i18n'
 
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import AsyncState from '@/components/AsyncState.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import { useDelayTests } from '@/composables/useDelayTests'
+import { useGroupDelaySettings } from '@/composables/useGroupDelaySettings'
 import { api, errorMessage, jsonRequest } from '@/services/api'
 import { providerUpdatedText } from '@/services/format'
 import { parseProxyGroupSortPreferences, shouldShowProxyNode, sortProxyNodeNames, type ProxyNodeSort } from '@/services/proxy-view'
 import { latencyClass } from '@/services/latency'
 import { notify } from '@/services/toast'
-import type { ProxiesResponse, ProxyNode, ProxyProvider, ProxyProvidersResponse, GroupDelayContext } from '@/types/api'
+import type { ProxiesResponse, ProxyNode, ProxyProvider, ProxyProvidersResponse } from '@/types/api'
 
 type ProxyGroup = { name: string; proxy: ProxyNode }
 const GROUP_SORT_STORAGE_KEY = 'clash-for-fnos.proxy-group-sorts.v1'
@@ -24,31 +26,13 @@ const loading = ref(true), error = ref(''), query = ref('')
 const groups = ref<ProxyGroup[]>([])
 const expanded = reactive(new Set<string>())
 const delayTests = useDelayTests()
-const settingGroup = ref('')
-const settingMode = ref<'auto' | 'global' | 'custom'>('auto')
-const settingURL = ref('')
-const settingBusy = ref(false)
-const settingError = ref('')
-const settingContext = ref<GroupDelayContext | null>(null)
-const selectedTarget = computed(() => settingContext.value?.groups[settingGroup.value])
-const previewURL = computed(() => settingMode.value === 'custom' ? settingURL.value : settingMode.value === 'global' ? settingContext.value?.globalUrl : selectedTarget.value?.configUrl || settingContext.value?.globalUrl)
-function openDelaySettings(group: ProxyGroup) {
-  settingGroup.value = group.name
-  settingContext.value = delayTests.context.value ? JSON.parse(JSON.stringify(delayTests.context.value)) : null
-  settingMode.value = selectedTarget.value?.mode || 'auto'
-  settingURL.value = settingMode.value === 'custom' ? selectedTarget.value?.url || '' : ''
-  settingError.value = ''
-}
-async function saveDelaySettings() {
-  settingBusy.value = true
-  settingError.value = ''
-  try {
-    const context = await api<GroupDelayContext>('/api/delay-settings', jsonRequest('PUT', { scope: settingContext.value?.scope, group: settingGroup.value, mode: settingMode.value, url: settingURL.value }))
-    delayTests.setContext(context)
-    settingGroup.value = ''
-    notify('测速设置已保存')
-  } catch (cause) { settingError.value = errorMessage(cause) }
-  finally { settingBusy.value = false }
+const delaySettings = useGroupDelaySettings(delayTests.context, delayTests.setContext)
+async function toggleCustomDelay(group: string) {
+  await delaySettings.toggle(group)
+  if (!delaySettings.isCustom(group)) return
+  await nextTick()
+  const card = Array.from(document.querySelectorAll<HTMLElement>('.proxy-card')).find(item => item.dataset.groupName === group)
+  card?.querySelector<HTMLInputElement>('.proxy-delay-url')?.focus({ preventScroll: true })
 }
 function delayFor(name: string, group: string) { return delayTests.get(name, group) }
 const groupFilters = reactive(new Map<string, string>())
@@ -132,6 +116,7 @@ async function select(group: ProxyGroup, name: string) {
 }
 async function testOne(name: string, group: string) {
   if (!testable(name)) return
+  if (!await delaySettings.save(group)) return
   try {
     await delayTests.start([name], group)
     const failure = delayFor(name, group)
@@ -151,6 +136,8 @@ async function testMany(names: string[], label: string, group: string) {
   }
 }
 async function testAllGroups() {
+ if (delayTestBusy.value) return
+ for (const group of groups.value) if (!await delaySettings.save(group.name)) return
  const requests = groups.value.map(group => ({ group: group.name, names: [...new Set(group.proxy.all || [])].filter(testable) })).filter(group => group.names.length)
  if (!requests.length) return notify('没有可测速节点')
  try { await delayTests.startGroups(requests); notify('全部节点测速完成') }
@@ -166,6 +153,7 @@ function groupTesting(name: string) {
 }
 async function testGroup(group: ProxyGroup) {
   if (delayTestBusy.value) return
+  if (!await delaySettings.save(group.name)) return
   await testMany(group.proxy.all || [], `${group.name} 测速完成`, group.name)
 }
 async function locateCurrent(group: ProxyGroup) {
@@ -243,13 +231,13 @@ onMounted(() => { void delayTests.restore(); void load() })
         <div class="proxy-card-head" @click="expanded.has(group.name) ? expanded.delete(group.name) : expanded.add(group.name)">
           <div class="proxy-summary"><div class="proxy-name-row"><h3>{{ group.name }}</h3><span class="tag">{{ t(group.proxy.type || 'Selector') }}</span></div><div class="proxy-current"><span>{{ t("当前") }}</span><strong>{{ group.proxy.now || '-' }}</strong><span v-if="snapshot(group.proxy.now || '', group.name).text !== '--'" class="current-delay" :class="snapshot(group.proxy.now || '', group.name).className">{{ t(snapshot(group.proxy.now || '', group.name).text) }}</span></div></div>
           <div class="proxy-head-actions">
-            <button class="proxy-group-tool proxy-locate ghost small" :disabled="!group.proxy.now" :aria-label="t('定位当前节点')" :title="t('定位当前节点')" @click.stop="locateCurrent(group)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" /></svg></button>
-            <button class="proxy-group-tool ghost small" :disabled="!delayTests.context.value" :aria-label="t('测速设置')" :title="t('测速设置')" @click.stop="openDelaySettings(group)">⚙</button>
+            <input v-if="delaySettings.isCustom(group.name)" class="proxy-delay-url" :value="delaySettings.url(group.name)" type="url" maxlength="4096" autocomplete="off" spellcheck="false" :aria-label="t('自定义测试地址') + ' · ' + group.name" :aria-invalid="Boolean(delaySettings.error(group.name))" :placeholder="t('输入测速网址')" :title="t('输入网址后按回车或移开焦点保存')" :disabled="delayTestBusy || delaySettings.isSaving(group.name)" @click.stop @input="delaySettings.edit(group.name, ($event.target as HTMLInputElement).value)" @blur="delaySettings.save(group.name)" @keydown.enter.stop.prevent="delaySettings.save(group.name)">
+            <button class="proxy-group-tool proxy-locate ghost small" :disabled="!group.proxy.now" :aria-label="t('定位当前节点')" :title="t('定位当前节点')" @click.stop="locateCurrent(group)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" /><circle class="proxy-locate-dot" cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg></button>
+            <button class="proxy-group-tool proxy-delay-custom ghost small" :class="{ active: delaySettings.isCustom(group.name) }" :disabled="!delayTests.context.value || delayTestBusy || delaySettings.isSaving(group.name)" :aria-pressed="delaySettings.isCustom(group.name)" :aria-label="t('自定义测速网址') + ' · ' + group.name" :title="t('自定义测速网址')" @mousedown.prevent @click.stop="toggleCustomDelay(group.name)"><Link2 :size="16" :stroke-width="1.8" aria-hidden="true" /></button>
             <button class="proxy-group-tool proxy-latency-test ghost small" :disabled="delayTestBusy" :title="t('测试本组全部可测速节点')" @click.stop="testGroup(group)">{{ t(groupTesting(group.name) ? '测试中…' : '延迟测试') }}</button>
             <label class="proxy-sort-control" :title="t('设置本组节点排序方式')" @click.stop>
-              <span>{{ t("排序") }}</span>
               <select :value="groupSort(group.name)" :aria-label="t(`${group.name} 排序方式`)" @click.stop @change.stop="updateGroupSort(group.name, $event)">
-                <option value="default">{{ t("默认") }}</option>
+                <option value="default">{{ t("默认排序") }}</option>
                 <option value="delay">{{ t("按延迟") }}</option>
                 <option value="name">{{ t("按名称") }}</option>
               </select>
@@ -258,6 +246,7 @@ onMounted(() => { void delayTests.restore(); void load() })
             <span class="proxy-chevron" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg></span>
           </div>
         </div>
+        <p v-if="delaySettings.error(group.name)" class="proxy-delay-error" role="alert">{{ t(delaySettings.error(group.name)) }}</p>
         <div class="proxy-body">
           <div class="proxy-group-filter">
             <label class="proxy-filter-search"><span>{{ t("筛选") }}</span><input :value="groupFilter(group.name)" :aria-label="t(`${group.name} 筛选节点`)" :placeholder="t('输入节点名称')" @input="updateGroupFilter(group.name, $event)"></label>
@@ -271,17 +260,6 @@ onMounted(() => { void delayTests.restore(); void load() })
       </section>
     </div>
   </AsyncState>
-
-  <BaseModal :open="Boolean(settingGroup)" :title="t('测速设置') + ' · ' + settingGroup" :closable="!settingBusy" @close="settingGroup = ''">
-    <form class="group-delay-settings" @submit.prevent="saveDelaySettings">
-      <div class="field"><label for="group-delay-mode">{{ t('测试地址') }}</label><select id="group-delay-mode" v-model="settingMode" :disabled="settingBusy"><option value="auto">{{ t('自动：优先使用组配置') }}</option><option value="global">{{ t('使用全局地址') }}</option><option value="custom">{{ t('自定义') }}</option></select></div>
-      <div v-if="settingMode === 'custom'" class="field"><label for="group-delay-url">{{ t('自定义测试地址') }}</label><input id="group-delay-url" v-model="settingURL" type="url" required maxlength="4096" :disabled="settingBusy" placeholder="https://example.com/generate_204"></div>
-      <div class="field"><label>{{ t('实际测试地址') }}</label><span class="group-delay-url mono">{{ previewURL }}</span></div>
-      <p>{{ t('设置仅作用于当前订阅的面板手动测速，不改变内核自动健康检查。') }}</p>
-      <p v-if="settingError" class="error" role="alert">{{ t(settingError) }}</p>
-      <div class="actions"><button type="button" class="ghost" :disabled="settingBusy" @click="settingMode = 'auto'; settingURL = ''">{{ t('恢复默认') }}</button><button type="button" class="ghost" :disabled="settingBusy" @click="settingGroup = ''">{{ t('取消') }}</button><button type="submit" :disabled="settingBusy">{{ t(settingBusy ? '保存中…' : '保存') }}</button></div>
-    </form>
-  </BaseModal>
 
   <BaseModal :open="providerOpen" :title="t(`代理组 · ${providerEntries.length}`)" @close="providerOpen = false">
     <div class="provider-modal-head"><p>{{ t("管理当前配置中的 Proxy Providers，可单独更新或执行健康检查。") }}</p><button v-if="providerEntries.length" class="ghost small" :disabled="updatingProviders.size > 0" @click="updateAllProviders">{{ t(updatingProviders.size ? '更新中…' : '全部更新') }}</button></div>
@@ -300,8 +278,24 @@ onMounted(() => { void delayTests.restore(); void load() })
 </template>
 
 <style scoped>
-.group-delay-settings { display: grid; gap: 16px; }
-.group-delay-settings p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.group-delay-url { overflow-wrap: anywhere; font-size: 12px; }
-.group-delay-settings .error { color: var(--bad); }
+.proxy-head-actions .proxy-locate { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-color: var(--line); color: var(--text); }
+.proxy-head-actions .proxy-locate:hover:not(:disabled) { border-color: var(--accent-line, var(--accent)); background: var(--accent-soft, rgba(124,156,255,.08)); color: var(--accent-ink, var(--accent)); }
+.proxy-locate svg { width: 18px; height: 18px; stroke-width: 2; }
+.proxy-locate-dot { fill: currentColor; stroke: none; }
+.proxy-head-actions .proxy-delay-url { width: clamp(160px, 20vw, 280px); min-width: 0; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 11px; user-select: text; }
+.proxy-head-actions .proxy-delay-url:focus { border-color: var(--accent); outline: none; box-shadow: none; }
+.proxy-head-actions .proxy-delay-url[aria-invalid="true"] { border-color: var(--bad); }
+.proxy-head-actions .proxy-delay-custom { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; line-height: 1; }
+.proxy-delay-custom svg { flex: none; color: var(--muted); }
+.proxy-head-actions .proxy-delay-custom.active { border-color: var(--accent-line, var(--accent)); background: var(--accent-soft, rgba(124,156,255,.10)); color: var(--accent-ink, var(--accent)); }
+.proxy-delay-custom.active svg { color: inherit; }
+.proxy-delay-error { margin: -5px 17px 12px; color: var(--bad); font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 680px) {
+  .proxy-card-head { position: relative; }
+  .proxy-summary { max-width: calc(100% - 84px); }
+  .proxy-head-actions { flex-wrap: wrap; overflow-x: visible; }
+  .proxy-head-actions .proxy-delay-url { width: 100%; order: 1; }
+  .proxy-head-actions .node-count { position: absolute; top: 13px; right: 47px; }
+  .proxy-head-actions .proxy-chevron { position: absolute; top: 13px; right: 13px; }
+}
 </style>

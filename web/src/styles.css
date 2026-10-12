@@ -769,7 +769,7 @@ html[data-theme="light"] .rule-type{background:#f7f9fc}
 .dashboard-delay.testing{color:var(--muted);animation:delayPulse 1s ease-in-out infinite alternate}
 .dashboard-route-actions{display:flex;align-items:center;gap:7px;white-space:nowrap}
 .dashboard-sort-control{height:30px;display:flex;align-items:center;gap:4px;overflow:hidden;padding-left:8px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--muted);font-size:10px;white-space:nowrap}
-.dashboard-sort-control select{width:72px;height:28px;padding:0 20px 0 0;border:0;border-radius:0;background:transparent;color:var(--text);font-size:11px;box-shadow:none;outline:0;cursor:pointer}
+.dashboard-sort-control select{width:88px;height:28px;padding:0 20px 0 0;border:0;border-radius:0;background:transparent;color:var(--text);font-size:11px;box-shadow:none;outline:0;cursor:pointer}
 .dashboard-location-grid{display:grid;grid-template-columns:.9fr 1fr 1fr 1.35fr;min-height:58px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .dashboard-location-grid>div{min-width:0;padding:0 14px}
 .dashboard-location-grid>div:first-child{padding-left:0}

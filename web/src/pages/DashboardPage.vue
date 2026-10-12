@@ -722,9 +722,8 @@ onBeforeUnmount(() => {
           <div class="dashboard-route-actions">
             <button class="dashboard-delay" :class="delayClass" :disabled="!currentGroup || testingGroup" :title="t('测试当前代理组全部节点延迟')" @click="testCurrentGroup">{{ t(delayText) }}</button>
             <label class="dashboard-sort-control" :title="t('设置当前代理组节点排序方式')">
-              <span>{{ t("排序") }}</span>
               <select :value="currentGroupSort" :disabled="!currentGroup || testingGroup" :aria-label="t('当前代理组节点排序方式')" @change="updateCurrentGroupSort">
-                <option value="default">{{ t("默认") }}</option>
+                <option value="default">{{ t("默认排序") }}</option>
                 <option value="delay">{{ t("按延迟") }}</option>
                 <option value="name">{{ t("按名称") }}</option>
               </select>
