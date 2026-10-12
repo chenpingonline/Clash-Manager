@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -83,6 +84,7 @@ type gateway struct {
 	jobMu              sync.Mutex
 	localScanMu        sync.Mutex
 	delayMu            sync.RWMutex
+	delayGeneration    atomic.Uint64
 	networkOperationMu sync.RWMutex
 	coreOperation      networkSaveStatus
 	networkOperation   networkSaveStatus
@@ -954,6 +956,8 @@ func (g *gateway) handleMihomoAPI(w http.ResponseWriter, r *http.Request, reques
 		return g.handleRuleProviderOperation(w, r, client, requestPath)
 	case strings.HasPrefix(requestPath, "/api/providers/"):
 		return g.handleProviderOperation(w, r, client, requestPath)
+	case requestPath == "/api/delay-settings" && r.Method == http.MethodPut:
+		g.saveGroupDelaySetting(w, r, client)
 	case requestPath == "/api/delays" && r.Method == http.MethodGet:
 		g.writeDelayStatus(w)
 	case requestPath == "/api/delays" && r.Method == http.MethodPost:
@@ -1115,6 +1119,13 @@ func (g *gateway) writeConnections(w http.ResponseWriter, r *http.Request, clien
 }
 
 func (g *gateway) orderedProxies(w http.ResponseWriter, r *http.Request, client *mihomo.Client) {
+	g.configMu.Lock()
+	defer g.configMu.Unlock()
+	client, err := client.Snapshot()
+	if err != nil {
+		writeMihomoError(w, err)
+		return
+	}
 	response, err := client.Do(r.Context(), http.MethodGet, "/proxies", nil, 12*time.Second)
 	if err != nil {
 		writeMihomoError(w, err)
@@ -1130,6 +1141,12 @@ func (g *gateway) orderedProxies(w http.ResponseWriter, r *http.Request, client 
 	payload["groupOrder"] = order
 	payload["groupOrderSource"] = source
 	payload["groupOrderPath"] = configPath
+	delayContext, err := g.groupDelayContext(r.Context(), client, payload)
+	if err != nil {
+		writeMihomoError(w, err)
+		return
+	}
+	payload["delayContext"] = delayContext
 	writeJSON(w, http.StatusOK, payload)
 }
 

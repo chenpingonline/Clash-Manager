@@ -71,7 +71,14 @@ const nodeSelecting = ref(false)
 const delayState = ref<DelayState>('idle')
 const delayValue = ref(0)
 const delayTests = useDelayTests()
-const nodeDelays = computed<Record<string, NodeDelay>>(() => Object.fromEntries(delayTests.delays))
+const nodeDelays = computed<Record<string, NodeDelay>>(() => {
+  const values: Record<string, NodeDelay> = {}
+  for (const name of currentGroup.value?.proxy.all || []) {
+    const delay = delayTests.get(name, selectedGroupName.value)
+    if (delay) values[name] = delay
+  }
+  return values
+})
 const groupSorts = ref<Record<string, ProxyNodeSort>>((() => {
   try { return parseProxyGroupSortPreferences(window.localStorage.getItem(GROUP_SORT_STORAGE_KEY)) }
   catch { return {} }
@@ -158,10 +165,11 @@ function syncCurrentDelay() {
     delayState.value = cached.state
     return
   }
-  const history = rawProxies.value?.[currentNode.value]?.history || []
-  delayValue.value = Number(history[history.length - 1]?.delay || 0)
-  delayState.value = delayValue.value > 0 ? 'done' : 'idle'
+  delayValue.value = 0
+  delayState.value = 'idle'
 }
+
+watch(nodeDelays, syncCurrentDelay)
 
 function nodeDelayText(name: string) {
   const item = nodeDelays.value[name]
@@ -215,7 +223,7 @@ async function fetchProxies() {
     const data = await api<ProxiesResponse>('/api/proxies')
     if (stopped) return false
     rawProxies.value = data.proxies || {}
-    delayTests.hydrateHistory(rawProxies.value)
+    if (data.delayContext) delayTests.setContext(data.delayContext)
     groups.value = orderedProxyGroups(data)
     if (!groups.value.some(group => group.name === selectedGroupName.value)) selectedGroupName.value = groups.value[0]?.name || ''
     syncCurrentDelay()
@@ -466,7 +474,7 @@ function testableNode(name: string) {
 
 async function testNode(name: string) {
   try {
-    const completion = delayTests.start([name])
+    const completion = delayTests.start([name], selectedGroupName.value)
     syncCurrentDelay()
     await completion
   } catch (cause) {
@@ -481,7 +489,7 @@ async function testCurrentGroup() {
   const queue = [...new Set(group.proxy.all || [])].filter(testableNode)
   if (!queue.length) return notify('当前代理组没有可测速节点')
   try {
-    const completion = delayTests.start(queue)
+    const completion = delayTests.start(queue, group.name)
     syncCurrentDelay()
     await completion
     syncCurrentDelay()

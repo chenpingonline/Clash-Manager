@@ -41,6 +41,13 @@ func (s *Store) WithDocument(operation func(map[string]any) error) error {
 	return s.save(document)
 }
 
+// ReadDocument returns a fresh snapshot for internal consumers only.
+func (s *Store) ReadDocument() (map[string]any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.load()
+}
+
 func (s *Store) ReadPublic() (map[string]any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

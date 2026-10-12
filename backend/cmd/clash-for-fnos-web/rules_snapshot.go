@@ -110,6 +110,7 @@ func (s *rulesSnapshotStore) scheduleRefresh(settingsFile string, delay time.Dur
 }
 
 func (g *gateway) rulesChanged() {
+	g.delayGeneration.Add(1)
 	if g.rulesSnapshot == nil {
 		return
 	}

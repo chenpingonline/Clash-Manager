@@ -56,8 +56,11 @@ func (c *DelayClient) loadProviders(ctx context.Context) {
 	}
 }
 
-func (c *DelayClient) Do(ctx context.Context, name, testURL string, timeout int) (*http.Response, error) {
+func (c *DelayClient) Do(ctx context.Context, name, testURL string, timeout int, expected ...string) (*http.Response, error) {
 	query := url.Values{"url": {testURL}, "timeout": {strconv.Itoa(timeout)}}
+	if len(expected) > 0 && expected[0] != "" {
+		query.Set("expected", expected[0])
+	}
 	requestTimeout := time.Duration(timeout+3000) * time.Millisecond
 	response, err := c.client.Do(ctx, http.MethodGet, "/proxies/"+url.PathEscape(name)+"/delay?"+query.Encode(), nil, requestTimeout)
 	var apiError *APIError

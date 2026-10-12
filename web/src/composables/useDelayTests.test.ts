@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   streamUpdate: null as null | ((status: unknown) => void),
 }))
 
-vi.mock('@/services/delay-tests', () => ({
+vi.mock('@/services/delay-tests', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/services/delay-tests')>(),
   createDelayTest: mocks.create,
   loadDelayTestStatus: mocks.load,
   openDelayTestStream: vi.fn((_jobId: string, update: (status: unknown) => void) => {
@@ -57,4 +58,33 @@ describe('useDelayTests', () => {
     await tests.restore()
     expect(tests.delays.get('provider-node')).toEqual({ value: 32, state: 'done' })
   })
+})
+
+it('isolates the same node by URL, status expectation and subscription, including late completion', async () => {
+  const { useDelayTests } = await import('./useDelayTests')
+  const tests = useDelayTests()
+  const context = { scope: 'profile-a', globalUrl: 'https://global.example/', groups: {
+    AI: { mode: 'auto' as const, source: 'config' as const, url: 'https://ai.example/', expected: '200' },
+    Video: { mode: 'custom' as const, source: 'custom' as const, url: 'https://video.example/' },
+  } }
+  tests.setContext(context)
+  mocks.load.mockResolvedValue({ state: 'done', names: [], results: [
+    { name: 'shared', scope: 'profile-a', url: 'https://ai.example/', expected: '200', state: 'done', delay: 20 },
+    { name: 'shared', scope: 'profile-a', url: 'https://video.example/', state: 'timeout' },
+  ] })
+  await tests.restore()
+  expect(tests.get('shared', 'AI')?.value).toBe(20)
+  expect(tests.get('shared', 'Video')?.state).toBe('timeout')
+  tests.setContext({ ...context, scope: 'profile-b' })
+  expect(tests.get('shared', 'AI')).toBeUndefined()
+  // A completion for A must not appear in the currently displayed B.
+  mocks.load.mockResolvedValue({ state: 'done', names: ['shared'], targets: [
+    { name: 'shared', scope: 'profile-a', url: 'https://ai.example/', expected: '200' },
+  ], results: [{ name: 'shared', scope: 'profile-a', url: 'https://ai.example/', expected: '200', state: 'done', delay: 30 }] })
+  await tests.restore()
+  expect(tests.get('shared', 'AI')).toBeUndefined()
+  tests.setContext(context)
+  expect(tests.get('shared', 'AI')?.value).toBe(30)
+  tests.setContext({ ...context, groups: { ...context.groups, AI: { ...context.groups.AI, expected: '204' } } })
+  expect(tests.get('shared', 'AI')).toBeUndefined()
 })

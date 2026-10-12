@@ -115,10 +115,25 @@ export interface ProxyNode {
   type?: string
   now?: string
   all?: string[]
+  testUrl?: string
   history?: Array<{ delay?: number }>
 }
 
+export interface GroupDelayTarget {
+  mode: 'auto' | 'global' | 'custom'
+  url: string
+  configUrl?: string
+  expected?: string
+  source: 'global' | 'config' | 'custom'
+}
+export interface GroupDelayContext {
+  scope: string
+  globalUrl: string
+  groups: Record<string, GroupDelayTarget>
+}
+
 export interface ProxiesResponse {
+  delayContext?: GroupDelayContext
   proxies?: Record<string, ProxyNode>
   groupOrder?: string[]
   groupOrderSource?: 'startup' | 'managed' | string

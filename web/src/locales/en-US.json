@@ -1587,5 +1587,19 @@
   "请输入监听 IP 地址": "Enter a listening IP address",
   "代理监听地址必须为 IP 地址或 *": "The proxy listening address must be an IP address or *",
   "监听地址": "Bind address",
-  "监听设置": "Listen settings"
+  "监听设置": "Listen settings",
+  "当前配置已切换，请刷新后重试": "The active configuration changed. Refresh and try again.",
+  "测速设置已保存": "Latency test settings saved",
+  "测速设置": "Latency test settings",
+  "自动：优先使用组配置": "Automatic: prefer group configuration",
+  "使用全局地址": "Use global URL",
+  "实际测试地址": "Effective test URL",
+  "设置仅作用于当前订阅的面板手动测速，不改变内核自动健康检查。": "These settings apply only to manual tests in the current subscription. Core automatic health checks stay unchanged.",
+  "测速期间配置已切换，请重新测试": "Configuration changed during the test. Run the test again.",
+  "测速地址模式无效": "Invalid latency test URL mode",
+  "代理组不存在": "Proxy group does not exist",
+  "读取组测速设置失败": "Failed to read group latency test settings",
+  "缺少当前配置标识": "Active configuration identity is missing",
+  "测速节点不属于指定代理组": "The node does not belong to the specified proxy group",
+  "单次测速需包含 1～2000 个测试目标": "A test must contain 1–2000 targets"
 }

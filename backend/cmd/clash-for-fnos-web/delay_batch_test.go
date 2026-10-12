@@ -217,7 +217,7 @@ func TestDelayBatchStreamRestoresRunningJobAndPublishesCompletion(t *testing.T) 
 	}
 
 	gateway.delayMu.Lock()
-	gateway.delayResults["a"] = delayBatchResult{Name: "a", Delay: 18, State: "done"}
+	gateway.delayResults["a"] = delayBatchResult{delayBatchTarget: delayBatchTarget{Name: "a"}, Delay: 18, State: "done"}
 	gateway.delayJob.State = "done"
 	gateway.publishDelayStatusLocked()
 	gateway.delayMu.Unlock()

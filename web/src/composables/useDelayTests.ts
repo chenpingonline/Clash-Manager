@@ -1,11 +1,12 @@
 import { computed, reactive, readonly, ref } from 'vue'
-import { createDelayTest, loadDelayTestStatus, openDelayTestStream, type DelayTestStatus } from '@/services/delay-tests'
-import type { ProxyNode } from '@/types/api'
+import { createDelayTest, createGroupDelayTest, delayTargetKey, loadDelayTestStatus, openDelayTestStream, type DelayTestStatus } from '@/services/delay-tests'
+import type { GroupDelayContext } from '@/types/api'
 
 export type NodeDelayState = { value: number; state: 'idle' | 'testing' | 'done' | 'timeout' | 'error'; error?: string }
 
 const idleStatus: DelayTestStatus = { state: 'idle', names: [], results: [] }
 const status = ref<DelayTestStatus>(idleStatus)
+const context = ref<GroupDelayContext | null>(null)
 const delays = reactive(new Map<string, NodeDelayState>())
 const waiting = new Map<string, Set<(value: DelayTestStatus) => void>>()
 let closeStream: (() => void) | null = null
@@ -21,13 +22,16 @@ function settle(next: DelayTestStatus) {
 
 function applyStatus(next: DelayTestStatus) {
   status.value = next
+  // Preserve each result's source/URL, even if completion arrives after a
+  // subscription switch. Rendering selects only the current target context.
+  next.results.forEach(result => delays.set(delayTargetKey(result), { value: result.delay || 0, state: result.state, ...(result.error ? { error: result.error } : {}) }))
+  const targets = next.targets || next.names.map(name => ({ name }))
   if (next.state === 'running') {
-    next.names.forEach(name => delays.set(name, { value: 0, state: 'testing' }))
+    targets.forEach(target => delays.set(delayTargetKey(target), { value: 0, state: 'testing' }))
   } else if (next.state === 'done') {
-    const completed = new Set(next.results.map(result => result.name))
-    next.results.forEach(result => delays.set(result.name, { value: result.delay || 0, state: result.state, ...(result.error ? { error: result.error } : {}) }))
-    next.names.forEach(name => {
-      if (!completed.has(name)) delays.set(name, { value: 0, state: 'error' })
+    const completed = new Set(next.results.map(delayTargetKey))
+    targets.forEach(target => {
+      if (!completed.has(delayTargetKey(target))) delays.set(delayTargetKey(target), { value: 0, state: 'error' })
     })
   }
   settle(next)
@@ -66,28 +70,35 @@ function waitForCompletion(jobId: string): Promise<DelayTestStatus> {
   })
 }
 
-export async function startDelayTest(names: string[]): Promise<DelayTestStatus> {
-  const next = await createDelayTest(names)
+async function followJob(next: DelayTestStatus): Promise<DelayTestStatus> {
   applyStatus(next)
   subscribe(next)
   return next.jobId ? waitForCompletion(next.jobId) : next
 }
-
-export function hydrateDelayHistory(proxies: Record<string, ProxyNode>) {
-  for (const [name, proxy] of Object.entries(proxies)) {
-    if (delays.has(name)) continue
-    const value = Number(proxy.history?.[proxy.history.length - 1]?.delay || 0)
-    delays.set(name, { value, state: value > 0 ? 'done' : 'idle' })
-  }
+export async function startDelayTest(names: string[], group?: string): Promise<DelayTestStatus> {
+  return followJob(await createDelayTest(names, group, context.value?.scope))
+}
+async function startGroups(groups: Array<{ group: string; names: string[] }>): Promise<DelayTestStatus> {
+  if (!context.value) throw new Error('当前配置已切换，请刷新后重试')
+  return followJob(await createGroupDelayTest(groups, context.value.scope))
+}
+function getDelay(name: string, group: string): NodeDelayState | undefined {
+  const current = context.value
+  if (!current) return undefined
+  const target = current.groups[group]
+  return delays.get(delayTargetKey({ name, scope: current.scope, url: target?.url || current.globalUrl, expected: target?.expected }))
 }
 
 export function useDelayTests() {
   return {
     delays: readonly(delays),
+    context: readonly(context),
+    setContext: (value: GroupDelayContext) => { context.value = value },
+    get: getDelay,
+    startGroups,
     status: readonly(status),
     testing: computed(() => status.value.state === 'running'),
     restore: restoreDelayTest,
     start: startDelayTest,
-    hydrateHistory: hydrateDelayHistory,
   }
 }

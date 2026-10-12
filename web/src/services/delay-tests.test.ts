@@ -49,3 +49,10 @@ describe('delay test jobs', () => {
     expect(source.closed).toBe(true)
   })
 })
+
+it('sends the group and source identity for manual node tests', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ state: 'running', names: ['same'], results: [] }), { status: 202, headers: { 'Content-Type': 'application/json' } }))
+  vi.stubGlobal('fetch', fetchMock)
+  await createDelayTest(['same'], 'AI', 'profile-a')
+  expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))).toEqual({ names: ['same'], group: 'AI', scope: 'profile-a' })
+})

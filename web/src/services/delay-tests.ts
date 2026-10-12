@@ -1,7 +1,17 @@
 import { api, APP_PREFIX, jsonRequest } from './api'
 
-export type DelayTestResult = {
+export type DelayTestTarget = {
   name: string
+  scope?: string
+  group?: string
+  url?: string
+  expected?: string
+}
+export function delayTargetKey(target: DelayTestTarget): string {
+  if (!target.scope && !target.url) return target.name
+  return JSON.stringify([target.scope || '', target.url || '', target.expected || '', target.name])
+}
+export type DelayTestResult = DelayTestTarget & {
   delay: number
   state: 'done' | 'timeout' | 'error'
   error?: string
@@ -11,6 +21,7 @@ export type DelayTestStatus = {
   jobId?: string
   state: 'idle' | 'running' | 'done'
   names: string[]
+  targets?: DelayTestTarget[]
   results: DelayTestResult[]
   createdAt?: number
   updatedAt?: number
@@ -20,8 +31,8 @@ export function loadDelayTestStatus(): Promise<DelayTestStatus> {
   return api<DelayTestStatus>('/api/delays')
 }
 
-export function createDelayTest(names: string[]): Promise<DelayTestStatus> {
-  return api<DelayTestStatus>('/api/delays', jsonRequest('POST', { names: [...new Set(names)] }))
+export function createDelayTest(names: string[], group?: string, scope?: string): Promise<DelayTestStatus> {
+  return api<DelayTestStatus>('/api/delays', jsonRequest('POST', { names: [...new Set(names)], ...(group ? { group, scope } : {}) }))
 }
 
 export function openDelayTestStream(jobId: string, onUpdate: (status: DelayTestStatus) => void): () => void {
@@ -31,4 +42,8 @@ export function openDelayTestStream(jobId: string, onUpdate: (status: DelayTestS
     catch { /* Ignore one malformed event; EventSource keeps the current task subscription alive. */ }
   }
   return () => source.close()
+}
+
+export function createGroupDelayTest(groups: Array<{ group: string; names: string[] }>, scope: string): Promise<DelayTestStatus> {
+  return api<DelayTestStatus>('/api/delays', jsonRequest('POST', { groups, scope }))
 }
