@@ -50,12 +50,14 @@ type delayBatchResult struct {
 }
 
 type delayBatchJob struct {
-	ID        string             `json:"jobId,omitempty"`
-	Targets   []delayBatchTarget `json:"targets,omitempty"`
-	State     string             `json:"state"`
-	Names     []string           `json:"names"`
-	CreatedAt int64              `json:"createdAt,omitempty"`
-	UpdatedAt int64              `json:"updatedAt,omitempty"`
+	ID         string             `json:"jobId,omitempty"`
+	Targets    []delayBatchTarget `json:"targets,omitempty"`
+	Groups     []string           `json:"groups,omitempty"`
+	GroupBatch bool               `json:"groupBatch,omitempty"`
+	State      string             `json:"state"`
+	Names      []string           `json:"names"`
+	CreatedAt  int64              `json:"createdAt,omitempty"`
+	UpdatedAt  int64              `json:"updatedAt,omitempty"`
 }
 
 type delayBatchStatus struct {
@@ -115,6 +117,7 @@ func (g *gateway) delayStatusLocked() delayBatchStatus {
 		status.delayBatchJob = *g.delayJob
 		status.Names = append([]string(nil), g.delayJob.Names...)
 		status.Targets = append([]delayBatchTarget(nil), g.delayJob.Targets...)
+		status.Groups = append([]string(nil), g.delayJob.Groups...)
 	}
 	keys := make([]string, 0, len(g.delayResults))
 	for name := range g.delayResults {
@@ -176,6 +179,7 @@ func (g *gateway) startDelayBatch(w http.ResponseWriter, r *http.Request, client
 		return
 	}
 	var targets []delayBatchTarget
+	var jobGroups []string
 	if request.Group != "" || len(request.Groups) > 0 {
 		if request.Scope == "" {
 			writeJSON(w, 400, map[string]string{"error": "缺少当前配置标识"})
@@ -197,6 +201,7 @@ func (g *gateway) startDelayBatch(w http.ResponseWriter, r *http.Request, client
 		}
 		proxies, _ := payload["proxies"].(map[string]any)
 		seen := map[string]bool{}
+		seenGroups := map[string]bool{}
 		for _, group := range groups {
 			target, exists := context.Groups[group.Group]
 			if !exists {
@@ -207,6 +212,13 @@ func (g *gateway) startDelayBatch(w http.ResponseWriter, r *http.Request, client
 			if err != nil {
 				writeJSON(w, 400, map[string]string{"error": err.Error()})
 				return
+			}
+			// Preserve submitted groups independently of target de-duplication.
+			// Shared nodes/URLs must not make unrelated groups look submitted,
+			// or hide a submitted group whose targets were already queued.
+			if !seenGroups[group.Group] {
+				jobGroups = append(jobGroups, group.Group)
+				seenGroups[group.Group] = true
 			}
 			proxy, _ := proxies[group.Group].(map[string]any)
 			members, _ := proxy["all"].([]any)
@@ -256,7 +268,7 @@ func (g *gateway) startDelayBatch(w http.ResponseWriter, r *http.Request, client
 		return
 	}
 	now := time.Now().UnixMilli()
-	g.delayJob = &delayBatchJob{ID: newHexID(8), State: "running", Names: names, Targets: targets, CreatedAt: now, UpdatedAt: now}
+	g.delayJob = &delayBatchJob{ID: newHexID(8), State: "running", Names: names, Targets: targets, Groups: jobGroups, GroupBatch: request.Group == "" && len(request.Groups) > 0, CreatedAt: now, UpdatedAt: now}
 	status := g.delayStatusLocked()
 	g.publishDelayStatusLocked()
 	g.delayMu.Unlock()

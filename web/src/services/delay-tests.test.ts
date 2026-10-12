@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createDelayTest, loadDelayTestStatus, openDelayTestStream } from './delay-tests'
+import { createDelayTest, delayTestGroupBatchRunning, delayTestGroupRunning, loadDelayTestStatus, openDelayTestStream, type DelayTestStatus } from './delay-tests'
 
 class EventSourceMock {
   static instance: EventSourceMock | null = null
@@ -55,4 +55,35 @@ it('sends the group and source identity for manual node tests', async () => {
   vi.stubGlobal('fetch', fetchMock)
   await createDelayTest(['same'], 'AI', 'profile-a')
   expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))).toEqual({ names: ['same'], group: 'AI', scope: 'profile-a' })
+})
+
+describe('submitted group progress', () => {
+  const running: DelayTestStatus = { state: 'running', names: ['shared'], groups: ['AI'], targets: [
+    { name: 'shared', group: 'AI', scope: 'profile-a', url: 'https://shared.example/' },
+  ], results: [] }
+
+  it('does not mark another group as submitted just because its nodes and URL overlap', () => {
+    expect(delayTestGroupRunning(running, 'profile-a', 'AI')).toBe(true)
+    expect(delayTestGroupRunning(running, 'profile-a', 'Video')).toBe(false)
+    expect(delayTestGroupBatchRunning(running, 'profile-a')).toBe(false)
+  })
+
+  it('keeps every submitted batch group visible after identical targets were de-duplicated', () => {
+    const batch = { ...running, groups: ['AI', 'Video'], groupBatch: true }
+    expect(delayTestGroupRunning(batch, 'profile-a', 'Video')).toBe(true)
+    expect(delayTestGroupRunning(batch, 'profile-a', 'Other')).toBe(false)
+    expect(delayTestGroupBatchRunning(batch, 'profile-a')).toBe(true)
+  })
+
+  it('clears progress after completion and hides jobs from another subscription', () => {
+    expect(delayTestGroupRunning({ ...running, state: 'done' }, 'profile-a', 'AI')).toBe(false)
+    expect(delayTestGroupRunning(running, 'profile-b', 'AI')).toBe(false)
+    expect(delayTestGroupBatchRunning({ ...running, groupBatch: true }, 'profile-b')).toBe(false)
+  })
+
+  it('uses exact target group identity when restoring an older job without submitted groups', () => {
+    const legacy = { ...running, groups: undefined }
+    expect(delayTestGroupRunning(legacy, 'profile-a', 'AI')).toBe(true)
+    expect(delayTestGroupRunning(legacy, 'profile-a', 'Video')).toBe(false)
+  })
 })

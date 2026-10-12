@@ -22,9 +22,28 @@ export type DelayTestStatus = {
   state: 'idle' | 'running' | 'done'
   names: string[]
   targets?: DelayTestTarget[]
+  groups?: string[]
+  groupBatch?: boolean
   results: DelayTestResult[]
   createdAt?: number
   updatedAt?: number
+}
+
+type DelayTestProgress = {
+  state: DelayTestStatus['state']
+  targets?: readonly Readonly<DelayTestTarget>[]
+  groups?: readonly string[]
+  groupBatch?: boolean
+}
+
+export function delayTestGroupRunning(status: DelayTestProgress, scope: string | undefined, group: string): boolean {
+  if (status.state !== 'running' || !scope || !status.targets?.some(target => target.scope === scope)) return false
+  // Node measurements can be shared, but button state belongs to submitted groups.
+  return status.groups?.includes(group) ?? status.targets.some(target => target.scope === scope && target.group === group)
+}
+
+export function delayTestGroupBatchRunning(status: DelayTestProgress, scope: string | undefined): boolean {
+  return status.state === 'running' && status.groupBatch === true && Boolean(scope && status.targets?.some(target => target.scope === scope))
 }
 
 export function loadDelayTestStatus(): Promise<DelayTestStatus> {

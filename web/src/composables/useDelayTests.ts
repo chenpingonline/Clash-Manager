@@ -6,6 +6,7 @@ export type NodeDelayState = { value: number; state: 'idle' | 'testing' | 'done'
 
 const idleStatus: DelayTestStatus = { state: 'idle', names: [], results: [] }
 const status = ref<DelayTestStatus>(idleStatus)
+const submitting = ref<DelayTestStatus | null>(null)
 const context = ref<GroupDelayContext | null>(null)
 const delays = reactive(new Map<string, NodeDelayState>())
 const waiting = new Map<string, Set<(value: DelayTestStatus) => void>>()
@@ -75,12 +76,36 @@ async function followJob(next: DelayTestStatus): Promise<DelayTestStatus> {
   subscribe(next)
   return next.jobId ? waitForCompletion(next.jobId) : next
 }
-export async function startDelayTest(names: string[], group?: string): Promise<DelayTestStatus> {
-  return followJob(await createDelayTest(names, group, context.value?.scope))
+type PrepareDelayTest = () => Promise<boolean>
+
+async function submitDelayTest(
+  groups: Array<{ group?: string; names: string[] }>, groupBatch: boolean,
+  create: (scope: string | undefined) => Promise<DelayTestStatus>, prepare?: PrepareDelayTest,
+): Promise<DelayTestStatus | null> {
+  if (submitting.value || status.value.state === 'running') throw new Error('已有测速任务正在进行')
+  const current = context.value
+  const targets = groups.flatMap(({ group, names }) => names.map(name => {
+    const target = group ? current?.groups[group] : undefined
+    return { name, group, scope: current?.scope, url: target?.url || current?.globalUrl, expected: target?.expected }
+  }))
+  // Show the submitted groups immediately, including while saving URL edits.
+  // Keep cached node measurements intact until the server accepts the job.
+  submitting.value = { state: 'running', names: targets.map(target => target.name), targets,
+    groups: groups.flatMap(item => item.group ? [item.group] : []), groupBatch, results: [] }
+  try {
+    if (prepare && !await prepare()) return null
+    if (current?.scope !== context.value?.scope) throw new Error('当前配置已切换，请刷新后重试')
+    return followJob(await create(current?.scope))
+  } finally {
+    submitting.value = null
+  }
 }
-async function startGroups(groups: Array<{ group: string; names: string[] }>): Promise<DelayTestStatus> {
+export async function startDelayTest(names: string[], group?: string, prepare?: PrepareDelayTest): Promise<DelayTestStatus | null> {
+  return submitDelayTest([{ group, names }], false, scope => createDelayTest(names, group, scope), prepare)
+}
+async function startGroups(groups: Array<{ group: string; names: string[] }>, prepare?: PrepareDelayTest): Promise<DelayTestStatus | null> {
   if (!context.value) throw new Error('当前配置已切换，请刷新后重试')
-  return followJob(await createGroupDelayTest(groups, context.value.scope))
+  return submitDelayTest(groups, true, scope => createGroupDelayTest(groups, scope!), prepare)
 }
 function getDelay(name: string, group: string): NodeDelayState | undefined {
   const current = context.value
@@ -96,8 +121,8 @@ export function useDelayTests() {
     setContext: (value: GroupDelayContext) => { context.value = value },
     get: getDelay,
     startGroups,
-    status: readonly(status),
-    testing: computed(() => status.value.state === 'running'),
+    status: computed(() => submitting.value ? readonly(submitting.value) : readonly(status.value)),
+    testing: computed(() => Boolean(submitting.value) || status.value.state === 'running'),
     restore: restoreDelayTest,
     start: startDelayTest,
   }

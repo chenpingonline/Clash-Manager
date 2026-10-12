@@ -122,7 +122,7 @@ function modalKeydown(event: KeyboardEvent) {
 </template>
 
 <style scoped>
-.auth-setting { cursor: default; }
+.auth-setting { grid-column: 1 / -1; cursor: default; }
 .auth-setting small { display: block; color: var(--muted); }
 .auth-setting > button { flex: none; white-space: nowrap; }
 .auth-status { margin-left: 6px; color: var(--muted); font-size: 10px; font-weight: 400; }
