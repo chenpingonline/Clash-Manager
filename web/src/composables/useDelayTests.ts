@@ -1,5 +1,5 @@
 import { computed, reactive, readonly, ref } from 'vue'
-import { createDelayTest, createGroupDelayTest, delayTargetKey, loadDelayTestStatus, openDelayTestStream, type DelayTestStatus } from '@/services/delay-tests'
+import { createDelayTest, createGroupDelayTest, delayTargetKey, delayTestGroupRunning, loadDelayTestStatus, openDelayTestStream, type DelayTestStatus } from '@/services/delay-tests'
 import type { GroupDelayContext } from '@/types/api'
 
 export type NodeDelayState = { value: number; state: 'idle' | 'testing' | 'done' | 'timeout' | 'error'; error?: string }
@@ -27,9 +27,9 @@ function applyStatus(next: DelayTestStatus) {
   // subscription switch. Rendering selects only the current target context.
   next.results.forEach(result => delays.set(delayTargetKey(result), { value: result.delay || 0, state: result.state, ...(result.error ? { error: result.error } : {}) }))
   const targets = next.targets || next.names.map(name => ({ name }))
-  if (next.state === 'running') {
-    targets.forEach(target => delays.set(delayTargetKey(target), { value: 0, state: 'testing' }))
-  } else if (next.state === 'done') {
+  // Cache measurements only. In-flight progress belongs to submitted groups,
+  // while completed measurements may be reused for the same node and URL.
+  if (next.state === 'done') {
     const completed = new Set(next.results.map(delayTargetKey))
     targets.forEach(target => {
       if (!completed.has(delayTargetKey(target))) delays.set(delayTargetKey(target), { value: 0, state: 'error' })
@@ -111,7 +111,14 @@ function getDelay(name: string, group: string): NodeDelayState | undefined {
   const current = context.value
   if (!current) return undefined
   const target = current.groups[group]
-  return delays.get(delayTargetKey({ name, scope: current.scope, url: target?.url || current.globalUrl, expected: target?.expected }))
+  const key = delayTargetKey({ name, scope: current.scope, url: target?.url || current.globalUrl, expected: target?.expected })
+  const active = status.value
+  if (delayTestGroupRunning(active, current.scope, group)
+    && active.targets?.some(item => delayTargetKey(item) === key)
+    && !active.results.some(item => delayTargetKey(item) === key)) {
+    return { value: 0, state: 'testing' }
+  }
+  return delays.get(key)
 }
 
 export function useDelayTests() {

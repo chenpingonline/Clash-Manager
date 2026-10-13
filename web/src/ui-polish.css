@@ -132,7 +132,7 @@ button,.btn,.nav-item,.node-row,input,select,textarea {
 .ghost.primary:hover:not(:disabled),html[data-theme="light"] .ghost.primary:hover:not(:disabled) { background: color-mix(in srgb,var(--accent) 15%,var(--panel)); border-color: color-mix(in srgb,var(--accent) 38%,var(--line)); }
 button:active:not(:disabled),.btn:active { opacity: .85; }
 .top-actions button:active:not(:disabled) { transform: scale(.98); }
-:where(button,a,select,input,textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+:where(button,a,input[type="checkbox"],input[type="radio"],input[type="range"],input[type="file"]):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 input:focus,select:focus,textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
 input::placeholder,textarea::placeholder { color: var(--muted); opacity: 1; }
 
@@ -140,6 +140,14 @@ input::placeholder,textarea::placeholder { color: var(--muted); opacity: 1; }
 .proxy-filter-search { background: var(--panel2); transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease; }
 .proxy-filter-search:focus-within,html[data-theme="light"] .proxy-filter-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
 .proxy-filter-search input { min-width: 0; flex: 1; border-radius: 0; outline: none; box-shadow: none; }
+
+/* Composite controls own the focus border; their inner fields stay borderless. */
+:is(.proxy-sort-control,.dashboard-sort-control,.system-proxy-bypass-editor,.core-timeout-input):focus-within,
+html[data-theme="light"] :is(.proxy-sort-control,.dashboard-sort-control,.system-proxy-bypass-editor,.core-timeout-input):focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
+:is(.proxy-search,.rule-search,.proxy-filter-search,.system-proxy-bypass-editor,.core-timeout-input) input:focus,
+:is(.proxy-sort-control,.dashboard-sort-control) select:focus { outline: none; box-shadow: none; }
+/* A port row is a layout container, rather than an additional input border. */
+.port-row:focus-within { border-color: var(--line); box-shadow: none; }
 
 .nav-item { font-weight: 550; }
 html[data-theme="light"] .nav-item:not(.active) .nav-label { color: var(--text); }

@@ -26,24 +26,26 @@ describe('useDelayTests', () => {
   })
 
   it('shares a restored running job across page composable instances', async () => {
-    mocks.load.mockResolvedValue({ jobId: 'delay-1', state: 'running', names: ['node-a'], results: [] })
+    const target = { name: 'node-a', group: 'AI', scope: 'profile-a', url: 'https://shared.example/' }
+    mocks.load.mockResolvedValue({ jobId: 'delay-1', state: 'running', names: ['node-a'], targets: [target], groups: ['AI'], results: [] })
     const { useDelayTests } = await import('./useDelayTests')
     const proxiesPage = useDelayTests()
+    proxiesPage.setContext({ scope: 'profile-a', globalUrl: target.url, groups: {} })
     await proxiesPage.restore()
 
     expect(proxiesPage.testing.value).toBe(true)
-    expect(proxiesPage.delays.get('node-a')).toEqual({ value: 0, state: 'testing' })
+    expect(proxiesPage.get('node-a', 'AI')).toEqual({ value: 0, state: 'testing' })
 
     const dashboardPage = useDelayTests()
     expect(dashboardPage.testing.value).toBe(true)
-    expect(dashboardPage.delays.get('node-a')?.state).toBe('testing')
+    expect(dashboardPage.get('node-a', 'AI')?.state).toBe('testing')
 
     mocks.streamUpdate?.({
       jobId: 'delay-1', state: 'done', names: ['node-a'],
-      results: [{ name: 'node-a', delay: 24, state: 'done' }],
+      results: [{ ...target, delay: 24, state: 'done' }],
     })
     expect(dashboardPage.testing.value).toBe(false)
-    expect(proxiesPage.delays.get('node-a')).toEqual({ value: 24, state: 'done' })
+    expect(proxiesPage.get('node-a', 'AI')).toEqual({ value: 24, state: 'done' })
   })
 
   it('keeps the precise failure reason and clears it on the next measurement', async () => {
@@ -175,4 +177,54 @@ it('isolates the same node by URL, status expectation and subscription, includin
   expect(tests.get('shared', 'AI')?.value).toBe(30)
   tests.setContext({ ...context, groups: { ...context.groups, AI: { ...context.groups.AI, expected: '204' } } })
   expect(tests.get('shared', 'AI')).toBeUndefined()
+})
+
+describe('node progress belongs to the submitted groups', () => {
+  const url = 'https://shared.example/204'
+  const context = { scope: 'profile-progress', globalUrl: url, groups: {
+    Selector: { mode: 'auto' as const, source: 'global' as const, url },
+    Automatic: { mode: 'auto' as const, source: 'global' as const, url },
+    Other: { mode: 'auto' as const, source: 'global' as const, url },
+  } }
+  const target = { name: 'shared-node', group: 'Selector', scope: context.scope, url }
+  beforeEach(() => { vi.resetModules(); mocks.load.mockReset(); mocks.streamUpdate = null })
+
+  it.each([false, true])('isolates current-node and list progress on restore (previous result: %s)', async previous => {
+    const { useDelayTests } = await import('./useDelayTests')
+    const tests = useDelayTests()
+    tests.setContext(context)
+    if (previous) {
+      mocks.load.mockResolvedValue({ state: 'done', names: [target.name], results: [{ ...target, delay: 42, state: 'done' }] })
+      await tests.restore()
+    }
+    const running = { jobId: 'isolated', state: 'running', names: [target.name], targets: [target], groups: ['Selector'], results: [] }
+    mocks.load.mockResolvedValue(running)
+    await tests.restore()
+    expect(tests.get(target.name, 'Selector')?.state).toBe('testing')
+    expect(tests.get(target.name, 'Automatic')).toEqual(previous ? { value: 42, state: 'done' } : undefined)
+    // An SSE update must preserve isolation as well.
+    mocks.streamUpdate?.(running)
+    expect(tests.get(target.name, 'Automatic')?.state).not.toBe('testing')
+    mocks.streamUpdate?.({ ...running, state: 'done', results: [{ ...target, state: 'done', delay: 27 }] })
+    expect(tests.get(target.name, 'Selector')).toEqual({ value: 27, state: 'done' })
+    expect(tests.get(target.name, 'Automatic')).toEqual({ value: 27, state: 'done' })
+  })
+
+  it('shows all submitted batch groups despite deduplication, but does not revert completed nodes to testing', async () => {
+    const { useDelayTests } = await import('./useDelayTests')
+    const tests = useDelayTests()
+    tests.setContext(context)
+    const second = { ...target, name: 'second-node' }
+    const running = { jobId: 'batch-progress', state: 'running', names: [target.name, second.name], targets: [target, second], groups: ['Selector', 'Automatic'], groupBatch: true, results: [] }
+    mocks.load.mockResolvedValue(running)
+    await tests.restore()
+    expect(tests.get(target.name, 'Automatic')?.state).toBe('testing')
+    expect(tests.get(target.name, 'Other')).toBeUndefined()
+    mocks.streamUpdate?.({ ...running, results: [{ ...target, state: 'done', delay: 19 }] })
+    expect(tests.get(target.name, 'Selector')).toEqual({ value: 19, state: 'done' })
+    expect(tests.get(target.name, 'Automatic')).toEqual({ value: 19, state: 'done' })
+    expect(tests.get(second.name, 'Automatic')?.state).toBe('testing')
+    tests.setContext({ ...context, scope: 'another-profile' })
+    expect(tests.get(second.name, 'Automatic')).toBeUndefined()
+  })
 })
