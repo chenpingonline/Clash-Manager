@@ -28,17 +28,42 @@ function setup(mode: 'auto' | 'global' | 'custom' = 'auto') {
 describe('inline group delay settings', () => {
   beforeEach(() => { mocks.api.mockReset() })
 
-  it('reveals the effective URL, then saves the edited URL for its group and scope', async () => {
+  it('opens an empty editor with the effective URL as its placeholder, then saves the typed URL', async () => {
     const { context, settings } = setup()
     await settings.toggle('A')
     expect(settings.isCustom('A')).toBe(true)
-    expect(settings.url('A')).toBe('https://group.example/204')
+    expect(settings.url('A')).toBe('')
+    expect(settings.defaultUrl('A')).toBe('https://group.example/204')
+    expect(await settings.save('A')).toBe(true)
+    expect(settings.error('A')).toBe('')
     expect(mocks.api).not.toHaveBeenCalled()
+    expect(context.value.groups.A?.mode).toBe('auto')
     settings.edit('A', ' https://custom.example/204 ')
     expect(await settings.save('A')).toBe(true)
     expect(JSON.parse(mocks.api.mock.calls[0]![1].body)).toEqual({ scope: 'profile-a', group: 'A', mode: 'custom', url: 'https://custom.example/204' })
     expect(context.value.groups.A?.url).toBe('https://custom.example/204')
     expect(context.value.groups.B?.mode).toBe('auto')
+  })
+
+  it('keeps a saved custom URL as text and uses the original default only as a hint', () => {
+    const { context, settings } = setup('custom')
+    context.value.groups.A!.url = 'https://custom.example/204'
+    expect(settings.url('A')).toBe('https://custom.example/204')
+    expect(settings.defaultUrl('A')).toBe('https://group.example/204')
+  })
+
+  it('uses the global default as a hint and does not prefill it on reopening the editor', async () => {
+    const { context, settings } = setup('global')
+    await settings.toggle('A')
+    expect(settings.url('A')).toBe('')
+    expect(settings.defaultUrl('A')).toBe('https://global.example/204')
+    expect(await settings.save('A')).toBe(true)
+    expect(context.value.groups.A?.mode).toBe('global')
+    expect(mocks.api).not.toHaveBeenCalled()
+    await settings.toggle('A')
+    await settings.toggle('A')
+    expect(settings.url('A')).toBe('')
+    expect(settings.defaultUrl('B')).toBe('https://global.example/204')
   })
 
   it('restores automatic URL selection when custom is switched off', async () => {

@@ -111,7 +111,13 @@ button:active:not(:disabled),.btn:active { opacity: .85; }
 input:focus,select:focus,textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
 input::placeholder,textarea::placeholder { color: var(--muted); opacity: 1; }
 
+/* The label and text field form one control, including its focus indicator. */
+.proxy-filter-search { background: var(--panel2); transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease; }
+.proxy-filter-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
+.proxy-filter-search input { min-width: 0; flex: 1; border-radius: 0; outline: none; box-shadow: none; }
+
 .nav-item { font-weight: 550; }
+html[data-theme="light"] .nav-item:not(.active) .nav-label { color: #000; }
 .nav-item.active,html[data-theme="light"] .nav-item.active { background: var(--accent-soft); color: var(--accent-ink); }
 .nav-item:hover,html[data-theme="light"] .nav-item:hover { background: var(--panel2); color: var(--text); }
 .nav-item.active:hover,html[data-theme="light"] .nav-item.active:hover { background: var(--accent-soft); color: var(--accent-ink); }

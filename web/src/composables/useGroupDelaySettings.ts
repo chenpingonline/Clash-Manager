@@ -2,7 +2,7 @@ import { reactive, type Ref } from 'vue'
 import { api, errorMessage, jsonRequest } from '@/services/api'
 import type { GroupDelayContext } from '@/types/api'
 
-type Draft = { enabled: boolean; url: string }
+type Draft = { enabled: boolean; url: string; edited: boolean }
 
 export function useGroupDelaySettings(context: Readonly<Ref<GroupDelayContext | null>>, setContext: (value: GroupDelayContext) => void) {
   const drafts = reactive(new Map<string, Draft>())
@@ -13,13 +13,23 @@ export function useGroupDelaySettings(context: Readonly<Ref<GroupDelayContext | 
   let queue = Promise.resolve(true)
   const keyFor = (group: string, scope = context.value?.scope) => JSON.stringify([scope, group])
   const isCustom = (group: string) => drafts.get(keyFor(group))?.enabled ?? context.value?.groups[group]?.mode === 'custom'
-  const url = (group: string) => drafts.get(keyFor(group))?.url ?? context.value?.groups[group]?.url ?? context.value?.globalUrl ?? ''
+  const url = (group: string) => {
+    const draft = drafts.get(keyFor(group))
+    if (draft) return draft.url
+    const target = context.value?.groups[group]
+    return target?.mode === 'custom' ? target.url : ''
+  }
+  const defaultUrl = (group: string) => {
+    const current = context.value
+    const target = current?.groups[group]
+    return (target?.mode === 'custom' ? target.configUrl : target?.url) || current?.globalUrl || ''
+  }
   const error = (group: string) => errors.get(keyFor(group)) || ''
   const isSaving = (group: string) => saving.has(keyFor(group))
 
   function edit(group: string, value: string) {
     if (isSaving(group)) return
-    drafts.set(keyFor(group), { enabled: true, url: value })
+    drafts.set(keyFor(group), { enabled: true, url: value, edited: true })
     errors.delete(keyFor(group))
   }
 
@@ -34,6 +44,9 @@ export function useGroupDelaySettings(context: Readonly<Ref<GroupDelayContext | 
     const task = queue.then(async () => {
       if (context.value?.scope !== scope) return false
       const draft = drafts.get(key)!
+      // Opening an empty editor must not save the placeholder as an override,
+      // or report a validation error when the user simply moves focus away.
+      if (draft.enabled && !draft.edited && !draft.url && context.value.groups[group]?.mode !== 'custom') return true
       const mode = draft.enabled ? 'custom' : 'auto'
       const targetURL = draft.enabled ? draft.url.trim() : ''
       if (draft.enabled) {
@@ -75,11 +88,11 @@ export function useGroupDelaySettings(context: Readonly<Ref<GroupDelayContext | 
     if (!context.value || isSaving(group)) return
     const key = keyFor(group)
     const enabled = !isCustom(group)
-    drafts.set(key, { enabled, url: url(group) })
+    drafts.set(key, { enabled, url: enabled ? '' : url(group), edited: false })
     errors.delete(key)
     // Enabling reveals the editor. Disabling immediately restores defaults.
     if (!enabled && !await save(group)) drafts.delete(key)
   }
 
-  return { isCustom, url, error, isSaving, edit, save, toggle }
+  return { isCustom, url, defaultUrl, error, isSaving, edit, save, toggle }
 }
