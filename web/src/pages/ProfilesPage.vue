@@ -192,7 +192,7 @@ onBeforeUnmount(() => {
         <div v-for="item in items" :key="item.id" class="profile" :class="{ current: item.current }">
           <div>
             <div class="profile-title-line">
-              <div class="profile-name">{{ t(item.current ? '● ' : '') }}{{ item.name }}</div>
+              <div class="profile-name">{{ item.name }}</div><span v-if="item.current" class="profile-current-badge">{{ t("当前使用") }}</span>
             </div>
             <div class="profile-meta">{{ t(item.type === 'remote' ? '远程订阅' : '本地配置') }} {{ t("· 更新：") }}{{ t(formatTime(item.updatedAt)) }}</div>
             <div v-if="downloadText(item)" class="download-info" :class="item.lastDownload?.method === 'failed' ? 'bad' : 'good'">{{ downloadText(item) }}</div>
@@ -213,10 +213,10 @@ onBeforeUnmount(() => {
           </div>
           <div class="actions">
             <button v-if="item.type === 'remote'" class="ghost small" :disabled="Boolean(busyId)" @click="update(item)">{{ t(busyId === `update-${item.id}` ? '处理中…' : '更新') }}</button>
-            <button class="success small" :disabled="Boolean(busyId)" @click="activate(item)">{{ t(busyId === `activate-${item.id}` ? '应用中…' : '应用') }}</button>
+            <button class="success small" :disabled="Boolean(busyId)" @click="activate(item)">{{ t(busyId === `activate-${item.id}` ? '应用中…' : item.current ? '重新应用' : '应用') }}</button>
             <div class="profile-edit-menu">
-              <button type="button" class="ghost small profile-edit-trigger" :aria-label="t(`编辑 ${item.name}`)" aria-haspopup="menu" :aria-expanded="openEditMenuId === item.id" @click="toggleEditMenu(item)">
-                <span>{{ t("编辑") }}</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" /></svg>
+              <button type="button" class="ghost small profile-edit-trigger" :aria-label="t('更多操作 · {arg0}', { arg0: item.name })" aria-haspopup="menu" :aria-expanded="openEditMenuId === item.id" @click="toggleEditMenu(item)">
+                <span>{{ t("更多") }}</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" /></svg>
               </button>
               <div v-if="openEditMenuId === item.id" class="profile-edit-popover" role="menu">
                 <button type="button" role="menuitem" @click="openExtension(item, 'rules')">{{ t("编辑规则") }}</button>
@@ -226,9 +226,9 @@ onBeforeUnmount(() => {
                 <button type="button" role="menuitem" @click="openExtension(item, 'override')">{{ t("扩展覆写配置") }}</button>
                 <button type="button" role="menuitem" @click="openExtension(item, 'script')">{{ t("扩展脚本") }}</button>
                 <button v-if="item.type === 'remote'" type="button" role="menuitem" class="profile-edit-secondary" @click="closeEditMenu(); openRemote(item)">{{ t("订阅信息") }}</button>
+                <button type="button" role="menuitem" class="profile-menu-delete" :disabled="Boolean(busyId)" @click="closeEditMenu(); remove(item)">{{ t("删除") }}</button>
               </div>
             </div>
-            <button class="danger small" :disabled="Boolean(busyId)" @click="remove(item)">{{ t("删除") }}</button>
           </div>
           <ConfigErrorNotice v-if="item.lastError" class="profile-operation-row error-text" :message="item.lastError" />
           <template v-for="job in [profileJobs[item.id]]" :key="job?.jobId || item.id">
@@ -242,7 +242,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-else class="empty">{{ t("还没有配置") }}</div>
     </AsyncState>
-    <div class="global-extension-grid">
+    <details class="profile-advanced"><summary>{{ t("高级选项") }}<span>{{ t("全局覆写与脚本") }}</span></summary><div class="global-extension-grid">
       <div class="global-extension-card">
         <span class="global-extension-icon" aria-hidden="true">M</span>
         <span class="global-extension-copy"><strong>{{ t("全局扩展覆写配置") }}</strong><small>{{ t("应用到所有配置，先递归合并") }}</small></span>
@@ -253,7 +253,7 @@ onBeforeUnmount(() => {
         <span class="global-extension-copy"><strong>{{ t("全局扩展脚本") }}</strong><small>{{ t("全局覆写后、单配置增强前执行") }}</small></span>
         <span class="global-extension-actions"><span class="tag">Script</span><button type="button" class="ghost small global-extension-edit" :aria-label="t('编辑全局扩展脚本')" @click="openGlobalExtension('script')">{{ t("编辑") }}</button></span>
       </div>
-    </div>
+    </div></details>
   </div>
   <div class="card section local-discovery-card"><div class="section-head"><div><h2>{{ t("本机 Mihomo 配置") }}</h2><p>{{ t(runtime.platform === 'linux' ? '读取托管 Mihomo 配置和 APP_IMPORT_PATHS 指定的导入目录' : runtime.platform === 'docker' ? '读取容器内 Mihomo 配置和明确挂载的导入目录' : '自动读取当前 Mihomo 配置；用户文件仅从 fnOS 明确授权的目录读取') }}</p></div><button class="ghost small" @click="scan">{{ t("重新扫描") }}</button></div><AsyncState :loading="localLoading" :error="t(localError)"><div v-if="discovery.error" class="local-warning">{{ t("扫描失败：") }}{{ t(discovery.error) }}</div><div class="local-access-summary" :class="discovery.authorizedPaths?.length ? 'active' : 'warn'"><strong>{{ t(discovery.authorizedPaths?.length ? `已授权 ${discovery.authorizedPaths.length} 个文件夹` : '尚未授权用户文件夹') }}</strong><span v-if="discovery.authorizedPaths?.length"><span v-for="path in discovery.authorizedPaths" :key="path" class="mono">{{ path }}</span></span><span v-else>{{ t(runtime.platform === 'linux' ? '请通过 APP_IMPORT_PATHS 指定 YAML 导入目录；也可以直接上传配置文件。' : runtime.platform === 'docker' ? '请将 YAML 目录挂载到容器，并通过 APP_IMPORT_PATHS 指定；也可以直接上传配置文件。' : '如需从 NAS 共享目录导入 YAML，请到 fnOS「系统设置 → 应用 → Clash for fnos → 访问权限」添加文件夹。') }}</span></div><div class="local-processes"><div v-if="discovery.runtime" class="local-process" :class="{ managed: discovery.runtime.mode === 'managed' && discovery.runtime.running, none: !discovery.runtime.running }"><div class="local-process-dot" :class="{ off: !discovery.runtime.running }" /><div class="local-process-main"><strong>{{ t(runtimeTitle(discovery.runtime)) }}</strong><div class="mono muted local-process-args" :title="runtimeDetail(discovery.runtime)">{{ runtimeDetail(discovery.runtime) }}</div></div><span class="tag">{{ t(runtimeTag(discovery.runtime)) }}</span></div><template v-else><div v-for="process in discovery.processes || []" :key="process.pid" class="local-process"><div class="local-process-dot" /><div class="local-process-main"><strong>PID {{ t(process.pid) }} · {{ process.exe || 'mihomo' }}</strong><div class="mono muted local-process-args">{{ (process.args || []).join(' ') }}</div></div><span class="tag">{{ t(process.containerized ? '容器进程' : '主机进程') }}</span></div><div v-if="!discovery.processes?.length" class="local-process none"><div class="local-process-dot off" /><div><strong>{{ t("未获取到 Mihomo 运行状态") }}</strong><div class="muted">{{ t("仍会继续检查常见 config.yaml 路径") }}</div></div></div></template></div><div v-if="discovery.candidates?.length" class="local-config-list"><div v-for="candidate in discovery.candidates" :key="candidate.path" class="local-config-row"><div class="local-config-icon">Y</div><div class="local-config-main"><div class="local-config-path mono" :title="candidate.path">{{ candidate.path }}</div><div class="local-config-meta"><span>{{ t(candidate.source || '检测') }}</span><span v-if="candidate.namespace === 'process-root'">{{ t("进程根目录") }}</span><span v-if="candidate.size">{{ t(formatBytes(candidate.size)) }}</span><span v-if="candidate.mtime">{{ t(formatTime(candidate.mtime)) }}</span></div></div><div class="local-config-state" :class="candidate.readable ? 'good' : candidate.exists ? 'bad' : 'muted'"><span v-if="importedPaths.has(candidate.path)" class="local-imported">{{ t("已导入") }}</span> {{ t(candidateState(candidate)) }}</div><div class="actions local-config-actions"><template v-if="candidate.readable && candidate.token"><button class="ghost small" :disabled="Boolean(busyId)" @click="importNas(candidate, false)">{{ t("导入") }}</button><button class="success small" :disabled="Boolean(busyId)" @click="importNas(candidate, true)">{{ t("导入并应用") }}</button></template><button v-else class="ghost small" disabled>{{ t(candidateState(candidate)) }}</button></div></div></div></AsyncState></div>
 <BaseModal :open="modal === 'remote'" :title="t(editing ? '编辑订阅' : '添加远程订阅')" @close="modal = null"><div class="hint" style="margin-bottom:14px">{{ t(editing ? '修改订阅信息后保存；订阅内容将在下次更新时重新下载。' : '填写远程订阅信息，添加后会立即尝试下载一次。') }}</div><div class="form-grid"><div class="field"><label>{{ t("名称") }}</label><input v-model="form.name" :placeholder="t('例如：机场订阅')"></div><div class="field"><label>{{ t("更新间隔（分钟）") }}</label><input v-model.number="form.intervalMinutes" type="number" min="5"></div><div class="field full"><label>{{ t("订阅 URL") }}</label><input v-model="form.url" placeholder="https://..."></div><div class="field full"><div class="hint">{{ t("自动更新顺序：直连 → 当前 Mihomo mixed-port → 系统 HTTP/HTTPS 代理。") }}</div></div><div class="field profile-checkbox-field"><label class="profile-checkbox-label"><input v-model="form.autoUpdate" type="checkbox"><span>{{ t("自动更新") }}</span></label></div><div class="field profile-checkbox-field"><label class="profile-checkbox-label"><input v-model="form.autoApply" type="checkbox"><span>{{ t("当前配置更新后自动应用") }}</span></label></div></div><div class="actions" style="margin-top:16px"><button class="small" :disabled="busyId === 'remote'" @click="saveRemote">{{ t(busyId === 'remote' ? '处理中…' : editing ? '保存修改' : '添加订阅') }}</button><button class="ghost small" @click="modal = null">{{ t("取消") }}</button></div></BaseModal>

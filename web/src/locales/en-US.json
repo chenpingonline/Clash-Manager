@@ -1618,7 +1618,7 @@
   "支持 YAML、文本列表、MRS 和 ACL4SSR INI。预览后保存到所选订阅增强，订阅更新后保留。": "Import YAML, text lists, MRS and ACL4SSR INI. Preview and save to profile enhancements, preserved across subscription updates.",
   "目标订阅": "Target profile",
   "请选择订阅": "Choose a profile",
-  "当前使用": "Active",
+  "当前使用": "In use",
   "规则集名称 / INI 名称前缀": "Rule set name / INI name prefix",
   "请先在订阅配置中添加或导入一个订阅。": "Add or import a profile first.",
   "导入来源": "Import source",
@@ -1801,5 +1801,16 @@
   "代理认证配置格式无效": "Invalid proxy authentication configuration.",
   "读取代理认证配置失败，请检查 Helper 与当前启动配置": "Unable to read proxy credentials. Check Helper and the active startup configuration.",
   "出口位置更新失败，无法通过已配置的认证代理连接": "Unable to update the exit location through the configured authenticated proxy.",
-  "代理认证失败，请检查用户名、密码与免认证网段": "Proxy authentication failed. Check the credentials and exempt networks."
+  "代理认证失败，请检查用户名、密码与免认证网段": "Proxy authentication failed. Check the credentials and exempt networks.",
+  "混合代理已同时提供 HTTP 与 SOCKS5 服务。要编辑其他入站端口，请先关闭混合代理。": "The mixed port serves both HTTP and SOCKS5. Turn it off before editing other inbound ports.",
+  "展开分组 {arg0}": "Expand group {arg0}",
+  "收起分组 {arg0}": "Collapse group {arg0}",
+  "搜索时分组自动展开": "Groups expand automatically while searching",
+  "尚未测速，点击测试此节点": "Not tested yet. Click to test this node",
+  "未测速": "Not tested",
+  "重新应用": "Reapply",
+  "更多操作 · {arg0}": "More actions · {arg0}",
+  "更多": "More",
+  "高级选项": "Advanced options",
+  "全局覆写与脚本": "Global overrides and scripts"
 }

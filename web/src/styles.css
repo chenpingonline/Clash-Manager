@@ -253,8 +253,8 @@ html[data-theme="light"] .settings-category-icon{background:linear-gradient(145d
 
 /* 0.3.33 fnOS-style workspace container */
 :root{--window-radius:18px;--workspace-gap:10px;--page-top-space:16px}
-html,body{height:100%;overflow:hidden;background:transparent!important}
-body{margin:0;background:transparent!important}
+html,body{height:100%;overflow:hidden;background:var(--startup-frame,var(--bg))!important}
+body{margin:0;background:var(--startup-frame,var(--bg))!important}
 #app{
   height:100vh;
   min-height:0;
@@ -338,7 +338,7 @@ body{margin:0;background:transparent!important}
   background:color-mix(in srgb,var(--muted) 58%,transparent);
   background-clip:padding-box;
 }
-html[data-theme="light"] body{background:transparent!important}
+html[data-theme="light"] body{background:var(--startup-frame,var(--bg))!important}
 html[data-theme="light"] #app{background:#F3F3F3}
 html[data-theme="light"] .main{
   background:#fff;

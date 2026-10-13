@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   platform: 'fnos',
+  standalone: false,
   beforeUnmount: undefined as (() => void) | undefined,
   mounted: undefined as (() => void) | undefined,
   getPlatformConfig: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock('vue', () => ({
 vi.mock('@trimjs/web-app', () => ({
   TrimApp: class {
     isWeb = true
-    isStandaloneWeb = false
+    isStandaloneWeb = mocks.standalone
     getPlatformConfig = mocks.getPlatformConfig
     $on = mocks.on
     $off = mocks.off
@@ -41,6 +42,7 @@ describe('useFnosTheme', () => {
 
   beforeEach(() => {
     mocks.platform = 'fnos'
+    mocks.standalone = false
     mocks.beforeUnmount = undefined
     mocks.mounted = undefined
     mocks.getPlatformConfig.mockReset()
@@ -53,6 +55,7 @@ describe('useFnosTheme', () => {
     root.style = {}
     vi.stubGlobal('matchMedia', vi.fn(() => media))
     vi.stubGlobal('document', { documentElement: root })
+    vi.stubGlobal('localStorage', { setItem: vi.fn() })
   })
 
   afterEach(() => vi.unstubAllGlobals())
@@ -69,6 +72,55 @@ describe('useFnosTheme', () => {
     const callback = mocks.on.mock.calls[0]?.[1] as (theme: unknown) => void
     callback({ theme: { theme: 'light' } })
     expect(root.dataset.theme).toBe('light')
+    expect(localStorage.setItem).toHaveBeenLastCalledWith('clash-fnos-host-theme', 'light')
+  })
+
+  it('keeps the cached host theme until the host responds despite an opposite browser preference', async () => {
+    root.dataset = { theme: 'light', bootThemeSource: 'host-cache' }
+    media.matches = true
+    let resolveConfig!: (config: { theme: string }) => void
+    mocks.getPlatformConfig.mockImplementation(() => new Promise(resolve => { resolveConfig = resolve }))
+    useFnosTheme()
+    mocks.mounted?.()
+    expect(root.dataset.theme).toBe('light')
+    const changed = media.addEventListener.mock.calls[0]?.[1] as () => void
+    changed()
+    expect(root.dataset.theme).toBe('light')
+    resolveConfig({ theme: 'dark' })
+    await vi.waitFor(() => expect(root.dataset.theme).toBe('dark'))
+    media.matches = false
+    changed()
+    expect(root.dataset.theme).toBe('dark')
+  })
+
+  it.each(['rejected', 'invalid'])('falls back from the cache when host configuration is %s', async (result) => {
+    root.dataset = { theme: 'dark', bootThemeSource: 'host-cache' }
+    if (result === 'rejected') mocks.getPlatformConfig.mockRejectedValue(new Error('unavailable'))
+    else mocks.getPlatformConfig.mockResolvedValue({ theme: 'unknown' })
+    useFnosTheme()
+    mocks.mounted?.()
+    await vi.waitFor(() => expect(root.dataset.theme).toBe('light'))
+    expect(root.dataset.fnosThemeMode).toBe('system')
+  })
+
+  it('does not let blocked storage break live host theme updates', async () => {
+    vi.stubGlobal('localStorage', { setItem: () => { throw new Error('blocked') } })
+    mocks.getPlatformConfig.mockResolvedValue({ theme: 'dark' })
+    useFnosTheme()
+    mocks.mounted?.()
+    await vi.waitFor(() => expect(mocks.on).toHaveBeenCalledOnce())
+    expect(root.dataset.theme).toBe('dark')
+  })
+
+  it('ignores the embedded cache in a standalone browser', async () => {
+    root.dataset = { theme: 'dark', bootThemeSource: 'host-cache' }
+    mocks.standalone = true
+    mocks.getPlatformConfig.mockRejectedValue(new Error('standalone'))
+    useFnosTheme()
+    mocks.mounted?.()
+    expect(root.dataset.theme).toBe('light')
+    await Promise.resolve()
+    expect(localStorage.setItem).not.toHaveBeenCalled()
   })
 
   it('uses the browser theme only when the host SDK is unavailable', async () => {

@@ -8,3 +8,4 @@ app.config.errorHandler = (error) => {
   console.error(`[${document.title}]`, error)
 }
 app.mount('#app')
+document.documentElement.removeAttribute('data-booting')

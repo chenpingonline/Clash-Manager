@@ -247,7 +247,7 @@ onMounted(() => { void delayTests.restore(); void load() })
                 <option value="name">{{ t("按名称") }}</option>
               </select>
             </label>
-            <span class="proxy-chevron" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg></span>
+            <button type="button" class="proxy-chevron ghost" :aria-expanded="expanded.has(group.name) || Boolean(query)" :aria-label="t(expanded.has(group.name) || query ? '收起分组 {arg0}' : '展开分组 {arg0}', { arg0: group.name })" :disabled="Boolean(query)" :title="query ? t('搜索时分组自动展开') : undefined" @click.stop="expanded.has(group.name) ? expanded.delete(group.name) : expanded.add(group.name)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg></button>
           </div>
         </div>
         <p v-if="delaySettings.error(group.name)" class="proxy-delay-error" role="alert">{{ t(delaySettings.error(group.name)) }}</p>
@@ -258,7 +258,7 @@ onMounted(() => { void delayTests.restore(); void load() })
             <label class="proxy-timeout-toggle" :title="t('关闭后隐藏测速结果为超时的节点')"><input type="checkbox" :checked="groupShowsTimeoutNodes(group.name)" @change="updateTimeoutVisibility(group.name, $event)"><span>{{ t("显示超时节点") }}</span></label>
             <span>{{ t(group.nodes.length) }} / {{ t(group.proxy.all?.length || 0) }} {{ t("个节点") }}</span>
           </div>
-          <div v-if="group.nodes.length" class="node-list"><div v-for="name in group.nodes" :key="name" class="node-row" :class="{ active: group.proxy.now === name }" :data-node-name="name"><button class="node-select" @click="select(group, name)"><span class="node-copy"><span class="node-name" :title="name">{{ name }}</span><span v-if="rawProxies[name]?.type" class="node-type">{{ rawProxies[name]?.type }}</span></span></button><button class="node-delay" :class="snapshot(name, group.name).className" :disabled="delayTestBusy" :title="snapshot(name, group.name).error || t('单独测试该节点延迟')" @click="testOne(name, group.name)">{{ t(snapshot(name, group.name).text) }}</button></div></div>
+          <div v-if="group.nodes.length" class="node-list"><div v-for="name in group.nodes" :key="name" class="node-row" :class="{ active: group.proxy.now === name }" :data-node-name="name"><button class="node-select" @click="select(group, name)"><span class="node-copy"><span class="node-name" :title="name">{{ name }}</span><span v-if="rawProxies[name]?.type" class="node-type">{{ rawProxies[name]?.type }}</span></span></button><button class="node-delay" :class="snapshot(name, group.name).className" :disabled="delayTestBusy" :title="snapshot(name, group.name).error || t(snapshot(name, group.name).text === '--' ? '尚未测速，点击测试此节点' : '单独测试该节点延迟')" @click="testOne(name, group.name)">{{ t(snapshot(name, group.name).text === '--' ? '未测速' : snapshot(name, group.name).text) }}</button></div></div>
           <div v-else class="proxy-group-empty">{{ t("没有匹配的节点") }}</div>
         </div></div></CollapseTransition>
       </section>

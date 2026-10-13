@@ -36,6 +36,9 @@ export function useFnosTheme(): void {
   let disposed = false
   let hostThemeActive = false
   let subscribed = false
+  // Preserve the first-paint cache while the host answers; it is not an override.
+  let hostThemePending = Boolean(sdk && !sdk.isStandaloneWeb
+    && document.documentElement.dataset.bootThemeSource === 'host-cache')
 
   const applyHostTheme = (value: unknown) => {
     if (disposed) return
@@ -43,9 +46,12 @@ export function useFnosTheme(): void {
     if (!theme) return
     hostThemeActive = true
     applyTheme(theme, theme)
+    if (sdk && !sdk.isStandaloneWeb) {
+      try { localStorage.setItem('clash-fnos-host-theme', theme) } catch { /* Optional first-paint cache. */ }
+    }
   }
   const applySystemTheme = () => {
-    if (!hostThemeActive && !disposed) applyTheme(systemTheme(), 'system')
+    if (!hostThemeActive && !hostThemePending && !disposed) applyTheme(systemTheme(), 'system')
   }
 
   onMounted(() => {
@@ -56,7 +62,9 @@ export function useFnosTheme(): void {
     void sdk.getPlatformConfig()
       .then(async (config) => {
         if (disposed) return
+        hostThemePending = false
         applyHostTheme(config.theme)
+        applySystemTheme()
         if (sdk.isWeb && !sdk.isStandaloneWeb) {
           await sdk.$on('os/theme', applyHostTheme)
           if (disposed) {
@@ -68,6 +76,8 @@ export function useFnosTheme(): void {
       })
       .catch(() => {
         // Standalone browsers and older fnOS hosts keep using the media-query fallback.
+        hostThemePending = false
+        applySystemTheme()
       })
   })
 

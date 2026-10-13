@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-booting>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,15 +8,37 @@
     <link rel="icon" type="image/png" href="%BASE_URL%icons/cat-orbit_64.png" />
     <script>
       (() => {
-        const dark = matchMedia('(prefers-color-scheme: dark)').matches
-        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
-        document.documentElement.dataset.themeMode = 'system'
-        document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+        const root = document.documentElement
+        let theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        // Only reuse a confirmed host theme at the fnOS gateway entry.
+        if (location.pathname.startsWith('/app/clash-for-fnos/')) {
+          try {
+            const cached = localStorage.getItem('clash-fnos-host-theme')
+            if (cached === 'dark' || cached === 'light') {
+              theme = cached
+              root.dataset.bootThemeSource = 'host-cache'
+            }
+          } catch { /* Storage can be blocked in an embedded window. */ }
+        }
+        root.dataset.theme = theme
+        root.dataset.themeMode = 'system'
+        root.style.colorScheme = theme
       })()
     </script>
+    <style>
+      /* First paint must not depend on the application CSS or JavaScript download. */
+      :root { --startup-frame: #0c0c0c; --startup-surface: #1f2021; --startup-line: #383a3d; --startup-accent: #5b98ff; }
+      :root[data-theme="light"] { --startup-frame: #f7f9fc; --startup-surface: #fff; --startup-line: #e4e9f0; --startup-accent: #0167ff; }
+      html, body { margin: 0; height: 100%; background: var(--startup-frame); }
+      html[data-booting] #app { display: block; box-sizing: border-box; height: 100vh; height: 100dvh; padding: 0 10px 10px; background: var(--startup-frame); }
+      .app-boot { box-sizing: border-box; height: 100%; display: grid; place-items: center; border: 1px solid var(--startup-line); border-radius: 18px; background: var(--startup-surface); }
+      .app-boot-indicator { width: 24px; height: 24px; border: 3px solid var(--startup-line); border-top-color: var(--startup-accent); border-radius: 50%; animation: app-boot-spin .9s linear infinite; }
+      @keyframes app-boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .app-boot-indicator { animation: none; } }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app"><div class="app-boot" role="progressbar" aria-label="正在加载"><span class="app-boot-indicator" aria-hidden="true"></span></div></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
