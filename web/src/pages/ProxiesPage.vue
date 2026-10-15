@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link2, Search } from 'lucide-vue-next'
+import { Gauge, Link2, LoaderCircle, Search } from 'lucide-vue-next'
 import { countLabel, t } from '@/services/i18n'
 
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
@@ -239,7 +239,7 @@ onMounted(() => { void delayTests.restore(); void load() })
             <input v-if="delaySettings.isCustom(group.name)" class="proxy-delay-url" :value="delaySettings.url(group.name)" type="url" maxlength="4096" autocomplete="off" spellcheck="false" :aria-label="t('自定义测试地址') + ' · ' + group.name" :aria-invalid="Boolean(delaySettings.error(group.name))" :placeholder="delaySettings.defaultUrl(group.name) || t('输入测速网址')" :title="t('输入网址后按回车或移开焦点保存')" :disabled="delayTestBusy || delaySettings.isSaving(group.name)" @click.stop @input="delaySettings.edit(group.name, ($event.target as HTMLInputElement).value)" @blur="delaySettings.save(group.name)" @keydown.enter.stop.prevent="delaySettings.save(group.name)">
             <button class="proxy-group-tool proxy-locate ghost small" :disabled="!group.proxy.now" :aria-label="t('定位当前节点')" :title="t('定位当前节点')" @click.stop="locateCurrent(group)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" /><circle class="proxy-locate-dot" cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg></button>
             <button class="proxy-group-tool proxy-delay-custom ghost small" :class="{ active: delaySettings.isCustom(group.name) }" :disabled="!delayTests.context.value || delayTestBusy || delaySettings.isSaving(group.name)" :aria-pressed="delaySettings.isCustom(group.name)" :aria-label="t('自定义测速网址') + ' · ' + group.name" :title="t('自定义测速网址')" @mousedown.prevent @click.stop="toggleCustomDelay(group.name)"><Link2 :size="16" :stroke-width="1.8" aria-hidden="true" /></button>
-            <button class="proxy-group-tool proxy-latency-test ghost small" :disabled="delayTestBusy" :aria-busy="groupTesting(group.name)" :title="t(delayTestBusy && !groupTesting(group.name) ? '已有测速任务正在进行' : '测试本组全部可测速节点')" @click.stop="testGroup(group)">{{ t(groupTesting(group.name) ? '测试中…' : '延迟测试') }}</button>
+            <button class="proxy-group-tool proxy-latency-test ghost small" :disabled="delayTestBusy" :aria-busy="groupTesting(group.name)" :aria-label="t(groupTesting(group.name) ? '测试中…' : '延迟测试') + ' · ' + group.name" :title="t(delayTestBusy && !groupTesting(group.name) ? '已有测速任务正在进行' : '测试本组全部可测速节点')" @click.stop="testGroup(group)"><LoaderCircle v-if="groupTesting(group.name)" class="proxy-latency-spinner" :size="18" :stroke-width="2" aria-hidden="true" /><Gauge v-else :size="18" :stroke-width="2" aria-hidden="true" /></button>
             <label class="proxy-sort-control" :title="t('设置本组节点排序方式')" @click.stop>
               <select :value="groupSort(group.name)" :aria-label="t(`${group.name} 排序方式`)" @click.stop @change.stop="updateGroupSort(group.name, $event)">
                 <option value="default">{{ t("默认排序") }}</option>
@@ -286,7 +286,7 @@ onMounted(() => { void delayTests.restore(); void load() })
 .proxy-name-row .tag, .proxy-name-row .node-count, .proxy-current > span { flex: none; white-space: nowrap; }
 .proxy-current strong { min-width: 0; }
 .proxy-sort-control { padding-left: 8px; }
-.proxy-sort-control select { width: 112px; min-width: 112px; flex: none; padding-right: 20px; }
+.proxy-sort-control select { width: 88px; min-width: 88px; flex: none; padding-right: 20px; }
 .proxy-head-actions .proxy-locate { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-color: var(--line); color: var(--text); }
 .proxy-head-actions .proxy-locate:hover:not(:disabled) { border-color: var(--accent-line, var(--accent)); background: var(--accent-soft, rgba(124,156,255,.08)); color: var(--accent-ink, var(--accent)); }
 .proxy-locate svg { width: 18px; height: 18px; stroke-width: 2; }
@@ -298,6 +298,10 @@ onMounted(() => { void delayTests.restore(); void load() })
 .proxy-delay-custom svg { flex: none; color: var(--muted); }
 .proxy-head-actions .proxy-delay-custom.active { border-color: var(--accent-line, var(--accent)); background: var(--accent-soft, rgba(124,156,255,.10)); color: var(--accent-ink, var(--accent)); }
 .proxy-delay-custom.active svg { color: inherit; }
+.proxy-head-actions .proxy-latency-test { display: inline-flex; align-items: center; justify-content: center; width: 30px; min-width: 30px; height: 30px; padding: 0; line-height: 1; }
+.proxy-latency-test svg { flex: none; }
+.proxy-latency-spinner { animation: spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .proxy-latency-spinner { animation: none; } }
 .proxy-delay-error { margin: -5px 17px 12px; color: var(--bad); font-size: 11px; overflow-wrap: anywhere; }
 @media (max-width: 680px) {
   .proxy-card-head { position: relative; }
