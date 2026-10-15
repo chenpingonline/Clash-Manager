@@ -22,7 +22,7 @@ describe('ProxiesPage language-specific styles', () => {
       return result.code
     }).join('\n')
 
-    expect(css).toMatch(/proxy-sort-control[^{}]*select[^{}]*:lang\(en\)[^{}]*\{\s*width:\s*88px/)
+    expect(css).toMatch(/proxy-sort-control[^{}]*select[^{}]*\{\s*width:\s*112px/)
     expect(css).not.toMatch(/html\[lang[^\]]+\]\s*\{[^}]*\bwidth\s*:/)
   })
 })
