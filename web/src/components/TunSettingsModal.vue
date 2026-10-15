@@ -147,7 +147,6 @@ watch(() => props.open, open => {
           <strong>{{ t(supported ? (form.enabled ? '已开启' : '已关闭') : '不可用') }}</strong>
           <span>{{ t(capabilityText) }}</span>
         </div>
-        <p v-if="!form.enabled && supported" class="tun-settings-disabled-hint">{{ t("当前 TUN 未开启，修改会先保存为预配置；之后开启 TUN 时生效。") }}</p>
         <p v-if="offline" class="tun-settings-disabled-hint">{{ t("Core 已停止；保存后将在下次启动时生效。") }}</p>
 
         <div class="tun-settings-main-grid">

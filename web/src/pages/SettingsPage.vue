@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from '@/components/AppSelect.vue'
 import { t } from '@/services/i18n'
 
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
@@ -242,8 +243,7 @@ const healthcheckTimeoutSeconds = computed({
 const customHealthcheckMode = ref(false)
 const customHealthcheckUrl = ref('')
 const healthcheckPreset = computed(() => customHealthcheckMode.value ? 'custom' : healthcheckPresets.find(item => item.url === manager.healthcheckUrl)?.id || 'custom')
-function changeHealthcheckPreset(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
+function changeHealthcheckPreset(value: string) {
   if (healthcheckPreset.value === 'custom') customHealthcheckUrl.value = manager.healthcheckUrl || ''
   customHealthcheckMode.value = value === 'custom'
   if (value === 'custom') {
@@ -571,7 +571,6 @@ onMounted(initialize)
               <div class="tun-master"><span :class="network.tun.enabled ? 'good-text' : 'muted-text'">{{ t(tunSwitching ? (network.tun.enabled ? '正在开启' : '正在关闭') : network.tun.enabled ? '已开启' : '已关闭') }}</span><label class="switch large"><input v-model="network.tun.enabled" type="checkbox" :disabled="tunSwitching || netState === 'pending' || netState === 'saving' || (!tunSupported && !network.tun.enabled)" @change="toggleTunSetting"><span /></label></div>
             </div>
             <div class="tun-capability" :class="tunSupported ? 'ok' : 'warn'"><strong>{{ t(tunSupported ? '可用' : '不可用') }}</strong><span>{{ t(tunSupportText) }}</span></div>
-            <p v-if="!network.tun.enabled && tunSupported" class="tun-settings-disabled-hint">{{ t("当前 TUN 未开启，修改会先保存为预配置；之后开启 TUN 时生效。") }}</p>
             <div class="tun-main-grid">
               <TunStackFields v-model:stack="network.tun.stack" v-model:congestion-controller="network.tun.congestionController" :features="tunFeatures" :disabled="tunSwitching || !tunSupported" @change="saveTunSettings" />
               <div class="field">
@@ -596,7 +595,7 @@ onMounted(initialize)
             </div>
             <div class="dns-tab-panels">
               <div v-show="dnsTab === 'basic'" id="dns-panel-basic" class="dns-tab-panel" role="tabpanel" aria-labelledby="dns-tab-basic">
-                <div class="dns-field-grid"><div class="field"><label>{{ t("DNS 监听地址") }}</label><input v-model="network.dns.listen" class="mono" @change="saveDns(80)"></div><div class="field"><label>{{ t("增强模式") }}</label><select v-model="network.dns.enhancedMode" @change="saveDns(180)"><option value="fake-ip">Fake IP</option><option value="redir-host">Redir Host</option></select></div><div class="field"><label>{{ t("Fake IP IPv4 范围") }}</label><input v-model="network.dns.fakeIpRange" class="mono" @change="saveDns(80)"></div><div class="field"><label>{{ t("Fake IP IPv6 范围") }}</label><input v-model="network.dns.fakeIpRange6" class="mono" @change="saveDns(80)"></div><div class="field"><label>{{ t("Fake IP 过滤模式") }}</label><select v-model="network.dns.fakeIpFilterMode" @change="saveDns(180)"><option value="blacklist">{{ t("黑名单") }}</option><option value="whitelist">{{ t("白名单") }}</option><option value="rule">{{ t("规则模式") }}</option></select></div></div>
+                <div class="dns-field-grid"><div class="field"><label>{{ t("DNS 监听地址") }}</label><input v-model="network.dns.listen" class="mono" @change="saveDns(80)"></div><div class="field"><label>{{ t("增强模式") }}</label><AppSelect :aria-label="t('增强模式')" v-model="network.dns.enhancedMode" @change="saveDns(180)" :options="[{ value: 'fake-ip', label: 'Fake IP' }, { value: 'redir-host', label: 'Redir Host' }]" /></div><div class="field"><label>{{ t("Fake IP IPv4 范围") }}</label><input v-model="network.dns.fakeIpRange" class="mono" @change="saveDns(80)"></div><div class="field"><label>{{ t("Fake IP IPv6 范围") }}</label><input v-model="network.dns.fakeIpRange6" class="mono" @change="saveDns(80)"></div><div class="field"><label>{{ t("Fake IP 过滤模式") }}</label><AppSelect :aria-label="t('Fake IP 过滤模式')" v-model="network.dns.fakeIpFilterMode" @change="saveDns(180)" :options="[{ value: 'blacklist', label: (t('黑名单')) }, { value: 'whitelist', label: (t('白名单')) }, { value: 'rule', label: (t('规则模式')) }]" /></div></div>
                 <div class="dns-toggle-grid"><SettingToggle v-model="network.dns.enable" :title="t('启用 DNS')" :description="t('写入覆写配置时启用 Mihomo DNS')" @change="saveDns(120)" /><SettingToggle v-model="network.dns.ipv6" :title="t('IPv6 DNS 解析')" :description="t('是否返回 AAAA 记录；与全局 IPv6 开关不同')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.preferH3" :title="t('优先使用 HTTP/3')" :description="t('DoH 优先尝试 HTTP/3')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.respectRules" :title="t('DNS 遵循路由规则')" :description="t('需要配置代理节点 DNS，避免解析循环')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.useHosts" :title="t('使用配置 Hosts')" :description="t('使用 Mihomo 配置中的 hosts 映射')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.useSystemHosts" :title="t('使用系统 Hosts')" :description="t(runtime.platform === 'linux' ? '读取 Linux 主机的 hosts 文件' : runtime.platform === 'docker' ? '读取容器内 hosts 文件' : '读取 fnOS 的系统 hosts 文件')" @change="saveDns(180)" /><SettingToggle v-model="network.dns.directNameserverFollowPolicy" :title="t('直连 DNS 遵循策略')" :description="t('直连域名解析遵循 nameserver-policy')" @change="saveDns(180)" /></div>
               </div>
               <div v-show="dnsTab === 'servers'" id="dns-panel-servers" class="dns-tab-panel dns-text-grid" role="tabpanel" aria-labelledby="dns-tab-servers"><div v-for="field in dnsServerFields" :key="field.key" class="field"><label>{{ t(field.label) }}</label><textarea v-model="dnsText[field.key]" class="dns-list-input mono" @change="saveDns(80)" @input="saveDns(1000)" /></div></div>
@@ -654,7 +653,7 @@ onMounted(initialize)
               <div class="core-mode-row">
                 <div class="section-head"><div><h2 id="core-mode-label">{{ t("Core 运行方式") }}</h2><p>{{ t("切换后保存选择，下次启动时沿用。") }}</p></div></div>
                 <div class="core-mode-controls">
-                  <select id="core-mode" v-model="selectedCoreMode" aria-labelledby="core-mode-label" :disabled="Boolean(busy)"><option value="managed">{{ t("Manager 托管") }}</option><option v-if="runtime.capabilities.externalCore" value="external">{{ t("外部 Mihomo") }}</option></select>
+                  <AppSelect id="core-mode" v-model="selectedCoreMode" aria-labelledby="core-mode-label" :disabled="Boolean(busy)" :options="[{ value: 'managed', label: (t('Manager 托管')) }, ...(runtime.capabilities.externalCore ? [{ value: 'external', label: (t('外部 Mihomo')) }] : [])]" />
                   <button :disabled="Boolean(busy) || system.available === false" @click="switchCoreMode">{{ t(busy === 'core-mode' ? '正在切换…' : '应用') }}</button>
                 </div>
               </div>
@@ -695,7 +694,7 @@ onMounted(initialize)
             <div class="settings-accordion-subsection core-healthcheck-section">
               <div v-if="behaviorMessage" class="core-healthcheck-save-state dns-autosave-state" :class="behaviorState" role="status" aria-live="polite">{{ t(behaviorMessage) }}</div>
               <div class="form-grid core-healthcheck-fields">
-                <div class="field"><label for="core-healthcheck-preset">{{ t("测试地址") }}</label><select id="core-healthcheck-preset" :value="healthcheckPreset" @change="changeHealthcheckPreset"><option v-for="preset in healthcheckPresets" :key="preset.id" :value="preset.id">{{ t(preset.label) }}</option><option value="custom">{{ t("自定义") }}</option></select><span v-if="healthcheckPreset !== 'custom'" class="core-healthcheck-url mono">{{ t(manager.healthcheckUrl) }}</span></div>
+                <div class="field"><label for="core-healthcheck-preset">{{ t("测试地址") }}</label><AppSelect id="core-healthcheck-preset" :model-value="healthcheckPreset" @change="changeHealthcheckPreset" :options="[...(healthcheckPresets).map((preset) => ({ value: preset.id, label: (t(preset.label)) })), { value: 'custom', label: (t('自定义')) }]" /><span v-if="healthcheckPreset !== 'custom'" class="core-healthcheck-url mono">{{ t(manager.healthcheckUrl) }}</span></div>
                 <div class="field"><label for="core-healthcheck-timeout">{{ t("超时") }}</label><div class="core-timeout-input"><input id="core-healthcheck-timeout" v-model.number="healthcheckTimeoutSeconds" type="number" min="1" max="30" step="1" @change="saveBehavior"><span>{{ t("秒") }}</span></div><span class="core-field-help">{{ t("范围 1～30 秒") }}</span></div>
               </div>
               <div v-if="healthcheckPreset === 'custom'" class="field core-custom-healthcheck"><label for="core-healthcheck-url">{{ t("自定义测试地址") }}</label><input id="core-healthcheck-url" v-model="manager.healthcheckUrl" @input="customHealthcheckMode = true" type="url" placeholder="https://example.com/generate_204" @change="saveBehavior"></div>
@@ -715,7 +714,7 @@ onMounted(initialize)
                 <div class="update-row-copy"><p>{{ t(geo.message || '由 Mihomo 管理地理数据库') }}</p></div>
                 <div class="geo-controls">
                   <label class="geo-auto"><input v-model="geoForm.autoUpdate" type="checkbox" :disabled="geo.readOnly || !geo.canUpdate || Boolean(geoBusy)"> {{ t("自动更新") }}</label>
-                  <label class="geo-interval">{{ t("周期") }} <select v-model.number="geoForm.updateInterval" :disabled="geo.readOnly || !geo.canUpdate || Boolean(geoBusy)"><option :value="12">{{ t("12 小时") }}</option><option :value="24">{{ t("24 小时") }}</option><option :value="72">{{ t("3 天") }}</option><option :value="168">{{ t("7 天") }}</option></select></label>
+                  <label class="geo-interval">{{ t("周期") }} <AppSelect :aria-label="t('周期')" v-model.number="geoForm.updateInterval" :disabled="geo.readOnly || !geo.canUpdate || Boolean(geoBusy)" :options="[{ value: 12, label: (t('12 小时')) }, { value: 24, label: (t('24 小时')) }, { value: 72, label: (t('3 天')) }, { value: 168, label: (t('7 天')) }]" /></label>
                   <button class="ghost" :disabled="geo.readOnly || !geo.canUpdate || Boolean(geoBusy)" @click="saveGeoSettings">{{ t(geoBusy === 'settings' ? '应用中…' : '保存设置') }}</button>
                   <button :disabled="!geo.canUpdate || Boolean(geoBusy)" @click="updateGeoData">{{ t(geoBusy === 'update' ? '更新中…' : '立即更新') }}</button>
                 </div>
@@ -839,7 +838,7 @@ onMounted(initialize)
 #core-panel-delay > .core-healthcheck-section { border-top: 0; }
 .core-healthcheck-save-state { margin: 0 0 10px; min-height: 0; text-align: right; }
 .core-healthcheck-section .field label { font-size: 12px; font-weight: 600; color: var(--text); }
-.core-healthcheck-section input, .core-healthcheck-section select { min-height: 32px; height: 32px; padding: 4px 10px; font-size: 13px; }
+.core-healthcheck-section input, .core-healthcheck-section .app-select { min-height: 32px; height: 32px; padding: 4px 10px; font-size: 13px; }
 .core-healthcheck-url, .core-field-help { font-size: 11px; line-height: 1.5; color: var(--muted); }
 .core-healthcheck-url { overflow-wrap: anywhere; }
 .core-timeout-input { height: 32px; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 9px; background: var(--control-bg); overflow: hidden; }

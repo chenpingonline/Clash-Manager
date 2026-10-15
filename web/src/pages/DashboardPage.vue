@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from '@/components/AppSelect.vue'
 import { t } from '@/services/i18n'
 
 import { runtime } from '@/services/runtime'
@@ -441,10 +442,9 @@ function chooseGroup(name: string) {
   syncCurrentDelay()
 }
 
-function updateCurrentGroupSort(event: Event) {
+function updateCurrentGroupSort(sort: ProxyNodeSort) {
   const groupName = currentGroup.value?.name
   if (!groupName) return
-  const sort = (event.target as HTMLSelectElement).value as ProxyNodeSort
   const next = { ...groupSorts.value }
   if (sort === 'default') delete next[groupName]
   else next[groupName] = sort
@@ -657,7 +657,7 @@ onBeforeUnmount(() => {
       <div class="card section bootstrap-card">
         <div class="section-head">
           <div><h2>{{ t(bootstrapActive ? '正在准备 Mihomo Core' : downloadAction ? '需要下载 Mihomo Core' : status.bootstrap?.state === 'error' ? 'Mihomo Core 启用失败' : 'Mihomo Core 未连接') }}</h2><p v-if="bootstrapActive || downloadAction">{{ t(status.bootstrap?.message || 'Manager 正在检查本机 Mihomo') }}</p></div>
-          <select v-model="selectedCoreMode" class="bootstrap-mode-select" :aria-label="t('Core 运行方式')" :disabled="working || retryingCore" @change="coreModeEdited = true"><option value="managed">{{ t("Manager 托管") }}</option><option value="external">{{ t("外部 Core") }}</option></select>
+          <AppSelect v-model="selectedCoreMode" class="bootstrap-mode-select" :aria-label="t('Core 运行方式')" :disabled="working || retryingCore" @change="coreModeEdited = true" :options="[{ value: 'managed', label: (t('Manager 托管')) }, { value: 'external', label: (t('外部 Core')) }]" />
         </div>
         <p class="hint">{{ t(downloadAction ? 'all 通用安装包不包含 Core。点击“下载 Core”后，Manager 将下载并校验当前设备架构匹配的官方版本，安装完成后自动启动和检测。' : '切换 Mihomo Core 管理模式后请点击“重新检测”') }}</p>
         <template v-if="bootstrapActive">
@@ -724,11 +724,7 @@ onBeforeUnmount(() => {
           <div class="dashboard-route-actions">
             <button class="dashboard-delay" :class="delayClass" :disabled="!currentGroup || testingGroup" :title="t('测试当前代理组全部节点延迟')" @click="testCurrentGroup">{{ t(delayText) }}</button>
             <label class="dashboard-sort-control" :title="t('设置当前代理组节点排序方式')">
-              <select :value="currentGroupSort" :disabled="!currentGroup || testingGroup" :aria-label="t('当前代理组节点排序方式')" @change="updateCurrentGroupSort">
-                <option value="default">{{ t("默认排序") }}</option>
-                <option value="delay">{{ t("按延迟") }}</option>
-                <option value="name">{{ t("按名称") }}</option>
-              </select>
+              <AppSelect :model-value="currentGroupSort" :disabled="!currentGroup || testingGroup" :aria-label="t('当前代理组节点排序方式')" @change="updateCurrentGroupSort" :options="[{ value: 'default', label: (t('默认排序')) }, { value: 'delay', label: (t('按延迟')) }, { value: 'name', label: (t('按名称')) }]" />
             </label>
           </div>
         </div>

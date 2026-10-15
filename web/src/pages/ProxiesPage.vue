@@ -6,6 +6,7 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import AsyncState from '@/components/AsyncState.vue'
 import CollapseTransition from '@/components/CollapseTransition.vue'
 import BaseModal from '@/components/BaseModal.vue'
+import ProxySortSelect from '@/components/ProxySortSelect.vue'
 import { useDelayTests } from '@/composables/useDelayTests'
 import { useGroupDelaySettings } from '@/composables/useGroupDelaySettings'
 import { api, errorMessage, jsonRequest } from '@/services/api'
@@ -73,8 +74,7 @@ function updateGroupFilter(name: string, event: Event) {
   if (value) groupFilters.set(name, value)
   else groupFilters.delete(name)
 }
-function updateGroupSort(name: string, event: Event) {
-  const sort = (event.target as HTMLSelectElement).value as ProxyNodeSort
+function updateGroupSort(name: string, sort: ProxyNodeSort) {
   if (sort === 'default') groupSorts.delete(name)
   else groupSorts.set(name, sort)
   try { window.localStorage.setItem(GROUP_SORT_STORAGE_KEY, JSON.stringify(Object.fromEntries(groupSorts))) }
@@ -240,13 +240,7 @@ onMounted(() => { void delayTests.restore(); void load() })
             <button class="proxy-group-tool proxy-locate ghost small" :disabled="!group.proxy.now" :aria-label="t('定位当前节点')" :title="t('定位当前节点')" @click.stop="locateCurrent(group)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" /><circle class="proxy-locate-dot" cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg></button>
             <button class="proxy-group-tool proxy-delay-custom ghost small" :class="{ active: delaySettings.isCustom(group.name) }" :disabled="!delayTests.context.value || delayTestBusy || delaySettings.isSaving(group.name)" :aria-pressed="delaySettings.isCustom(group.name)" :aria-label="t('自定义测速网址') + ' · ' + group.name" :title="t('自定义测速网址')" @mousedown.prevent @click.stop="toggleCustomDelay(group.name)"><Link2 :size="16" :stroke-width="1.8" aria-hidden="true" /></button>
             <button class="proxy-group-tool proxy-latency-test ghost small" :disabled="delayTestBusy" :aria-busy="groupTesting(group.name)" :aria-label="t(groupTesting(group.name) ? '测试中…' : '延迟测试') + ' · ' + group.name" :title="t(delayTestBusy && !groupTesting(group.name) ? '已有测速任务正在进行' : '测试本组全部可测速节点')" @click.stop="testGroup(group)"><LoaderCircle v-if="groupTesting(group.name)" class="proxy-latency-spinner" :size="18" :stroke-width="2" aria-hidden="true" /><Gauge v-else :size="18" :stroke-width="2" aria-hidden="true" /></button>
-            <label class="proxy-sort-control" :title="t('设置本组节点排序方式')" @click.stop>
-              <select :value="groupSort(group.name)" :aria-label="t(`${group.name} 排序方式`)" @click.stop @change.stop="updateGroupSort(group.name, $event)">
-                <option value="default">{{ t("默认排序") }}</option>
-                <option value="delay">{{ t("按延迟") }}</option>
-                <option value="name">{{ t("按名称") }}</option>
-              </select>
-            </label>
+            <ProxySortSelect :model-value="groupSort(group.name)" :label="t(`${group.name} 排序方式`)" @update:model-value="updateGroupSort(group.name, $event)" />
             <button type="button" class="proxy-chevron ghost" :aria-expanded="expanded.has(group.name) || Boolean(query)" :aria-label="t(expanded.has(group.name) || query ? '收起分组 {arg0}' : '展开分组 {arg0}', { arg0: group.name })" :disabled="Boolean(query)" :title="query ? t('搜索时分组自动展开') : undefined" @click.stop="expanded.has(group.name) ? expanded.delete(group.name) : expanded.add(group.name)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg></button>
           </div>
         </div>
@@ -285,8 +279,6 @@ onMounted(() => { void delayTests.restore(); void load() })
 .proxy-summary { flex: 1; }
 .proxy-name-row .tag, .proxy-name-row .node-count, .proxy-current > span { flex: none; white-space: nowrap; }
 .proxy-current strong { min-width: 0; }
-.proxy-sort-control { padding-left: 8px; }
-.proxy-sort-control select { width: 88px; min-width: 88px; flex: none; padding-right: 20px; }
 .proxy-head-actions .proxy-locate { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-color: var(--line); color: var(--text); }
 .proxy-head-actions .proxy-locate:hover:not(:disabled) { border-color: var(--accent-line, var(--accent)); background: var(--accent-soft, rgba(124,156,255,.08)); color: var(--accent-ink, var(--accent)); }
 .proxy-locate svg { width: 18px; height: 18px; stroke-width: 2; }

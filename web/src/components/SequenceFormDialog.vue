@@ -15,7 +15,7 @@ watch(() => props.open, async open => {
 function keyboard(event: KeyboardEvent) {
   if (event.key !== 'Tab') return
   const controls = Array.from(dialog.value?.querySelectorAll<HTMLElement>('button, input, select, textarea, [tabindex="0"]') || [])
-    .filter(element => !element.matches(':disabled') && element.getClientRects().length)
+    .filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length)
   if (!controls.length) return
   event.preventDefault()
   const index = controls.indexOf(document.activeElement as HTMLElement)

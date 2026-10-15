@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from '@/components/AppSelect.vue'
 import { Search } from 'lucide-vue-next'
 import { t } from '@/services/i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -116,8 +117,8 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
 <template>
   <Teleport defer to="#page-actions"><div class="log-tools">
     <div class="log-search-wrap"><Search :size="14" :stroke-width="1.8" aria-hidden="true" /><input v-model="query" type="search" class="log-search" :placeholder="t(historyMode ? '搜索保留的历史日志' : '搜索最近日志')" :aria-label="t('搜索日志')" @keydown.enter="historyMode && load()"></div>
-    <select v-model.number="limit" class="log-limit-select" :aria-label="t('显示行数')" @change="(isCore || historyMode) && load()"><option v-for="value in [100, 200, 500, 800, 2000]" :key="value" :value="value">{{ value }} {{ t('行') }}</option></select>
-    <select v-if="!isCore" v-model="level" class="log-level-select" :aria-label="t('显示级别')" @change="load()"><option v-for="value in ['debug', 'info', 'warning', 'error']" :key="value">{{ value }}</option></select>
+    <AppSelect v-model.number="limit" class="log-limit-select" :aria-label="t('显示行数')" @change="(isCore || historyMode) && load()" :options="[...([100, 200, 500, 800, 2000]).map((value) => ({ value: value, label: (value) + ' ' + (t('行')) }))]" />
+    <AppSelect v-if="!isCore" v-model="level" class="log-level-select" :aria-label="t('显示级别')" @change="load()" :options="[...(['debug', 'info', 'warning', 'error']).map((value) => ({ value: (value), label: (value) }))]" />
     <button class="ghost" @click="changeMode">{{ t(historyMode ? '实时日志' : '历史查询') }}</button><button class="ghost" @click="openSettings">{{ t('日志设置') }}</button>
     <button class="ghost danger" @click="clearHistory">{{ t(isCore ? '清空 Core 输出日志' : '清空历史日志') }}</button><button v-if="!historyMode" class="ghost primary" @click="toggle">{{ t(running ? '停止' : '继续') }}</button>
   </div></Teleport>
@@ -149,7 +150,7 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
     <p v-if="settingsError" class="error" role="alert">{{ t(settingsError) }}</p><p v-if="settingsBusy && !draft" class="muted">{{ t('正在读取…') }}</p>
     <form v-if="draft && status" id="log-settings-form" class="log-settings-form" @submit.prevent="saveSettings">
       <fieldset :disabled="settingsBusy"><legend>{{ t('页面历史日志') }}</legend>
-        <div class="log-policy-fields"><label>{{ t('保留天数') }}<input v-model.number="draft.history.days" type="number" min="0" max="365" step="1" required></label><label>{{ t('容量上限（MiB）') }}<input v-model.number="draft.history.maxMiB" type="number" min="1" max="1024" step="1" required></label><label>{{ t('保存级别') }}<select v-model="draft.saveLevel"><option v-for="value in ['info', 'warning', 'error', 'debug']" :key="value">{{ value }}</option></select></label></div>
+        <div class="log-policy-fields"><label>{{ t('保留天数') }}<input v-model.number="draft.history.days" type="number" min="0" max="365" step="1" required></label><label>{{ t('容量上限（MiB）') }}<input v-model.number="draft.history.maxMiB" type="number" min="1" max="1024" step="1" required></label><label>{{ t('保存级别') }}<AppSelect :aria-label="t('保存级别')" v-model="draft.saveLevel" :options="[...(['info', 'warning', 'error', 'debug']).map((value) => ({ value: (value), label: (value) }))]" /></label></div>
         <p class="muted">{{ t('保存级别仅影响历史记录；实时显示级别可独立选择。Debug 适合临时排查。') }}</p>
         <p class="muted">{{ t('已使用：') }}{{ bytes(status.history.size) }} · {{ t('最早记录：') }}{{ status.history.oldest ? displayLogTime(status.history.oldest) : t('暂无日志') }}</p>
         <p v-if="status.history.error" class="error" role="alert">{{ t('历史日志保存失败：') }}{{ status.history.error }}</p>
@@ -190,7 +191,7 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
 .log-settings-form p{font-size:11px;line-height:1.5;margin:6px 0;overflow-wrap:anywhere}
 .log-policy-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .log-policy-fields label{display:flex;flex-direction:column;gap:4px;font-size:12px}
-.log-policy-fields input,.log-policy-fields select{width:100%;min-width:0;height:28px;padding:0 8px;border-radius:6px;font-size:12px}
+.log-policy-fields input,.log-policy-fields .app-select{width:100%;min-width:0;height:28px;padding:0 8px;border-radius:6px;font-size:12px}
 .log-core-storage{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:8px}
 .log-core-storage p{flex:1;min-width:200px;margin:0}
 .log-core-storage button,.log-settings-actions button{flex:none;height:28px;min-height:28px;padding:0 10px;border-radius:7px;font-size:11px;line-height:26px}

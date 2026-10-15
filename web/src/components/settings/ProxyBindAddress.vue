@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from '@/components/AppSelect.vue'
 import { nextTick, ref, useId } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
 import { errorMessage } from '@/services/api'
@@ -9,7 +10,7 @@ const emit = defineEmits<{ 'update:allowLan': [value: boolean]; lanChange: [] }>
 const inputId = `proxy-lan-${useId()}`
 const open = ref(false), saving = ref(false), error = ref('')
 const mode = ref('all'), customAddress = ref('')
-const trigger = ref<HTMLButtonElement>(), form = ref<HTMLFormElement>(), modeInput = ref<HTMLSelectElement>()
+const trigger = ref<HTMLButtonElement>(), form = ref<HTMLFormElement>(), modeInput = ref<{ focus: () => void }>()
 async function show() {
   const address = props.modelValue.trim() || '*'
   mode.value = address === '*' ? 'all' : 'ip'
@@ -46,7 +47,7 @@ async function saveAddress() {
 function modalKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') { event.preventDefault(); void close() }
   if (event.key !== 'Tab') return
-  const controls = Array.from(form.value?.querySelectorAll<HTMLElement>('button:not(:disabled), select:not(:disabled), input:not(:disabled)') || [])
+  const controls = Array.from(form.value?.querySelectorAll<HTMLElement>('button:not(:disabled), select:not(:disabled), input:not(:disabled)') || []).filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length)
   const first = controls[0], last = controls[controls.length - 1]
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
@@ -74,7 +75,7 @@ function modalKeydown(event: KeyboardEvent) {
       </div>
       <p class="field-note">{{ t('默认监听所有网卡，也可填写 NAS 本机的网卡 IP。') }}</p>
       <div class="bind-fields">
-        <label class="bind-field"><span>{{ t('监听地址') }}</span><select ref="modeInput" v-model="mode" :disabled="saving || !allowLan" @change="error = ''"><option value="all">{{ t('所有网卡') }}</option><option value="ip">{{ t('本机网卡 IP') }}</option></select></label>
+        <label class="bind-field"><span>{{ t('监听地址') }}</span><AppSelect :aria-label="t('监听地址')" ref="modeInput" v-model="mode" :disabled="saving || !allowLan" @change="error = ''" :options="[{ value: 'all', label: (t('所有网卡')) }, { value: 'ip', label: (t('本机网卡 IP')) }]" /></label>
         <label v-if="mode === 'ip'" class="bind-field"><span>{{ t('指定监听 IP') }}</span><input v-model="customAddress" :disabled="saving || !allowLan" :placeholder="t('IPv4 或 IPv6 地址')" spellcheck="false" @input="error = ''"></label>
       </div>
       <p v-if="error" class="error-text" role="alert">{{ t(error) }}</p>
@@ -93,8 +94,8 @@ function modalKeydown(event: KeyboardEvent) {
 .bind-fields { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 10px; }
 .bind-field { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
 .bind-field span { font-size: 12px; white-space: nowrap; }
-.bind-field select, .bind-field input { height: 28px; min-width: 0; padding: 4px 8px; border-radius: 7px; font-size: 12px; }
-.bind-field select { width: 110px; flex: none; }
+.bind-field .app-select, .bind-field input { height: 28px; min-width: 0; padding: 4px 8px; border-radius: 7px; font-size: 12px; }
+.bind-field .app-select { width: 110px; flex: none; }
 .bind-field input { width: 180px; }
 .field-note { margin: 10px 0; font-size: 11px; line-height: 1.6; color: var(--muted); }
 .error-text { margin-bottom: 0; }

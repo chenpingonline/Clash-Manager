@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AppSelect from '@/components/AppSelect.vue'
+import PolicySelect from '@/components/PolicySelect.vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
 import { api, errorMessage, isAbortError, jsonRequest } from '@/services/api'
@@ -22,7 +24,7 @@ const profiles = ref<ProfileItem[]>([]), profileId = ref(''), source = ref<'file
 const file = ref<File | null>(null), fileInput = ref<HTMLInputElement | null>(null), text = ref(''), url = ref(''), name = ref(''), policy = ref('DIRECT')
 const behavior = ref('auto'), placement = ref('auto'), loading = ref(false), busy = ref(false), saving = ref(false)
 const preview = ref<ImportPreview | null>(null), acknowledged = ref(false), error = ref(''), policyOptions = ref(['DIRECT', 'REJECT', 'REJECT-DROP'])
-const profileSelect = ref<HTMLSelectElement | null>(null), previewHeading = ref<HTMLHeadingElement | null>(null), progress = ref('')
+const profileSelect = ref<{ focus: () => void } | null>(null), previewHeading = ref<HTMLHeadingElement | null>(null), progress = ref('')
 let controller: AbortController | null = null, generation = 0, policyGeneration = 0, openGeneration = 0
 const sources = ['file', 'url', 'text'] as const
 const sourceLabels = { file: '文件', url: '链接', text: '粘贴文本' }
@@ -113,7 +115,7 @@ function keydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && !saving.value) { event.preventDefault(); event.stopPropagation(); close() }
   if (event.key === 'Tab') {
     const dialog = (event.currentTarget as HTMLElement).closest('[role="dialog"]')
-    const elements = [...(dialog?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]') || [])]
+    const elements = [...(dialog?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]') || [])].filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length)
     const first = elements[0], last = elements[elements.length - 1]
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
     if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
@@ -127,7 +129,7 @@ onBeforeUnmount(() => { generation++; policyGeneration++; controller?.abort() })
     <div class="rule-import-body" @keydown="keydown">
       <p class="muted">{{ t('支持 YAML、文本列表、MRS 和 ACL4SSR INI。预览后保存到所选订阅增强，订阅更新后保留。') }}</p>
       <div class="rule-import-fields">
-        <label class="field"><span>{{ t('目标订阅') }}</span><select ref="profileSelect" v-model="profileId" :disabled="loading || saving"><option value="" disabled>{{ t(loading ? '正在读取…' : '请选择订阅') }}</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.name }}{{ item.current ? ` · ${t('当前使用')}` : '' }}</option></select></label>
+        <label class="field"><span>{{ t('目标订阅') }}</span><AppSelect :aria-label="t('目标订阅')" ref="profileSelect" v-model="profileId" :disabled="loading || saving" :options="[{ value: '', label: (t(loading ? '正在读取…' : '请选择订阅')), disabled: true }, ...(profiles).map((item) => ({ value: item.id, label: (item.name) + (item.current ? ` · ${t('当前使用')}` : '') }))]" /></label>
         <label class="field"><span>{{ t('规则集名称 / INI 名称前缀') }}</span><input v-model="name" :disabled="saving" placeholder="Imported"></label>
       </div>
       <p v-if="!loading && !profiles.length" class="sequence-error">{{ t('请先在订阅配置中添加或导入一个订阅。') }}</p>
@@ -136,9 +138,9 @@ onBeforeUnmount(() => { generation++; policyGeneration++; controller?.abort() })
       <label v-else-if="source === 'url'" class="field"><span>{{ t('规则文件链接') }}</span><input v-model="url" type="url" :disabled="saving" placeholder="https://raw.githubusercontent.com/…"><small class="muted">{{ t('支持 HTTP/HTTPS 和 GitHub 文件页；远程规则集保留自动更新来源。') }}</small></label>
       <label v-else class="field"><span>{{ t('粘贴规则内容') }}</span><textarea v-model="text" class="editor rule-import-text" :disabled="saving" spellcheck="false" :placeholder="t('粘贴 payload、域名 / IP 列表、完整规则或 INI 内容')" /></label>
       <div class="rule-import-fields rule-import-options">
-        <label class="field"><span>{{ t('目标策略') }}</span><input v-model="policy" list="rule-import-policies" :disabled="saving"><datalist id="rule-import-policies"><option v-for="item in policyOptions" :key="item" :value="item" /></datalist></label>
-        <label class="field"><span>{{ t('规则类型') }}</span><select v-model="behavior" :disabled="saving"><option value="auto">{{ t('自动识别') }}</option><option value="domain">domain</option><option value="ipcidr">ipcidr</option><option value="classical">classical</option></select></label>
-        <label class="field"><span>{{ t('导入方式') }}</span><select v-model="placement" :disabled="saving"><option value="auto">{{ t('默认前置，INI 遵循模板设置') }}</option><option value="prepend">{{ t('前置合并') }}</option><option value="append">{{ t('后置合并') }}</option><option value="replace">{{ t('替换原有规则') }}</option></select></label>
+        <PolicySelect v-model="policy" :options="policyOptions" :disabled="saving" label="目标策略" allow-custom />
+        <label class="field"><span>{{ t('规则类型') }}</span><AppSelect :aria-label="t('规则类型')" v-model="behavior" :disabled="saving" :options="[{ value: 'auto', label: (t('自动识别')) }, { value: 'domain', label: 'domain' }, { value: 'ipcidr', label: 'ipcidr' }, { value: 'classical', label: 'classical' }]" /></label>
+        <label class="field"><span>{{ t('导入方式') }}</span><AppSelect :aria-label="t('导入方式')" v-model="placement" :disabled="saving" :options="[{ value: 'auto', label: (t('默认前置，INI 遵循模板设置')) }, { value: 'prepend', label: (t('前置合并')) }, { value: 'append', label: (t('后置合并')) }, { value: 'replace', label: (t('替换原有规则')) }]" /></label>
       </div>
       <small class="muted">{{ t('目标策略用于单个规则集；完整规则和 INI 保留各自的策略。') }}</small>
       <div class="actions"><button class="small" :disabled="!canPreview || busy || saving" @click="requestPreview">{{ t(busy ? '正在识别并生成预览…' : '识别并预览') }}</button><span v-if="busy" class="muted" role="status">{{ t('正在检查格式和远程规则源，请稍候。') }}</span></div>
@@ -166,7 +168,7 @@ onBeforeUnmount(() => { generation++; policyGeneration++; controller?.abort() })
 .rule-import-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .rule-import-options{grid-template-columns:repeat(3,minmax(0,1fr))}
 .field{display:flex;flex-direction:column;gap:6px;min-width:0}
-.field input,.field select{width:100%;min-width:0}
+.field input,.field .app-select{width:100%;min-width:0}
 .rule-import-tabs{display:flex;gap:8px}
 .rule-import-tabs .active{background:color-mix(in srgb,var(--accent) 12%,transparent);border-color:var(--accent);color:var(--accent)}
 .rule-import-text{min-height:160px;max-height:260px;resize:vertical;width:100%}

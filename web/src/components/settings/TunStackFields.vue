@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from '@/components/AppSelect.vue'
 import { t } from '@/services/i18n'
 
 import { computed } from 'vue'
@@ -19,19 +20,13 @@ const usesMips = computed(() => stack.value === 'mips' || (!stack.value && props
       <label>{{ t("TUN 协议栈") }}</label>
       <HelpPopover :label="t('TUN 协议栈')"><strong>{{ t("协议栈决定内核如何处理 TUN 流量") }}</strong><span><b>{{ t("跟随内核默认") }}</b>{{ t("：不指定协议栈，1.19.32 起默认使用 mips。") }}</span><span><b>mips</b>{{ t("：新版用户态协议栈，支持拥塞控制设置。") }}</span><span><b>mixed</b>{{ t("：TCP 使用 System，UDP 使用 gVisor。") }}</span><span><b>system</b>{{ t("：使用系统协议栈。") }}</span><span><b>gVisor</b>{{ t("：使用 gVisor 用户态协议栈。") }}</span></HelpPopover>
     </div>
-    <select v-model="stack" :aria-label="t('TUN 协议栈')" :disabled="disabled" @change="emit('change', 'stack')">
-      <option value="">{{ t(defaultLabel) }}</option>
-      <option v-if="features?.mips || stack === 'mips'" value="mips" :disabled="!features?.mips">mips</option>
-      <option value="mixed">mixed</option><option value="system">system</option><option value="gvisor">gVisor</option>
-    </select>
+    <AppSelect v-model="stack" :aria-label="t('TUN 协议栈')" :disabled="disabled" @change="emit('change', 'stack')" :options="[{ value: '', label: (t(defaultLabel)) }, ...(features?.mips || stack === 'mips' ? [{ value: 'mips', label: 'mips', disabled: !features?.mips }] : []), { value: 'mixed', label: 'mixed' }, { value: 'system', label: 'system' }, { value: 'gvisor', label: 'gVisor' }]" />
   </div>
   <div v-if="features?.congestionController && usesMips" class="field" :class="fieldClass">
     <div class="field-label-row">
       <label>{{ t("TCP 拥塞控制") }}</label>
       <HelpPopover :label="t('TCP 拥塞控制')"><strong>{{ t("高级选项，仅用于 mips 协议栈") }}</strong><span>{{ t("建议保持内核默认；显式选择的算法用于 TUN 内的 TCP 连接。") }}</span></HelpPopover>
     </div>
-    <select v-model="congestionController" :aria-label="t('TCP 拥塞控制')" :disabled="disabled" @change="emit('change', 'congestionController')">
-      <option value="">{{ t("内核默认") }}</option><option value="cubic">CUBIC</option><option value="reno">Reno</option><option value="bbr">BBR</option><option value="bbr3">BBRv3</option>
-    </select>
+    <AppSelect v-model="congestionController" :aria-label="t('TCP 拥塞控制')" :disabled="disabled" @change="emit('change', 'congestionController')" :options="[{ value: '', label: (t('内核默认')) }, { value: 'cubic', label: 'CUBIC' }, { value: 'reno', label: 'Reno' }, { value: 'bbr', label: 'BBR' }, { value: 'bbr3', label: 'BBRv3' }]" />
   </div>
 </template>

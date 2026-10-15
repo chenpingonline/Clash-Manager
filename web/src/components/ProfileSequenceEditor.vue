@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from '@/components/AppSelect.vue'
 import { t } from '@/services/i18n'
 
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, useId, watch } from 'vue'
@@ -184,13 +185,12 @@ function reorder(row: Row, delta: number) {
         <h4 class="rule-form-title">{{ t(editIndex !== null ? '编辑自定义规则' : '添加规则') }}</h4>
         <div class="rule-add-bar">
           <RuleTypeSelect v-model="ruleType" :disabled="disabled" />
-          <label>{{ t("规则内容") }}<input v-model="payload" :disabled="ruleType === 'MATCH'" :list="ruleType === 'RULE-SET' ? 'sequence-rule-providers' : ruleType === 'SUB-RULE' ? 'sequence-sub-rules' : undefined" :placeholder="t(ruleType === 'MATCH' ? '无需填写匹配内容' : rulePlaceholder)" @keydown.enter.prevent="add(addSide)" /></label>
+          <PolicySelect v-if="ruleType === 'RULE-SET' || ruleType === 'SUB-RULE'" v-model="payload" :options="ruleType === 'RULE-SET' ? ruleProviderNames : subRuleNames" :disabled="disabled" label="规则内容" :placeholder="rulePlaceholder" search-placeholder="规则内容" allow-custom />
+          <label v-else>{{ t("规则内容") }}<input v-model="payload" :disabled="ruleType === 'MATCH'" :placeholder="t(ruleType === 'MATCH' ? '无需填写匹配内容' : rulePlaceholder)" @keydown.enter.prevent="add(addSide)" /></label>
           <PolicySelect v-model="policy" :options="availableProxies" :disabled="disabled" />
           <div class="rule-position-field"><div class="rule-position-heading"><span id="rule-position-label">{{ t("添加位置") }}</span><HelpPopover class="rule-position-help" :label="t('添加位置')"><span>{{ t('前置优先匹配，后置在订阅规则后。') }}</span></HelpPopover></div><div class="rule-position" role="group" aria-labelledby="rule-position-label"><button type="button" :aria-pressed="addSide === 'prepend'" :class="{ active: addSide === 'prepend' }" @click="addSide = 'prepend'">{{ t("前置") }}</button><button type="button" :aria-pressed="addSide === 'append'" :class="{ active: addSide === 'append' }" @click="addSide = 'append'">{{ t("后置") }}</button></div></div>
           <button class="small rule-add-submit" type="button" @click="add(addSide)">{{ t(editIndex !== null ? '更新规则' : '添加规则') }}</button>
         </div>
-        <datalist id="sequence-rule-providers"><option v-for="item in ruleProviderNames" :key="item" :value="item" /></datalist>
-        <datalist id="sequence-sub-rules"><option v-for="item in subRuleNames" :key="item" :value="item" /></datalist>
         <div v-if="canNoResolve || editIndex !== null" class="rule-add-help"><label v-if="canNoResolve" class="sequence-check"><input v-model="noResolve" type="checkbox" />{{ t("不解析域名（no-resolve）") }}</label><button v-if="editIndex !== null" type="button" class="rule-text-action" @click="cancelEdit">{{ t("取消条目编辑") }}</button></div>
         <p v-if="appendWarning" class="rule-order-warning">{{ t("已有 MATCH 兜底规则，后置规则可能无法匹配；建议使用前置。") }}</p>
         <p v-if="error" class="sequence-error" role="alert">{{ t(error) }}</p>
@@ -201,7 +201,7 @@ function reorder(row: Row, delta: number) {
       <template v-else>
         <div class="sequence-group-heading"><h4 class="rule-form-title">{{ t(editIndex !== null ? '编辑自定义代理组' : '添加代理组') }}</h4><HelpPopover :label="t('引入代理')"><span>{{ t("可多选成员，前置 / 后置决定代理组位置。") }}</span></HelpPopover></div>
         <div class="sequence-group-fields">
-          <label>{{ t("代理组类型") }}<select v-model="groupType"><option v-if="!['select', 'url-test', 'fallback', 'load-balance'].includes(groupType)" :value="groupType">{{ groupType }}</option><option value="select">{{ t("手动选择 · select") }}</option><option value="url-test">{{ t("自动选择 · url-test") }}</option><option value="fallback">{{ t("故障转移 · fallback") }}</option><option value="load-balance">{{ t("负载均衡 · load-balance") }}</option></select></label>
+          <label>{{ t("代理组类型") }}<AppSelect :aria-label="t('代理组类型')" v-model="groupType" :options="[...(!['select', 'url-test', 'fallback', 'load-balance'].includes(groupType) ? [{ value: groupType, label: (groupType) }] : []), { value: 'select', label: (t('手动选择 · select')) }, { value: 'url-test', label: (t('自动选择 · url-test')) }, { value: 'fallback', label: (t('故障转移 · fallback')) }, { value: 'load-balance', label: (t('负载均衡 · load-balance')) }]" /></label>
           <label>{{ t("代理组名称") }}<input ref="groupNameInput" v-model="name" :placeholder="t('我的代理组')" /></label>
           <div class="sequence-member-field"><div class="sequence-member-heading"><span>{{ t("引入代理") }}</span><SelectedGroupMembers v-model="members" :disabled="disabled" /></div><GroupMemberSelect v-model="members" :options="availableProxies" :exclude="name.trim()" :disabled="disabled" :label="t('引入代理')" :placeholder="t('选择或输入名称')" :search-placeholder="t('搜索代理组、节点或输入名称')" /></div>
           <div class="sequence-member-field"><div class="sequence-member-heading"><span>{{ t("引入代理集合") }}</span><SelectedGroupMembers v-model="providers" :disabled="disabled" provider /></div><GroupMemberSelect v-model="providers" :options="providerNames" :disabled="disabled" :label="t('引入代理集合')" :placeholder="t('选择或输入集合名称')" :search-placeholder="t('搜索集合或输入名称')" /></div>
@@ -214,7 +214,7 @@ function reorder(row: Row, delta: number) {
               <label>{{ t('检查间隔（秒）') }}<input v-model.number="interval" type="number" min="0" /></label><label>{{ t('超时（毫秒）') }}<input v-model.number="timeout" type="number" min="1" /></label>
               <label>{{ t('期望状态码') }}<input v-model="expectedStatus" :placeholder="t('* 或 200 / 204')" /></label>
               <label v-if="groupType === 'url-test'">{{ t('切换容差（毫秒）') }}<input v-model.number="tolerance" type="number" min="0" /></label>
-              <label v-if="groupType === 'load-balance'">{{ t('负载均衡策略') }}<select v-model="strategy"><option>consistent-hashing</option><option>round-robin</option><option>sticky-sessions</option></select></label>
+              <label v-if="groupType === 'load-balance'">{{ t('负载均衡策略') }}<AppSelect :aria-label="t('负载均衡策略')" v-model="strategy" :options="[{ value: 'consistent-hashing', label: 'consistent-hashing' }, { value: 'round-robin', label: 'round-robin' }, { value: 'sticky-sessions', label: 'sticky-sessions' }]" /></label>
               <label class="sequence-check group-options-wide"><input v-model="lazy" type="checkbox" />{{ t('仅在使用时检查') }}</label>
             </div></section>
             <section class="group-options-section"><h4>{{ t('成员筛选') }}</h4><div class="group-options-grid">
@@ -234,8 +234,8 @@ function reorder(row: Row, delta: number) {
       <div class="rule-list-toolbar">
         <input v-model="search" :aria-label="t(`搜索${noun}`)" :placeholder="t(kind === 'rules' ? '搜索规则、类型或策略' : `搜索${noun}名称或类型`)" />
         <div class="rule-source-filters" role="group" :aria-label="t('{arg0}来源', { arg0: t(noun) })"><button v-for="option in sourceOptions" :key="option.value" type="button" :aria-pressed="sourceFilter === option.value" :class="{ active: sourceFilter === option.value }" @click="sourceFilter = option.value">{{ t(option.label) }}<span v-if="option.value !== 'all'">{{ option.value === 'base' ? originals.length : option.value === 'deleted' ? allRows.filter(row => row.deleted).length : modelValue[option.value].length }}</span></button></div>
-        <label class="sequence-filter-field sequence-type-filter">{{ t('类型') }}<select v-model="typeFilter" :aria-label="t('筛选类型')"><option value="">{{ t('全部类型') }}</option><option v-for="type in typeOptions" :key="type" :value="type">{{ type }}</option></select></label>
-        <label v-if="kind === 'rules'" class="sequence-filter-field">{{ t('策略') }}<select v-model="policyFilter" :aria-label="t('筛选策略')"><option value="">{{ t('全部策略') }}</option><option v-for="item in policyOptions" :key="item" :value="item">{{ item }}</option></select></label>
+        <label class="sequence-filter-field sequence-type-filter">{{ t('类型') }}<AppSelect v-model="typeFilter" :aria-label="t('筛选类型')" :options="[{ value: '', label: (t('全部类型')) }, ...(typeOptions).map((type) => ({ value: type, label: (type) }))]" /></label>
+        <label v-if="kind === 'rules'" class="sequence-filter-field">{{ t('策略') }}<AppSelect v-model="policyFilter" :aria-label="t('筛选策略')" :options="[{ value: '', label: (t('全部策略')) }, ...(policyOptions).map((item) => ({ value: item, label: (item) }))]" /></label>
         <label v-else class="sequence-filter-field">{{ t(detailLabel) }}<input v-model="detailFilter" :aria-label="t(kind === 'proxies' ? '筛选服务器' : '筛选成员或集合')" :placeholder="t(kind === 'proxies' ? '输入服务器地址或端口' : '输入成员或集合名称')" /></label>
         <button type="button" class="ghost small sequence-view-reset" :disabled="!viewChanged" @click="resetView">{{ t('重置筛选与排序') }}</button>
         <HelpPopover class="sequence-sort-help" :label="t('排序')"><span>{{ t('点击表头排序，仅影响列表显示') }}</span></HelpPopover>

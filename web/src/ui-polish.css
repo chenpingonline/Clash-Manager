@@ -56,7 +56,7 @@ html[data-theme="light"] .topbar { background: var(--panel); }
 .node-select { min-height: 48px; }
 .node-delay { width: 64px; font-size: 11px; }
 .proxy-filter-search,.proxy-filter-search input,.proxy-timeout-toggle,.proxy-group-filter>span { font-size: 12px; }
-.proxy-head-actions .proxy-group-tool,.proxy-delay-url,.proxy-sort-control select { font-size: 12px; }
+.proxy-head-actions .proxy-group-tool,.proxy-delay-url,.proxy-sort-control .app-select { font-size: 12px; }
 .proxy-head-actions .proxy-chevron { padding: 0; min-height: 28px; border: 0; background: transparent; }
 .profile-meta,.quota-line,.quota-expire,.profile-source-note,.global-extension-copy small,.port-row-copy span,.setting-toggle > div > span,.settings-category-description { font-size: 12px; line-height: 1.5; }
 .port-row.mixed-disabled .port-row-copy { opacity: 1; color: var(--muted); }
@@ -83,9 +83,9 @@ html[data-theme="light"] .topbar { background: var(--panel); }
 .topbar .top-actions button,
 .topbar .top-actions .btn,
 .topbar .page-actions input,
-.topbar .page-actions select,
-.topbar .language-select select { height: 32px; min-height: 32px; border-radius: 8px; }
-.topbar .top-actions button,.topbar .page-actions input,.topbar .page-actions select { font-size: 12px; }
+.topbar .page-actions .app-select,
+.topbar .language-select .app-select { height: 32px; min-height: 32px; border-radius: 8px; }
+.topbar .top-actions button,.topbar .page-actions input,.topbar .page-actions .app-select { font-size: 12px; }
 .topbar .top-actions button { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; line-height: 1.2; }
 .page-refresh { white-space: nowrap; }
 .page-refresh svg { color: var(--accent); }
@@ -124,7 +124,7 @@ button,.btn { background: var(--accent-solid); box-shadow: none; }
 .ghost.primary,html[data-theme="light"] .ghost.primary { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-ink); }
 .danger,.ghost.danger,html[data-theme="light"] .danger,html[data-theme="light"] .ghost.danger { background: color-mix(in srgb,var(--bad) 5%,var(--panel)); border-color: color-mix(in srgb,var(--bad) 18%,var(--line)); color: var(--bad); }
 .success,html[data-theme="light"] .success { background: color-mix(in srgb,var(--good) 6%,var(--panel)); border-color: color-mix(in srgb,var(--good) 20%,var(--line)); color: var(--good); }
-button,.btn,.nav-item,.node-row,input,select,textarea {
+button,.btn,.nav-item,.node-row,input,.app-select,textarea {
   transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease,
     color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, transform var(--motion-fast) var(--motion-ease);
 }
@@ -133,7 +133,7 @@ button,.btn,.nav-item,.node-row,input,select,textarea {
 button:active:not(:disabled),.btn:active { opacity: .85; }
 .top-actions button:active:not(:disabled) { transform: scale(.98); }
 :where(button,a,input[type="checkbox"],input[type="radio"],input[type="range"],input[type="file"]):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-input:focus,select:focus,textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
+input:focus,.app-select:focus,textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
 input::placeholder,textarea::placeholder { color: var(--muted); opacity: 1; }
 
 /* The label and text field form one control, including its focus indicator. */
@@ -145,7 +145,7 @@ input::placeholder,textarea::placeholder { color: var(--muted); opacity: 1; }
 :is(.proxy-sort-control,.dashboard-sort-control,.system-proxy-bypass-editor,.core-timeout-input):focus-within,
 html[data-theme="light"] :is(.proxy-sort-control,.dashboard-sort-control,.system-proxy-bypass-editor,.core-timeout-input):focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
 :is(.proxy-search,.rule-search,.proxy-filter-search,.system-proxy-bypass-editor,.core-timeout-input) input:focus,
-:is(.proxy-sort-control,.dashboard-sort-control) select:focus { outline: none; box-shadow: none; }
+:is(.proxy-sort-control,.dashboard-sort-control) .app-select:focus { outline: none; box-shadow: none; }
 /* A port row is a layout container, rather than an additional input border. */
 .port-row:focus-within { border-color: var(--line); box-shadow: none; }
 
@@ -168,7 +168,7 @@ html[data-theme="light"] :is(.dashboard-connection-panel,.dashboard-runtime-pane
 .dashboard-location-grid { min-height: 46px; margin-top: 10px; padding-top: 10px; }
 .dashboard-subscription { gap: 8px 18px; }
 .dashboard-location-grid span,.subscription-updated>span,.subscription-identity small,.subscription-quota-values,.dashboard-metrics span { font-size: 12px; line-height: 16px; }
-.dashboard-location-grid strong,.dashboard-field select,.dashboard-node-trigger,.dashboard-runtime-toggle,.dashboard-mode-label { font-size: 13px; }
+.dashboard-location-grid strong,.dashboard-field .app-select,.dashboard-node-trigger,.dashboard-runtime-toggle,.dashboard-mode-label { font-size: 13px; }
 .dashboard-metrics>div { padding: 6px 12px; }
 .dashboard-live>h2 { margin-bottom: 8px; }
 .dashboard-overview-head h2,.dashboard-runtime-head h2,.dashboard-subscription-heading h2,.dashboard-live>h2,
@@ -180,8 +180,8 @@ html[data-theme="light"] :is(.dashboard-section-title,.dashboard-live>h2) { padd
 .dashboard-metrics strong.up,.dashboard-metrics strong.down { color: var(--text); }
 .dashboard-location-grid strong,.subscription-quota-values strong,.dashboard-metrics strong { font-variant-numeric: tabular-nums; }
 .dashboard-update-subscription,.subscription-quota-values b { color: var(--accent-ink); }
-.dashboard-field select,.dashboard-node-trigger,
-html[data-theme="light"] :is(.dashboard-field select,.dashboard-node-trigger) { background: var(--control-bg); font-weight: 500; }
+.dashboard-field .app-select,.dashboard-node-trigger,
+html[data-theme="light"] :is(.dashboard-field .app-select,.dashboard-node-trigger) { background: var(--control-bg); font-weight: 500; }
 .dashboard-mode-row { gap: 3px; padding: 3px; border-radius: 9px; background: var(--panel2); }
 .dashboard-mode-row .mode-btn,html[data-theme="light"] .dashboard-mode-row .mode-btn { min-height: 24px; border-color: transparent; background: transparent; color: var(--muted); }
 .dashboard-mode-row .mode-btn.active,html[data-theme="light"] .dashboard-mode-row .mode-btn.active { color: var(--accent-ink); border-color: var(--line); background: var(--panel); box-shadow: 0 1px 3px rgb(31 49 78 / 6%); }

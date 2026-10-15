@@ -1,23 +1,20 @@
 <script setup lang="ts">
+import AppSelect from '@/components/AppSelect.vue'
 import { languagePreference, setLanguage, t, type LanguagePreference } from '@/services/i18n'
-function change(event: Event) { setLanguage((event.target as HTMLSelectElement).value as LanguagePreference) }
+function change(value: LanguagePreference) { setLanguage(value) }
 </script>
 <template>
   <label class="language-select">
     <span>{{ t('界面语言') }}</span>
-    <select :value="languagePreference" :aria-label="t('界面语言')" @change="change">
-      <option value="system">{{ t('跟随系统') }}</option>
-      <option value="zh-CN">简体中文</option>
-      <option value="en-US">English</option>
-    </select>
+    <AppSelect :model-value="languagePreference" :aria-label="t('界面语言')" @change="change" :options="[{ value: 'system', label: (t('跟随系统')) }, { value: 'zh-CN', label: '简体中文' }, { value: 'en-US', label: 'English' }]" />
   </label>
 </template>
 <style scoped>
 .language-select { display:flex; align-items:center; flex:none; gap:8px; min-width:0; font-size:12px; color:var(--muted); }
 .language-select > span { white-space:nowrap; }
-.language-select select { width:132px; height:28px; padding:4px 8px; font-size:12px; }
+.language-select .app-select { width:132px; height:28px; padding:4px 8px; font-size:12px; }
 @media(max-width:680px) {
   .language-select { gap:5px; }
-  .language-select select { width:112px; }
+  .language-select .app-select { width:112px; }
 }
 </style>
