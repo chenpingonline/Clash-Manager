@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 // selector compiled into html[lang^="en"] { width: 88px }, shrinking
 // the entire fnOS app when switching to English.
 describe('ProxiesPage language-specific styles', () => {
-  it('only resizes the English proxy-sort select, never the document root', () => {
+  it('uses a stable proxy-sort width in both languages without shrinking the document root', () => {
     const source = readFileSync(new URL('./ProxiesPage.vue', import.meta.url), 'utf8')
     const { descriptor, errors } = parse(source, { filename: 'ProxiesPage.vue' })
     expect(errors).toEqual([])
