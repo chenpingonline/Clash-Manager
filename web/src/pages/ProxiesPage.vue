@@ -286,8 +286,7 @@ onMounted(() => { void delayTests.restore(); void load() })
 .proxy-name-row .tag, .proxy-name-row .node-count, .proxy-current > span { flex: none; white-space: nowrap; }
 .proxy-current strong { min-width: 0; }
 .proxy-sort-control { padding-left: 8px; }
-.proxy-sort-control select { width: 68px; padding-right: 4px; }
-:global(html[lang^="en"]) .proxy-sort-control select { width: 88px; }
+.proxy-sort-control select { width: 112px; min-width: 112px; flex: none; padding-right: 20px; }
 .proxy-head-actions .proxy-locate { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-color: var(--line); color: var(--text); }
 .proxy-head-actions .proxy-locate:hover:not(:disabled) { border-color: var(--accent-line, var(--accent)); background: var(--accent-soft, rgba(124,156,255,.08)); color: var(--accent-ink, var(--accent)); }
 .proxy-locate svg { width: 18px; height: 18px; stroke-width: 2; }
