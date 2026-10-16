@@ -384,7 +384,7 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
 /* --- profiles ----------------------------------------------------------- */
 .profile-list { gap: 12px; }
 .profile, html[data-theme="light"] .profile { padding: 16px 18px; border-radius: var(--radius); background: var(--panel); border-color: var(--line); box-shadow: var(--shadow); }
-.profile.current, html[data-theme="light"] .profile.current { border: 1px solid var(--accent-line); background: var(--panel); box-shadow: inset 3px 0 0 var(--accent-solid), var(--shadow); }
+.profile.current, html[data-theme="light"] .profile.current { border: 1px solid var(--accent-line); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent-solid), var(--shadow); }
 .profile-name { font-size: var(--text-lg); font-weight: 650; }
 .profile-current-badge { padding: 3px 9px; border-radius: var(--radius-pill); background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-ink); font-size: var(--text-xs); font-weight: 650; }
 .profile-url { font-size: var(--text-sm); color: var(--text-3); }
@@ -395,7 +395,7 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
 .quota-line strong { color: var(--text); font-weight: 650; }
 .quota-track { height: 6px; margin-top: 8px; border: 0; background: var(--panel2); }
 .quota-track span { background: linear-gradient(90deg, var(--accent-solid), var(--accent)); }
-.quota-expire { margin-top: 7px; font-size: var(--text-sm); color: var(--muted); }
+.quota-expire { margin-top: 7px; text-align: end; font-size: var(--text-sm); color: var(--muted); }
 .download-info { font-size: var(--text-sm); color: var(--muted); }
 .global-extension-grid { gap: 12px; margin-top: 18px; padding-top: 18px; }
 .global-extension-card { min-height: 84px; padding: 14px 16px; border-radius: 12px; background: var(--panel2); }
