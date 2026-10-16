@@ -461,14 +461,16 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
 .settings-accordion-list { gap: 10px; }
 .settings-accordion-item, html[data-theme="light"] .settings-accordion-item { border-radius: var(--radius); background: var(--panel); border-color: var(--line); box-shadow: var(--shadow); }
 .settings-accordion-item.open, html[data-theme="light"] .settings-accordion-item.open { border-color: var(--accent-line); box-shadow: var(--shadow); }
-.settings-accordion-head { min-height: 70px; padding: 12px 18px; gap: 14px; }
-.settings-category-icon { width: 40px; height: 40px; border-radius: 11px; }
+.settings-accordion-head { min-height: 60px; padding: 10px 16px; gap: 12px; }
+.settings-category-icon { width: 36px; height: 36px; border-radius: 10px; }
 .settings-category-icon svg { width: 19px; height: 19px; }
 .settings-category-copy strong { font-size: var(--text-lg); font-weight: 650; }
 .settings-category-copy small, .settings-category-description { font-size: var(--text-sm); color: var(--muted); }
 .settings-accordion-chevron { width: 30px; height: 30px; color: var(--text-3); }
 .settings-accordion-body, html[data-theme="light"] .settings-accordion-body { background: var(--panel2); }
-.settings-accordion-panel { padding: 20px; }
+.settings-home .settings-accordion-panel, .settings-home .settings-accordion-subsection { padding: 12px 16px; }
+.settings-home .settings-accordion-subsection .section-head { margin-bottom: 10px; }
+.settings-home #core-settings { padding: 0; }
 .settings-accordion-body .section-head h2, .settings-accordion-body .update-row-copy h2, .settings-accordion-body .geo-update-title h2 { font-size: var(--text-md); font-weight: 650; }
 .settings-accordion-body .section-head p, .settings-accordion-body .update-row-copy p { font-size: var(--text-sm); }
 .port-list, .network-options, .dns-toggle-grid, .dns-field-grid, .tun-main-grid, .tun-option-grid { gap: 10px; }
@@ -486,12 +488,63 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
 .dns-overview>div>span { font-size: var(--text-sm); color: var(--muted); }
 .dns-tabs button, .core-tabs button { padding: 7px 14px; border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 600; }
 .dns-tabs button[aria-selected="true"], .core-tabs button[aria-selected="true"] { color: var(--accent-ink); background: var(--accent-soft); border-color: var(--accent-line); }
-.core-tabs { padding: 10px 20px; gap: 6px; }
+.settings-home .core-tabs { padding: 8px 16px; gap: 6px; }
+.settings-home .geo-update-body { padding: 12px 16px; }
+.settings-home .geo-update-head { gap: 10px; }
+.settings-home .geo-asset-grid { margin-top: 10px; gap: 6px; }
+.settings-home .geo-asset-row { padding: 7px 10px; }
 .dns-tab-panel { padding: 16px; border-radius: 12px; background: var(--panel); }
 .network-source { padding: 10px 12px; border-radius: var(--radius-tile); font-size: var(--text-sm); background: var(--panel2); }
 .app-icon-choice { width: 88px; height: 88px; min-height: 88px; border-radius: var(--radius); background: var(--panel2); }
 .app-icon-choice img { width: 68px; height: 68px; border-radius: 16px; }
 .update-meta { font-size: var(--text-sm); }
+
+/* Compact settings only; controls and help text remain usable. */
+.settings-home .settings-accordion-list { gap: 8px; }
+.settings-home .settings-accordion-head { min-height: 56px; padding: 8px 14px; gap: 10px; }
+.settings-home .settings-category-icon { width: 32px; height: 32px; border-radius: 9px; }
+.settings-home .settings-category-icon svg { width: 17px; height: 17px; }
+.settings-home .settings-accordion-panel, .settings-home .settings-accordion-subsection { padding: 10px 14px; }
+.settings-home .section-head, .settings-home .settings-accordion-subsection .section-head { margin-bottom: 8px; }
+.settings-home .section-head p { margin-top: 3px; }
+.settings-home .port-list, .settings-home .network-options, .settings-home .dns-toggle-grid,
+.settings-home .dns-field-grid, .settings-home .dns-text-grid, .settings-home .tun-main-grid,
+.settings-home .tun-option-grid, .settings-home .proxy-env-manage-grid, .settings-home .proxy-env-target-grid { gap: 8px; }
+.settings-home .port-row { padding: 8px 10px; }
+.settings-home .setting-toggle { min-height: 54px; padding: 8px 10px; }
+.settings-home .field { gap: 4px; }
+.settings-home .network-options, .settings-home .tun-option-grid, .settings-home .dns-toggle-grid { margin-top: 8px; }
+.settings-home .dns-overview { padding: 10px 12px; margin-bottom: 8px; gap: 12px; }
+.settings-home .dns-overview>div { gap: 2px; }
+.settings-home .dns-tabs { margin-bottom: 8px; }
+.settings-home .dns-tabs button, .settings-home .core-tabs button { min-height: 30px; padding: 5px 10px; }
+.settings-home .dns-tab-panel { padding: 10px 12px; }
+.settings-home .dns-list-input { min-height: 76px; }
+.settings-home .dns-autosave-state:empty { display: none; }
+.settings-home .tun-capability { padding: 7px 10px; margin-bottom: 8px; }
+.settings-home .tun-note { padding: 8px 10px; margin-top: 8px; }
+.settings-home .tun-route-exclude { margin-top: 8px; }
+.settings-home .tun-route-exclude textarea { min-height: 72px; }
+.settings-home #core-settings { padding: 0; }
+.settings-home #core-settings .core-update-row { min-height: 60px; padding: 10px 14px; gap: 8px; }
+.settings-home #core-settings .core-mode-section { padding: 10px 14px; }
+.settings-home .core-tabs { padding: 6px 14px; }
+.settings-home .core-connection-summary { margin-top: 8px; gap: 8px; }
+.settings-home .core-connection-footer, .settings-home .core-startup-preference,
+.settings-home .core-custom-healthcheck { margin-top: 8px; }
+.settings-home .core-healthcheck-note { margin-top: 8px; }
+.settings-home .proxy-env-divider { margin: 12px 0 8px; }
+.settings-home .proxy-env-files { gap: 8px; }
+.settings-home .proxy-env-source, .settings-home .proxy-env-runtime-item { padding: 10px 12px; }
+.settings-home .proxy-env-source-head { margin-bottom: 6px; }
+.settings-home .proxy-env-files .proxy-env-vars { gap: 6px 16px; }
+.settings-home .proxy-env-target-title { margin: 10px 0 6px; }
+.settings-home .proxy-env-no-proxy { padding: 8px 10px; }
+.settings-home .app-icon-choice { width: 72px; height: 72px; min-height: 72px; }
+.settings-home .app-icon-choice img { width: 54px; height: 54px; border-radius: 12px; }
+.settings-home .update-panel>.section { padding: 0; }
+.settings-home .app-update-row { min-height: 64px; padding: 10px 0; gap: 10px; }
+.settings-home .app-update-preference { min-height: 44px; padding: 8px 0; }
 
 /* --- responsive --------------------------------------------------------- */
 @media(max-width:1100px) {

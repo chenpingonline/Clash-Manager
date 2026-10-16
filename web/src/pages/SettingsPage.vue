@@ -703,15 +703,9 @@ onMounted(initialize)
             </div>
             <div v-show="coreTab === 'geo'" id="core-panel-geo" role="tabpanel" aria-labelledby="core-tab-geo" class="geo-update-section">
 
-              <div class="geo-update-summary">
-                <div class="geo-update-title">
-                  <h2>{{ t("GEO 数据") }}</h2>
-                  <span v-if="geoMessage" class="geo-operation-state" :class="geoState" role="status" aria-live="polite"><span v-if="geoBusy" class="geo-spinner" /><span>{{ t(geoMessage) }}</span></span>
-                </div>
-              </div>
               <div class="geo-update-body">
               <div class="geo-update-head">
-                <div class="update-row-copy"><p>{{ t(geo.message || '由 Mihomo 管理地理数据库') }}</p></div>
+                <div class="update-row-copy"><p>{{ t(geo.message || '由 Mihomo 管理地理数据库') }}</p><span v-if="geoMessage" class="geo-operation-state" :class="geoState" role="status" aria-live="polite"><span v-if="geoBusy" class="geo-spinner" /><span>{{ t(geoMessage) }}</span></span></div>
                 <div class="geo-controls">
                   <label class="geo-auto"><input v-model="geoForm.autoUpdate" type="checkbox" :disabled="geo.readOnly || !geo.canUpdate || Boolean(geoBusy)"> {{ t("自动更新") }}</label>
                   <label class="geo-interval">{{ t("周期") }} <AppSelect :aria-label="t('周期')" v-model.number="geoForm.updateInterval" :disabled="geo.readOnly || !geo.canUpdate || Boolean(geoBusy)" :options="[{ value: 12, label: (t('12 小时')) }, { value: 24, label: (t('24 小时')) }, { value: 72, label: (t('3 天')) }, { value: 168, label: (t('7 天')) }]" /></label>

@@ -177,15 +177,17 @@ describe('backend API compatibility', () => {
     expect(rules).not.toContain("<h2>{{ t(\"生效规则\") }}</h2>")
   })
 
-  it('shows GEO in its own tab and places transient progress in the title', () => {
+  it('keeps GEO in its tab without a duplicate heading and retains transient progress', () => {
     const settings = readFileSync(resolve(__dirname, '../pages/SettingsPage.vue'), 'utf8')
-    const summary = settings.indexOf('class="geo-update-summary"')
+    const head = settings.indexOf('class="geo-update-head"')
     const status = settings.indexOf('class="geo-operation-state"')
-    const body = settings.indexOf('class="geo-update-body"')
+    const controls = settings.indexOf('class="geo-controls"')
     expect(settings).toContain('id="core-panel-geo" role="tabpanel"')
     expect(settings).not.toContain('<details class="geo-update-section"')
-    expect(status).toBeGreaterThan(summary)
-    expect(status).toBeLessThan(body)
+    expect(settings).not.toContain('class="geo-update-summary"')
+    expect(head).toBeGreaterThan(0)
+    expect(status).toBeGreaterThan(head)
+    expect(status).toBeLessThan(controls)
     expect(settings).toContain("setGeoOperation('success'")
     expect(settings).toContain("setGeoOperation('error'")
     expect(settings).toContain('}, 3000)')
