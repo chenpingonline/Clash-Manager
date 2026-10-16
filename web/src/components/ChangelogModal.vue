@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/services/i18n'
 
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
 import bundledChangelog from '../../../CHANGELOG.md?raw'
 import type { AppUpdateInfo } from '@/types/api'
@@ -9,11 +9,8 @@ import { parseChangelog } from '@/services/changelog'
 
 const props = defineProps<{ open: boolean; latest?: AppUpdateInfo['latest'] }>()
 const emit = defineEmits<{ close: [] }>()
-const closeButton = ref<HTMLButtonElement>()
 const body = ref<HTMLElement>()
-const historyLink = ref<HTMLAnchorElement>()
 const currentEntry = parseChangelog(bundledChangelog)[0]
-let previousFocus: HTMLElement | null = null
 const title = computed(() => props.latest ? `v${String(props.latest.tag || '').replace(/^v/, '')} 更新内容` : '更新日志')
 // Render release text through interpolation only; remote HTML must never execute.
 const lines = computed(() => (props.latest
@@ -24,30 +21,12 @@ const lines = computed(() => (props.latest
   const bullet = text.match(/^\s*[-*+]\s+(.+)$/)
   return { kind: heading ? (heading[1]!.length <= 2 ? 'version' : 'heading') : bullet ? 'bullet' : 'text', text: (heading?.[2] || bullet?.[1] || text).replace(/`([^`]+)`/g, '$1') }
 }))
-function handleKey(event: KeyboardEvent) {
-  if (event.key === 'Escape') { event.preventDefault(); emit('close') }
-  if (event.key === 'Tab') {
-    event.preventDefault()
-    const controls = [closeButton.value, body.value, historyLink.value].filter((element): element is HTMLElement => Boolean(element))
-    const current = controls.indexOf(document.activeElement as HTMLElement)
-    controls[(current + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus()
-  }
-}
+// BaseModal owns keyboard navigation and focus restoration.
 watch(() => props.open, async open => {
-  if (open) {
-    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.addEventListener('keydown', handleKey)
-    await nextTick()
-    if (props.open) {
-      if (body.value) body.value.scrollTop = 0
-      closeButton.value?.focus()
-    }
-  } else {
-    document.removeEventListener('keydown', handleKey)
-    previousFocus?.focus()
-  }
+  if (!open) return
+  await nextTick()
+  if (props.open && body.value) body.value.scrollTop = 0
 })
-onBeforeUnmount(() => document.removeEventListener('keydown', handleKey))
 
 </script>
 
@@ -56,7 +35,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKey))
     <template #header>
       <div class="changelog-header">
         <h3>{{ t(title) }}</h3>
-        <button ref="closeButton" type="button" class="changelog-close" :aria-label="t('关闭')" @click="emit('close')">
+        <button type="button" class="changelog-close" :aria-label="t('关闭')" @click="emit('close')">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
         </button>
       </div>
@@ -71,7 +50,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKey))
         <p v-else-if="line.text.trim()">{{ line.text }}</p>
       </template>
     </div>
-    <div class="changelog-footer"><a ref="historyLink" href="https://github.com/chenpingonline/Clash-for-fnos/blob/master/CHANGELOG.md" target="_blank" rel="noopener noreferrer">{{ t("查看历史日志 ↗") }}</a></div>
+    <div class="changelog-footer"><a href="https://github.com/chenpingonline/Clash-for-fnos/blob/master/CHANGELOG.md" target="_blank" rel="noopener noreferrer">{{ t("查看历史日志 ↗") }}</a></div>
   </BaseModal>
 </template>
 

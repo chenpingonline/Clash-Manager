@@ -280,7 +280,7 @@ onMounted(() => { void delayTests.restore(); void load() })
 .proxy-name-row .tag, .proxy-name-row .node-count, .proxy-current > span { flex: none; white-space: nowrap; }
 .proxy-current strong { min-width: 0; }
 .proxy-head-actions .proxy-locate { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-color: var(--line); color: var(--text); }
-.proxy-head-actions .proxy-locate:hover:not(:disabled) { border-color: var(--accent-line, var(--accent)); background: var(--accent-soft, rgba(124,156,255,.08)); color: var(--accent-ink, var(--accent)); }
+.proxy-head-actions .proxy-locate:hover:not(:disabled) { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-ink); }
 .proxy-locate svg { width: 18px; height: 18px; stroke-width: 2; }
 .proxy-locate-dot { fill: currentColor; stroke: none; }
 .proxy-head-actions .proxy-delay-url { width: clamp(160px, 20vw, 280px); min-width: 0; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 11px; user-select: text; }
@@ -288,7 +288,7 @@ onMounted(() => { void delayTests.restore(); void load() })
 .proxy-head-actions .proxy-delay-url[aria-invalid="true"] { border-color: var(--bad); }
 .proxy-head-actions .proxy-delay-custom { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; line-height: 1; }
 .proxy-delay-custom svg { flex: none; color: var(--muted); }
-.proxy-head-actions .proxy-delay-custom.active { border-color: var(--accent-line, var(--accent)); background: var(--accent-soft, rgba(124,156,255,.10)); color: var(--accent-ink, var(--accent)); }
+.proxy-head-actions .proxy-delay-custom.active { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-ink); }
 .proxy-delay-custom.active svg { color: inherit; }
 .proxy-head-actions .proxy-latency-test { display: inline-flex; align-items: center; justify-content: center; width: 30px; min-width: 30px; height: 30px; padding: 0; line-height: 1; }
 .proxy-latency-test svg { flex: none; }

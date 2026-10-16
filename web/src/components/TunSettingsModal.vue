@@ -153,10 +153,10 @@ watch(() => props.open, open => {
           <TunStackFields v-model:stack="form.stack" v-model:congestion-controller="form.congestionController" :features="features" field-class="tun-settings-field" :disabled="controlsDisabled" />
           <div class="field tun-settings-field">
             <div class="field-label-row">
-              <label>MTU</label>
+              <label for="tun-modal-mtu">MTU</label>
               <HelpPopover label="MTU"><strong>{{ t("单个网络数据包的最大传输尺寸") }}</strong><span>{{ t("默认值为") }} <b>1500</b>{{ t("。VPN、PPPoE 或多层隧道环境异常时，可尝试") }} <b>1400</b>。</span></HelpPopover>
             </div>
-            <input v-model.number="form.mtu" type="number" min="1280" max="65535" :disabled="controlsDisabled" aria-label="TUN MTU">
+            <input id="tun-modal-mtu" v-model.number="form.mtu" type="number" min="1280" max="65535" :disabled="controlsDisabled" aria-label="TUN MTU">
           </div>
         </div>
 
@@ -170,10 +170,10 @@ watch(() => props.open, open => {
 
         <div class="field tun-settings-route-exclude">
           <div class="field-label-row">
-            <label>{{ t("排除自定义网段") }}</label>
+            <label for="tun-modal-route-exclude">{{ t("排除自定义网段") }}</label>
             <HelpPopover :label="t('排除自定义网段')"><strong>{{ t("让指定目标网段绕过 TUN 自动路由") }}</strong><span>{{ t("仅在开启“自动路由”时生效。支持 IPv4/IPv6 CIDR，每行填写一个。") }}</span></HelpPopover>
           </div>
-          <textarea v-model="routeExcludeText" placeholder="192.168.0.0/16&#10;10.0.0.0/8&#10;fc00::/7" :disabled="controlsDisabled || !form.autoRoute" />
+          <textarea id="tun-modal-route-exclude" v-model="routeExcludeText" placeholder="192.168.0.0/16&#10;10.0.0.0/8&#10;fc00::/7" :disabled="controlsDisabled || !form.autoRoute" />
           <span class="field-note">{{ t("每行一个 IPv4/IPv6 CIDR；留空表示不额外排除。") }}</span>
         </div>
 

@@ -26,5 +26,5 @@ const diagnostic = computed(() => describeConfigError(props.message))
 .config-error-suggestion{color:var(--text)}
 .config-error-notice details{margin-top:6px;color:var(--muted)}
 .config-error-notice summary{cursor:pointer;font-size:11px}
-.config-error-notice pre{max-height:180px;overflow:auto;margin:6px 0 0;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--surface-inset);font:11px/1.5 var(--font-mono,monospace);white-space:pre-wrap;overflow-wrap:anywhere}
+.config-error-notice pre{max-height:180px;overflow:auto;margin:6px 0 0;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--surface-inset);font:11px/1.5 var(--font-mono);white-space:pre-wrap;overflow-wrap:anywhere}
 </style>

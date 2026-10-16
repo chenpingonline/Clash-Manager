@@ -1,9 +1,17 @@
 <script setup lang="ts" generic="T extends string | number">
-import { computed, nextTick, onBeforeUnmount, onUnmounted, ref, shallowRef, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onUnmounted, ref, shallowRef, useAttrs, useId, watch } from 'vue'
 import { Check, ChevronDown } from 'lucide-vue-next'
 import { nextSelectIndex, searchSelectIndex, type SelectOption } from '@/services/select-options'
 
-const props = withDefaults(defineProps<{ modelValue: T; options: SelectOption[]; disabled?: boolean; placeholder?: string; modelModifiers?: { number?: boolean } }>(), { disabled: false, placeholder: '' })
+const props = withDefaults(defineProps<{ modelValue: T; options: SelectOption[]; disabled?: boolean; placeholder?: string; label?: string; modelModifiers?: { number?: boolean } }>(), { disabled: false, placeholder: '', label: '' })
+// The root is a fragment (button + teleported panel), so inherited attributes never
+// reach the trigger; read them explicitly and expose the label on the combobox.
+defineOptions({ inheritAttrs: false })
+const attrs = useAttrs()
+const accessibleLabel = computed(() => props.label || (attrs['aria-label'] as string | undefined) || undefined)
+// Forward every caller attribute (classes, styles, data-*) to the trigger explicitly:
+// with a fragment root Vue cannot inherit them automatically.
+const forwarded = computed(() => ({ ...attrs, 'aria-label': accessibleLabel.value }))
 const emit = defineEmits<{ 'update:modelValue': [value: T]; change: [value: T] }>()
 const trigger = ref<HTMLButtonElement | null>(null), panel = ref<HTMLElement | null>(null)
 const open = ref(false), active = ref(-1), position = ref<Record<string, string>>({})
@@ -97,10 +105,10 @@ onUnmounted(() => portalTarget.value?.remove())
 </script>
 
 <template>
-  <button ref="trigger" type="button" class="app-select" role="combobox" :disabled="disabled" aria-haspopup="listbox" :aria-expanded="open" :aria-controls="open ? id : undefined" :aria-activedescendant="open && active >= 0 ? `${id}-${active}` : undefined" :title="String(selected?.label ?? placeholder)" @click.stop="open ? close() : show()" @keydown="keyboard" @blur="close">
+  <button ref="trigger" type="button" class="app-select" v-bind="forwarded" role="combobox" :disabled="disabled" aria-haspopup="listbox" :aria-expanded="open" :aria-controls="open ? id : undefined" :aria-activedescendant="open && active >= 0 ? `${id}-${active}` : undefined" :title="String(selected?.label ?? placeholder)" @click.stop="open ? close() : show()" @keydown="keyboard" @blur="close">
     <span class="app-select-value">{{ selected?.label ?? placeholder }}</span><ChevronDown :size="14" :stroke-width="1.8" aria-hidden="true" />
     <Teleport v-if="open && portalTarget" :to="portalTarget">
-      <div :id="id" ref="panel" class="app-select-menu" role="listbox" :aria-label="$attrs['aria-label'] as string | undefined" :style="position" @pointerdown.prevent @click.stop>
+      <div :id="id" ref="panel" class="app-select-menu" role="listbox" :aria-label="accessibleLabel" :style="position" @pointerdown.prevent @click.stop>
         <button v-for="(option, index) in options" :id="`${id}-${index}`" :key="`${typeof option.value}:${option.value}`" type="button" role="option" :aria-selected="modelValue === option.value" :aria-disabled="option.disabled || undefined" :disabled="option.disabled" :class="{ active: active === index }" tabindex="-1" @pointermove="!option.disabled && (active = index)" @click.stop="choose(index)">
           <span>{{ option.label }}</span><Check v-if="modelValue === option.value" :size="14" aria-hidden="true" />
         </button>

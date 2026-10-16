@@ -11,6 +11,9 @@ export interface ToastMessage {
 const items = ref<ToastMessage[]>([])
 let sequence = 0
 
+// Failures need time to be read and can now be dismissed by hand; successes are transient.
+const LIFETIME_MS = { info: 3200, error: 8000 }
+
 export function notify(text: string, bad = false): void {
   const id = ++sequence
   const configError = bad && describeConfigError(text) !== null
@@ -19,7 +22,7 @@ export function notify(text: string, bad = false): void {
   if (configError) return
   window.setTimeout(() => {
     items.value = items.value.filter(item => item.id !== id)
-  }, 3200)
+  }, bad ? LIFETIME_MS.error : LIFETIME_MS.info)
 }
 
 export function dismissToast(id: number): void {

@@ -7,15 +7,16 @@ import type { NormalizedRule } from '@/services/rules'
 const props = defineProps<{ items: NormalizedRule[]; busy: boolean; query: string }>()
 const emit = defineEmits<{ toggle: [rule: NormalizedRule] }>()
 
-const rowHeight = 52
+// Read the same CSS token used by .rule-row before the first browser paint.
+const rowHeight = ref(52)
 const overscan = 8
 const viewport = ref<HTMLElement | null>(null)
 const scrollTop = ref(0)
 const viewportHeight = ref(520)
 let observer: ResizeObserver | null = null
 
-const start = computed(() => Math.max(0, Math.floor(scrollTop.value / rowHeight) - overscan))
-const end = computed(() => Math.min(props.items.length, Math.ceil((scrollTop.value + viewportHeight.value) / rowHeight) + overscan))
+const start = computed(() => Math.max(0, Math.floor(scrollTop.value / rowHeight.value) - overscan))
+const end = computed(() => Math.min(props.items.length, Math.ceil((scrollTop.value + viewportHeight.value) / rowHeight.value) + overscan))
 const visible = computed(() => props.items.slice(start.value, end.value).map((rule, offset) => ({ rule, index: start.value + offset })))
 
 function onScroll() {
@@ -35,13 +36,14 @@ watch(() => props.query, () => {
 })
 
 watch(() => props.items.length, count => {
-  const next = Math.min(scrollTop.value, Math.max(0, count * rowHeight - viewportHeight.value))
+  const next = Math.min(scrollTop.value, Math.max(0, count * rowHeight.value - viewportHeight.value))
   scrollTop.value = next
   if (viewport.value) viewport.value.scrollTop = next
 })
 
 onMounted(() => {
   if (!viewport.value) return
+  rowHeight.value = Number.parseFloat(getComputedStyle(viewport.value).getPropertyValue('--rule-row-height')) || 52
   viewportHeight.value = viewport.value.clientHeight
   observer = new ResizeObserver(entries => {
     viewportHeight.value = entries[0]?.contentRect.height || viewport.value?.clientHeight || 520
@@ -52,7 +54,7 @@ onBeforeUnmount(() => observer?.disconnect())
 </script>
 
 <template>
-  <div class="rules-table" role="table" :aria-label="t('当前生效规则')" :aria-rowcount="items.length">
+  <div class="rules-table" role="table" :aria-label="t('当前生效规则')" :aria-rowcount="items.length + 1">
     <div class="rule-table-head" role="row">
       <span role="columnheader">{{ t("序号") }}</span><span role="columnheader">{{ t("规则内容") }}</span><span role="columnheader">{{ t("类型") }}</span><span role="columnheader">{{ t("目标策略") }}</span>
       <span role="columnheader">{{ t("启用") }}</span>

@@ -13,11 +13,13 @@ describe('configuration error notifications', () => {
     dismissToast(toasts.value[0]!.id)
     expect(toasts.value).toHaveLength(0)
   })
-  it('retains automatic expiry for success and unrelated failures', async () => {
+  it('expires successes quickly and failures slowly', async () => {
     const { notify, toasts } = await import('./toast')
     notify('已保存'); notify('HTTP 503', true)
     expect(toasts.value.every(item => !item.configError)).toBe(true)
     vi.advanceTimersByTime(3200)
+    expect(toasts.value.map(item => item.text)).toEqual(['HTTP 503'])
+    vi.advanceTimersByTime(4800)
     expect(toasts.value).toHaveLength(0)
   })
   it('replaces an earlier validation error without removing unrelated notifications', async () => {

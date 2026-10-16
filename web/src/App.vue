@@ -21,7 +21,7 @@ import { api, APP_PREFIX } from '@/services/api'
 import { isBrowserHistoryShortcut } from '@/services/navigation'
 import type { AppIconsResponse } from '@/types/api'
 
-import { runtime } from '@/services/runtime'
+import { appDisplayName, runtime, setDocumentTitle } from '@/services/runtime'
 
 type PageName = 'dashboard' | 'proxies' | 'profiles' | 'config' | 'rules' | 'connections' | 'logs' | 'settings'
 const pages: Array<{ name: PageName; label: string; component: Component }> = [
@@ -44,11 +44,15 @@ const refreshKey = ref(0)
 const activePageRef = ref<{ refreshPage?: () => void | Promise<void> } | null>(null)
 const pageRefreshing = ref(false)
 const contentRef = ref<HTMLElement | null>(null)
+const pageTitleRef = ref<HTMLElement | null>(null)
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 let pageAnimation: Animation | null = null
 function cancelPageMotion() { pageAnimation?.cancel(); pageAnimation = null }
 watch(current, () => {
   cancelPageMotion()
+  // Moving focus to the heading announces the new page to assistive technology and
+  // keeps the keyboard position in sync with the visible page.
+  pageTitleRef.value?.focus()
   if (reducedMotion.matches || !contentRef.value) return
   // Animate the existing scroll surface, without overlapping page mounts or Teleports.
   pageAnimation = contentRef.value.animate([
@@ -57,6 +61,7 @@ watch(current, () => {
   ], { duration: 200, easing: 'cubic-bezier(.22, 1, .36, 1)' })
 }, { flush: 'post' })
 const activePage = computed(() => pages.find(item => item.name === current.value) || pages[0]!)
+watch([activePage, appDisplayName], () => setDocumentTitle(t(activePage.value.label)), { immediate: true })
 const { footer, refresh } = useCoreHealth()
 const { available: appUpdateAvailable, initialize: initializeAppUpdateNotice } = useAppUpdateNotice()
 useFnosTheme()
@@ -183,7 +188,7 @@ onBeforeUnmount(() => {
   </aside>
   <main class="main">
     <header class="topbar">
-      <div class="topbar-title"><h1>{{ t(activePage.label) }}</h1><div id="page-title-meta" class="page-title-meta" /></div>
+      <div class="topbar-title"><h1 ref="pageTitleRef" tabindex="-1">{{ t(activePage.label) }}</h1><div id="page-title-meta" class="page-title-meta" /></div>
       <div class="top-actions">
         <LanguageSelect v-if="current === 'settings'" />
         <button v-if="runtime.platform !== 'fnos'" class="ghost" @click="logout">{{ t("退出登录") }}</button>

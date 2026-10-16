@@ -119,8 +119,6 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
     <div class="log-search-wrap"><Search :size="14" :stroke-width="1.8" aria-hidden="true" /><input v-model="query" type="search" class="log-search" :placeholder="t(historyMode ? '搜索保留的历史日志' : '搜索最近日志')" :aria-label="t('搜索日志')" @keydown.enter="historyMode && load()"></div>
     <AppSelect v-model.number="limit" class="log-limit-select" :aria-label="t('显示行数')" @change="(isCore || historyMode) && load()" :options="[...([100, 200, 500, 800, 2000]).map((value) => ({ value: value, label: (value) + ' ' + (t('行')) }))]" />
     <AppSelect v-if="!isCore" v-model="level" class="log-level-select" :aria-label="t('显示级别')" @change="load()" :options="[...(['debug', 'info', 'warning', 'error']).map((value) => ({ value: (value), label: (value) }))]" />
-    <button class="ghost" @click="changeMode">{{ t(historyMode ? '实时日志' : '历史查询') }}</button><button class="ghost" @click="openSettings">{{ t('日志设置') }}</button>
-    <button class="ghost danger" @click="clearHistory">{{ t(isCore ? '清空 Core 输出日志' : '清空历史日志') }}</button><button v-if="!historyMode" class="ghost primary" @click="toggle">{{ t(running ? '停止' : '继续') }}</button>
   </div></Teleport>
   <form v-if="historyMode" class="log-history-tools" @submit.prevent="load()">
     <div class="log-history-query">
@@ -140,6 +138,10 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
         <button type="button" :class="{ active: isCore }" :aria-pressed="isCore" @click="changeSource('core')">{{ t('Core 输出') }}</button>
       </div>
       <span class="muted log-status-text" :title="summary + (currentStats ? ` · ${bytes(currentStats.size)} / ${bytes(currentStats.maxBytes)}` : '')">{{ summary }}<template v-if="currentStats"> · {{ bytes(currentStats.size) }} / {{ bytes(currentStats.maxBytes) }}</template></span>
+    </div>
+    <div class="log-secondary-actions">
+      <button class="ghost" @click="changeMode">{{ t(historyMode ? '实时日志' : '历史查询') }}</button><button class="ghost" @click="openSettings">{{ t('日志设置') }}</button>
+      <button class="ghost danger" @click="clearHistory">{{ t(isCore ? '清空 Core 输出日志' : '清空历史日志') }}</button><button v-if="!historyMode" class="ghost primary" @click="toggle">{{ t(running ? '停止' : '继续') }}</button>
     </div>
     <label class="log-wrap-control"><span>{{ t('自动换行') }}</span><span class="switch quick-switch"><input v-model="wrapLines" type="checkbox"><span /></span></label>
   </div>
@@ -174,8 +176,8 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
 .log-status-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .log-source-switch{display:flex;gap:2px;flex:none;height:28px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--control-bg)}
 .log-source-switch button{height:22px;min-height:22px;padding:0 8px;border:0;border-radius:5px;background:transparent;color:var(--muted);font-size:11px;line-height:22px;white-space:nowrap}
-.log-source-switch button:hover{color:var(--text);background:rgba(124,156,255,.08)}
-.log-source-switch button.active{color:var(--accent);background:rgba(124,156,255,.14)}
+.log-source-switch button:hover{color:var(--text);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.log-source-switch button.active{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
 .core-log-line{white-space:pre;min-height:22px;padding:2px 0}.wrap-lines .core-log-line{white-space:pre-wrap;overflow-wrap:anywhere}.log-storage-error{font-size:12px;margin:6px 28px}
 .log-history-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;min-height:42px;padding:6px 28px;border-bottom:1px solid var(--line)}
 .log-history-query{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0}

@@ -158,13 +158,13 @@ watch(() => props.open, open => {
         </div>
 
         <div class="field system-proxy-bypass-field">
-          <label>{{ t("代理绕过设置") }}</label>
+          <label for="system-proxy-bypass-input">{{ t("代理绕过设置") }}</label>
           <div class="system-proxy-bypass-editor" :class="{ disabled: !available || saving }">
             <span v-for="(item, index) in bypassItems" :key="item" class="system-proxy-bypass-tag">
               {{ item }}
               <button type="button" :aria-label="t(`移除 ${item}`)" :disabled="!available || saving" @click="removeBypass(index)">×</button>
             </span>
-            <input v-model="bypassInput" :disabled="!available || saving" :aria-label="t('添加代理绕过地址')" :placeholder="t('输入域名、IP 或 CIDR，按回车添加')" @keydown="bypassKeydown" @blur="addBypass">
+            <input id="system-proxy-bypass-input" v-model="bypassInput" :disabled="!available || saving" :aria-label="t('添加代理绕过地址')" :placeholder="t('输入域名、IP 或 CIDR，按回车添加')" @keydown="bypassKeydown" @blur="addBypass">
           </div>
           <small>{{ t("保存为 NO_PROXY；多个条目会以英文逗号分隔。") }}</small>
         </div>

@@ -114,7 +114,9 @@ describe('backend API compatibility', () => {
 
   it('uses the tag editor for proxy bypass settings and removes the duplicate proxy address field', () => {
     const settings = readFileSync(resolve(__dirname, '../pages/SettingsPage.vue'), 'utf8')
-    expect(settings).toContain("<label>{{ t(\"代理绕过设置\") }}</label>")
+    expect(settings).toContain('class="system-proxy-bypass-editor"')
+    expect(settings).toContain('<label for="proxy-bypass-input">{{ t("代理绕过设置") }}</label>')
+    expect(settings).toContain('id="proxy-bypass-input"')
     expect(settings).toContain('class="system-proxy-bypass-tag"')
     expect(settings).toContain('@keydown="proxyBypassKeydown"')
     expect(settings).toContain('updateProxyBypass')

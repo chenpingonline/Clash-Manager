@@ -9,9 +9,15 @@ export type RuntimeInfo = {
 }
 export const runtime = shallowRef<RuntimeInfo>({ platform: APP_PREFIX ? 'fnos' : 'docker', version: '', capabilities: { appIcons: true, appUpdates: true, hostProxyEnvironment: true, nativeFolderAuthorization: true, externalCore: true } })
 export const appDisplayName = computed(() => runtime.value.displayName || (runtime.value.platform !== 'fnos' ? 'Clash Manager' : 'Clash for fnOS'))
+// The shell watches this to keep "page · application" in the window title.
+export const activePageTitle = shallowRef('')
+export function setDocumentTitle(page: string): void {
+  activePageTitle.value = page
+  document.title = page ? `${page} · ${appDisplayName.value}` : appDisplayName.value
+}
 export async function loadRuntime(signal?: AbortSignal) {
   const info = await api<RuntimeInfo>('/api/runtime', { signal })
   if (signal?.aborted) throw signal.reason
   runtime.value = info
-  document.title = appDisplayName.value
+  setDocumentTitle(activePageTitle.value)
 }

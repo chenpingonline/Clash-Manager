@@ -1,0 +1,131 @@
+/* ============================================================================
+   Design tokens — the single source of truth for colour, type, radius,
+   spacing, elevation and layering. Themes are switched with the
+   data-theme attribute written by useFnosTheme() / the boot script.
+   Keep every literal colour in this file; components use var(--token).
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* --- surfaces ------------------------------------------------------- */
+  --bg: #1f2021;
+  --panel: #232425;
+  --panel2: #292a2c;
+  --line: #383a3d;
+  --line-strong: #464a4f;
+  --surface: var(--panel);
+  --surface-inset: #1f2021;
+  --surface-raised: #272829;
+  --control-bg: #202123;
+  --surface-disabled: #222325;
+
+  /* --- text ----------------------------------------------------------- */
+  --text: #eef2f8;
+  --muted: #9e9fa0;
+  --text-3: #8b95a5;
+
+  /* --- accent + semantic ---------------------------------------------- */
+  --accent: #5b98ff;
+  --accent2: #5b98ff;
+  --accent-ink: #9bbfff;
+  --accent-solid: #2f6fe4;
+  --accent-soft: #1b2d4c;
+  --accent-line: #355685;
+  --good: #43d17b;
+  --warn: #ffbf5b;
+  --bad: #ff667a;
+
+  /* --- traffic chart -------------------------------------------------- */
+  --traffic-upload: #5b98ff;
+  --traffic-download: #4fc3bf;
+  --traffic-upload-ink: #9dc0ff;
+  --traffic-download-ink: #6ad3cf;
+
+  /* --- controls ------------------------------------------------------- */
+  --switch-track: #464e5c;
+  --switch-track-border: #727c8d;
+  --scrim: rgb(10 12 16 / 55%);
+
+  /* --- type scale ----------------------------------------------------- */
+  --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 15px;
+  --text-title: 19px;
+
+  /* --- radius --------------------------------------------------------- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-control: 9px;
+  --radius-tile: 10px;
+  --radius: 14px;
+  --radius-window: var(--window-radius, 18px);
+  --radius-pill: 999px;
+
+  /* --- elevation ------------------------------------------------------ */
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 12px 28px -18px rgb(0 0 0 / 60%);
+  --shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 55%);
+
+  /* --- layering ------------------------------------------------------- */
+  --z-sticky: 20;
+  --z-dropdown: 40;
+  --z-modal: 60;
+  --z-popover: 1100;
+  --z-top: 2000;
+
+  /* --- motion --------------------------------------------------------- */
+  --motion-fast: 140ms;
+  --motion-normal: 220ms;
+  --motion-ease: cubic-bezier(.22, 1, .36, 1);
+
+  /* --- layout --------------------------------------------------------- */
+  --window-radius: 18px;
+  --workspace-gap: 10px;
+  --page-top-space: 16px;
+  --rule-row-height: 54px;
+  --rule-table-row-height: 26px;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f3f6fb;
+  --panel: #ffffff;
+  --panel2: #f6f8fc;
+  --line: #e5e9f0;
+  --line-strong: #d5dce6;
+  --surface-inset: #f7f9fc;
+  --surface-raised: #ffffff;
+  --control-bg: #ffffff;
+  --surface-disabled: #eef1f6;
+
+  --text: #1b2430;
+  --muted: #5b6a7d;
+  --text-3: #64748b;
+
+  --accent: #1668e3;
+  --accent2: #1668e3;
+  --accent-ink: #0b57d0;
+  --accent-solid: #0b63f6;
+  --accent-soft: #eef4ff;
+  --accent-line: #cfdffd;
+  --good: #0f7a45;
+  --warn: #8f5309;
+  --bad: #c0392f;
+
+  --traffic-upload: #0b63f6;
+  --traffic-download: #2b9d9a;
+  --traffic-upload-ink: #0b57d0;
+  --traffic-download-ink: #1f7b79;
+
+  --switch-track: #cfd7e2;
+  --switch-track-border: #8792a4;
+  --scrim: rgb(20 30 48 / 32%);
+
+  --shadow: 0 1px 2px rgb(16 24 40 / 5%), 0 10px 24px -16px rgb(16 24 40 / 22%);
+  --shadow-pop: 0 16px 40px -12px rgb(16 24 40 / 24%);
+}
