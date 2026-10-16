@@ -176,7 +176,7 @@ onBeforeUnmount(() => {
 <template>
   <aside class="sidebar">
     <nav>
-      <a v-for="page in pages" :key="page.name" :href="`#${page.name}`" class="nav-item" :class="{ active: current === page.name }" :title="t(page.label)" :aria-current="current === page.name ? 'page' : undefined" @click="navigate(page.name, $event)">
+      <a v-for="page in pages" :key="page.name" :href="`#${page.name}`" class="nav-item" :class="{ active: current === page.name }" :title="t(page.label)" :aria-label="t(page.label)" :aria-current="current === page.name ? 'page' : undefined" @click="navigate(page.name, $event)">
         <span class="nav-icon" aria-hidden="true"><NavIcon :name="page.name" /></span><span class="nav-label">{{ t(page.label) }}</span>
       </a>
     </nav>

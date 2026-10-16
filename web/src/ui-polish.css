@@ -546,6 +546,11 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
 .settings-home .app-update-row { min-height: 64px; padding: 10px 0; gap: 10px; }
 .settings-home .app-update-preference { min-height: 44px; padding: 8px 0; }
 
+/* Allow long Core paths to shrink inside grid and flex cards. */
+.local-discovery-card, .local-process, .local-config-row { min-width: 0; }
+.local-processes, .local-config-list { grid-template-columns: minmax(0, 1fr); }
+.local-process-main strong { overflow-wrap: anywhere; }
+
 /* --- responsive --------------------------------------------------------- */
 @media(max-width:1100px) {
   .topbar { padding: 0 18px; }
@@ -560,10 +565,10 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
 @media(max-width:680px) {
   #app { display: flex; flex-direction: column; }
   .sidebar { flex-direction: row; align-items: center; gap: 4px; padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .nav-item .nav-label, .nav-item span:last-child { display: inline; }
-  .nav-item { flex: none; min-height: 40px; padding: 8px 12px; gap: 7px; border-radius: var(--radius-pill); white-space: nowrap; }
+  .nav-item .nav-label { display: none; }
+  .nav-item { flex: 1 0 32px; min-width: 32px; min-height: 40px; padding: 8px 6px; gap: 0; border-radius: var(--radius-pill); }
   .nav-item.active::before { display: none; }
-  nav { flex: 1 1 auto; min-width: 0; gap: 4px; padding: 0 2px 2px; overflow-x: auto; }
+  nav { flex: 1 1 auto; min-width: 0; gap: 2px; padding: 0 2px 2px; overflow-x: auto; }
   .sidebar-footer { flex: none; }
   .sidebar-footer { display: flex; margin: 0 0 0 4px; padding: 9px; flex: none; border-radius: var(--radius-tile); }
   .sidebar-footer>div:last-child { display: none; }
@@ -571,6 +576,13 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
   .content { padding: 14px 16px 28px; }
   .log-summary { flex-wrap: wrap; padding: 10px 16px; }
   .log-secondary-actions { margin-left: 0; padding-left: 0; border-left: 0; flex-wrap: wrap; }
+  .local-discovery-card .section-head > div { min-width: 0; }
+  .local-discovery-card .section-head > button { flex: none; }
+  .local-process { flex-wrap: wrap; }
+  .local-process-main { flex-basis: calc(100% - 19px); }
+  .local-process > .tag { margin-left: 19px; }
+  .local-process-args { white-space: normal; overflow-wrap: anywhere; }
+  .local-config-path { white-space: normal; overflow-wrap: anywhere; }
   .connections-table th, .connections-table td { padding: 10px 12px; }
   .dashboard-metrics>div { padding: 12px 10px; }
   .dashboard-location-grid>div { padding: 0 12px; }
