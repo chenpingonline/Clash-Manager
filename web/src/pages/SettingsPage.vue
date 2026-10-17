@@ -6,7 +6,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import ChangelogModal from '@/components/ChangelogModal.vue'
 import PortConflictHelp from '@/components/PortConflictHelp.vue'
 import AsyncState from '@/components/AsyncState.vue'
-import CollapseTransition from '@/components/CollapseTransition.vue'
 import TunStackFields from '@/components/settings/TunStackFields.vue'
 import HelpPopover from '@/components/HelpPopover.vue'
 import PortRow from '@/components/settings/PortRow.vue'
@@ -45,7 +44,7 @@ const defaultNetwork = (): NetworkForm => ({
 
 const requestedSectionValue = new URLSearchParams(location.hash.split('?')[1] || '').get('section')
 const requestedSection = (['core', 'network', 'dns', 'tun', 'advanced', 'behavior', 'update'] as Section[]).find(section => section === requestedSectionValue) || null
-const loading = ref(true), error = ref(''), open = ref<Section | null>(requestedSection), busy = ref(''), tunSwitching = ref(false)
+const loading = ref(true), error = ref(''), open = ref<Section>(requestedSection || 'core'), busy = ref(''), tunSwitching = ref(false)
 const tunProgress = ref('')
 const tunFeatures = ref<TunFeatures>({})
 const coreDetailsOpen = ref(false)
@@ -160,14 +159,27 @@ function mappings(value: string, kind: 'dns' | 'hosts'): DnsMapping[] | HostMapp
 function syncDnsText() {
   dnsText.defaultNameserver = list(network.dns.defaultNameserver); dnsText.nameserver = list(network.dns.nameserver); dnsText.fallback = list(network.dns.fallback); dnsText.proxyServerNameserver = list(network.dns.proxyServerNameserver); dnsText.directNameserver = list(network.dns.directNameserver); dnsText.fakeIpFilter = list(network.dns.fakeIpFilter); dnsText.nameserverPolicy = network.dns.nameserverPolicy.map(item => `${item.matcher} = ${item.servers.join('; ')}`).join('\n'); dnsText.fallbackIpCidr = list(network.dns.fallbackIpCidr); dnsText.fallbackDomain = list(network.dns.fallbackDomain); dnsText.hosts = network.dns.hosts.map(item => `${item.host} = ${item.values.join('; ')}`).join('\n')
 }
-function toggleSection(section: Section) {
-  open.value = open.value === section ? null : section
-}
-async function openSettingsSection(section: Section) {
+const categoryLabels: Record<Section, string> = { core: '内核管理', network: '网络与端口', dns: 'DNS 与解析', tun: '虚拟网卡(TUN)设置', advanced: '环境变量设置', behavior: '其他设置', update: '更新设置' }
+function selectSection(section: Section) {
   open.value = section
   history.replaceState(history.state, '', `#settings?section=${section}`)
+}
+function navigateCategory(event: KeyboardEvent, index: number) {
+  let next = index
+  if (event.key === 'ArrowRight') next = (index + 1) % categories.value.length
+  else if (event.key === 'ArrowLeft') next = (index + categories.value.length - 1) % categories.value.length
+  else if (event.key === 'Home') next = 0
+  else if (event.key === 'End') next = categories.value.length - 1
+  else return
+  event.preventDefault()
+  const category = categories.value[next]!
+  selectSection(category.key)
+  document.getElementById(`settings-tab-${category.key}`)?.focus()
+}
+async function openSettingsSection(section: Section) {
+  selectSection(section)
   await nextTick()
-  document.getElementById(`${section}-settings`)?.scrollIntoView({ block: 'start', behavior: 'instant' })
+  document.getElementById(`settings-tab-${section}`)?.focus()
 }
 function numericDelay(value: number | Event | undefined, fallback: number) { return typeof value === 'number' ? value : fallback }
 function platformLabel(value?: string) {
@@ -533,9 +545,7 @@ async function updateGeoData() {
 }
 async function initialize() {
   await load()
-  if (!requestedSection || error.value) return
-  await nextTick()
-  document.getElementById(`${requestedSection}-settings`)?.scrollIntoView({ block: 'start' })
+  if (!categories.value.some(category => category.key === open.value)) open.value = 'core'
 }
 onMounted(initialize)
 </script>
@@ -546,21 +556,16 @@ onMounted(initialize)
   </Teleport>
 
   <AsyncState :loading="loading" :error="t(error)">
-    <div class="settings-home"><div class="settings-accordion-list">
-      <div v-for="category in categories" :id="category.key === 'tun' ? 'tun-settings' : undefined" :key="category.key" class="settings-accordion-item" :class="{ open: open === category.key }"><button class="settings-accordion-head" type="button" :aria-expanded="open === category.key" @click="toggleSection(category.key)">
-        <span class="settings-category-icon" :class="`icon-${category.key}`" aria-hidden="true">
-          <svg v-if="category.key === 'core'" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /><rect x="9" y="9" width="6" height="6" rx="1" /><path d="M9 3v3m6-3v3M9 18v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3" /></svg>
-          <svg v-else-if="category.key === 'network'" viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.5" /><circle cx="18" cy="7" r="2.5" /><circle cx="12" cy="17" r="2.5" /><path d="M8.5 7h7M7.3 9.2l3.4 5.6m6-5.6-3.4 5.6" /></svg>
-          <svg v-else-if="category.key === 'dns'" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.3 2.3 3.5 5.1 3.5 8.5s-1.2 6.2-3.5 8.5M12 3.5C9.7 5.8 8.5 8.6 8.5 12s1.2 6.2 3.5 8.5" /></svg>
-          <svg v-else-if="category.key === 'tun'" class="tun-category-glyph" viewBox="0 0 24 24"><rect x="3" y="6" width="5" height="12" rx="2" /><rect x="16" y="6" width="5" height="12" rx="2" /><path d="M8 10h8m-2-2 2 2-2 2M16 14H8m2 2-2-2 2-2" /></svg>
-          <svg v-else-if="category.key === 'advanced'" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5" /><path d="m7 9 3 3-3 3m6 0h4" /></svg>
-          <svg v-else-if="category.key === 'behavior'" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></svg>
-          <svg v-else viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
-        </span>
-        <span class="settings-category-copy"><strong>{{ t(category.title) }}</strong><small>{{ t(category.description) }}</small></span><span class="settings-category-tail"><span v-if="category.key === 'update' && appUpdateAvailable" class="settings-update-notice" role="status"><span class="update-notice-dot" aria-hidden="true" />{{ t("有新版本") }}</span><span class="settings-accordion-chevron" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" /></svg></span></span>
-      </button>
-        <CollapseTransition><div v-if="open === category.key" class="expand-panel"><div class="settings-accordion-body">
-          <div v-if="category.key === 'network'" class="settings-accordion-panel network-card"><p v-if="networkOffline" class="hint">{{ t("Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。") }}</p><p v-if="network.mixed.enabled" id="mixed-port-hint" class="port-dependency-note">{{ t("混合代理已同时提供 HTTP 与 SOCKS5 服务。要编辑其他入站端口，请先关闭混合代理。") }}</p><div class="port-list"><PortRow id="netController" v-model="network.controller" title="Controller API" :description="t('Mihomo REST API · Manager 使用 127.0.0.1 连接')" locked @change="saveNetwork('controller')" /><PortRow id="netMixed" v-model="network.mixed" :title="t('混合代理端口')" :description="t('同时接受 HTTP 与 SOCKS5 代理')" @change="saveNetwork('mixed')" /><PortRow id="netSocks" v-model="network.socks" :title="t('SOCKS5 代理端口')" :description="t('单独提供 SOCKS5 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('socks')" /><PortRow id="netHttp" v-model="network.http" :title="t('HTTP(S) 代理端口')" :description="t('单独提供 HTTP CONNECT/HTTP 代理')" :disabled="network.mixed.enabled" @change="saveNetwork('http')" /><PortRow id="netRedir" v-model="network.redir" :title="t('Redir 透明代理端口')" :description="t('Linux TCP REDIRECT 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('redir')" /><PortRow id="netTproxy" v-model="network.tproxy" :title="t('TProxy 透明代理端口')" :description="t('Linux TPROXY TCP/UDP 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('tproxy')" /></div><div class="network-options"><ProxyAuthenticationSettings :model-value="proxyAuthentication" :busy="authSaving || netState === 'pending' || netState === 'saving'" :load="loadProxyAuthentication" :save="saveProxyAuthentication" /><ProxyBindAddress :model-value="network.bindAddress" v-model:allow-lan="network.allowLan" :busy="netState === 'pending' || netState === 'saving'" :save="saveProxyBindAddress" @lan-change="saveNetwork('allowLan')" /><SettingToggle v-model="network.core.ipv6" :title="t('全局 IPv6')" :description="t('允许 Mihomo 接收和处理 IPv6 流量')" @change="saveNetwork('ipv6')" /><SettingToggle v-model="network.core.unifiedDelay" :title="t('统一延迟')" :description="t('使用统一 RTT 算法，使不同协议的测速更便于比较')" @change="saveNetwork('unifiedDelay')" /></div><div class="dns-autosave-state" :class="netState" role="status" aria-live="polite">{{ t(netMessage) }}</div></div>
+    <div class="settings-home settings-compact">
+      <div class="settings-category-tabs" role="tablist" :aria-label="t('设置')">
+        <button v-for="(category, index) in categories" :id="`settings-tab-${category.key}`" :key="category.key" type="button" role="tab" :aria-selected="open === category.key" :aria-controls="`settings-panel-${category.key}`" :tabindex="open === category.key ? 0 : -1" @click="selectSection(category.key)" @keydown="navigateCategory($event, index)">
+          {{ t(categoryLabels[category.key]) }}<span v-if="category.key === 'update' && appUpdateAvailable" class="update-notice-dot" :aria-label="t('有新版本')" />
+        </button>
+      </div>
+      <div class="settings-tab-content">
+        <template v-for="category in categories" :key="category.key">
+        <div v-if="open === category.key" :id="`settings-panel-${category.key}`" class="settings-category-panel" role="tabpanel" :aria-labelledby="`settings-tab-${category.key}`" tabindex="0">
+          <div v-if="category.key === 'network'" class="settings-accordion-panel network-card"><p v-if="networkOffline" class="hint">{{ t("Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。") }}</p><p v-if="network.mixed.enabled" id="mixed-port-hint" class="port-dependency-note">{{ t("混合代理已同时提供 HTTP 与 SOCKS5 服务。要编辑其他入站端口，请先关闭混合代理。") }}</p><div class="network-columns"><section class="network-port-section"><h2>{{ t("代理端口") }}</h2><div class="port-list"><PortRow id="netController" v-model="network.controller" title="Controller API" :description="t('Mihomo REST API · Manager 使用 127.0.0.1 连接')" locked @change="saveNetwork('controller')" /><PortRow id="netMixed" v-model="network.mixed" :title="t('混合代理端口')" :description="t('同时接受 HTTP 与 SOCKS5 代理')" @change="saveNetwork('mixed')" /><PortRow id="netSocks" v-model="network.socks" :title="t('SOCKS5 代理端口')" :description="t('单独提供 SOCKS5 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('socks')" /><PortRow id="netHttp" v-model="network.http" :title="t('HTTP(S) 代理端口')" :description="t('单独提供 HTTP CONNECT/HTTP 代理')" :disabled="network.mixed.enabled" @change="saveNetwork('http')" /><PortRow id="netRedir" v-model="network.redir" :title="t('Redir 透明代理端口')" :description="t('Linux TCP REDIRECT 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('redir')" /><PortRow id="netTproxy" v-model="network.tproxy" :title="t('TProxy 透明代理端口')" :description="t('Linux TPROXY TCP/UDP 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('tproxy')" /></div></section><section class="network-option-section"><h2>{{ t("连接选项") }}</h2><div class="network-options"><ProxyAuthenticationSettings :model-value="proxyAuthentication" :busy="authSaving || netState === 'pending' || netState === 'saving'" :load="loadProxyAuthentication" :save="saveProxyAuthentication" /><ProxyBindAddress :model-value="network.bindAddress" v-model:allow-lan="network.allowLan" :busy="netState === 'pending' || netState === 'saving'" :save="saveProxyBindAddress" @lan-change="saveNetwork('allowLan')" /><SettingToggle v-model="network.core.ipv6" :title="t('全局 IPv6')" :description="t('允许 Mihomo 接收和处理 IPv6 流量')" @change="saveNetwork('ipv6')" /><SettingToggle v-model="network.core.unifiedDelay" :title="t('统一延迟')" :description="t('使用统一 RTT 算法，使不同协议的测速更便于比较')" @change="saveNetwork('unifiedDelay')" /></div></section></div><div class="dns-autosave-state" :class="netState" role="status" aria-live="polite">{{ t(netMessage) }}</div></div>
 
           <div v-else-if="category.key === 'tun'" class="settings-accordion-panel tun-card" :class="{ 'tun-on': network.tun.enabled }">
             <div class="section-head">
@@ -786,14 +791,60 @@ onMounted(initialize)
 
             <p v-if="appUpdate.directRetry" class="hint">{{ t("常规请求失败，已通过不使用 HTTP/HTTPS 代理的重试获取更新信息。") }}</p>
           </div>
-        </div></div></CollapseTransition>
+        </div>
+        </template>
       </div>
-    </div></div>
+    </div>
   </AsyncState>
   <ChangelogModal :open="changelogOpen" :latest="changelogLatest ? appUpdate.latest : undefined" @close="changelogOpen = false" />
 </template>
 
 <style scoped>
+
+/* Flat category tabs and compact forms share the existing theme tokens. */
+.settings-compact { max-width: none; }
+.settings-category-tabs { display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.settings-category-tabs > button { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: 14px; box-shadow: none; white-space: nowrap; }
+.settings-category-tabs > button:hover { color: var(--text); background: var(--accent-soft); }
+.settings-category-tabs > button[aria-selected="true"] { color: var(--accent-ink); border-bottom-color: var(--accent); }
+.settings-category-tabs > button:focus-visible, .settings-category-panel:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.settings-category-panel { min-width: 0; }
+.settings-compact .settings-accordion-panel { padding: 0; }
+.settings-compact .settings-accordion-subsection { padding: 16px 0; }
+.network-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+.network-columns > section { min-width: 0; }
+.network-option-section { border-left: 1px solid var(--line); padding-left: 28px; }
+.network-columns h2 { margin: 0; padding: 0 0 12px; border-bottom: 1px solid var(--line); font-size: 15px; font-weight: 650; }
+.settings-compact .port-list, .settings-compact .network-options { display: flex; flex-direction: column; gap: 0; margin: 0; }
+.settings-compact :deep(.port-row), .settings-compact :deep(.setting-toggle) { min-width: 0; min-height: 64px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
+.settings-compact :deep(.port-row) { gap: 12px; }
+.settings-compact :deep(.port-row-copy) { min-width: 0; }
+.settings-compact :deep(.port-row-copy strong), .settings-compact :deep(.setting-toggle strong) { font-size: 14px; }
+.settings-compact :deep(.port-row-copy span), .settings-compact :deep(.setting-toggle small), .settings-compact :deep(.setting-toggle > div > span), .settings-compact :deep(.lan-description) { font-size: 12px; line-height: 1.5; }
+.settings-compact :deep(.port-row-control) { flex: none; gap: 10px; }
+.settings-compact :deep(.port-input) { width: 82px !important; }
+.settings-compact :deep(.auth-setting) { order: 4; }
+.settings-compact :deep(.setting-toggle > div) { min-width: 0; }
+.settings-compact :deep(.setting-toggle > .switch) { flex: none; }
+.settings-compact .port-dependency-note { margin: 0 0 16px; }
+.settings-compact .dns-toggle-grid, .settings-compact .tun-option-grid { column-gap: 28px; row-gap: 0; }
+.settings-compact .core-tabs, .settings-compact .dns-tabs { padding: 0 0 12px; }
+@media (max-width: 1100px) {
+  .network-columns { gap: 20px; }
+  .network-option-section { padding-left: 20px; }
+  .settings-category-tabs { gap: 0; }
+  .settings-category-tabs > button { padding-inline: 10px; }
+}
+@media (max-width: 760px) {
+  .network-columns { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .settings-compact :deep(.port-row) { grid-template-columns: minmax(0, 1fr) auto; }
+  .settings-compact :deep(.port-input) { width: 72px !important; }
+  .network-option-section { border-left: 0; padding-left: 0; }
+  .settings-category-tabs { margin-bottom: 16px; }
+  .settings-category-tabs > button { font-size: 13px; }
+  .settings-compact .dns-toggle-grid, .settings-compact .tun-option-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
 .core-update-status { padding: 14px 20px; border-top: 1px solid var(--line); }
 .core-update-status-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
 .core-update-status-head strong { font-weight: 550; overflow-wrap: anywhere; }

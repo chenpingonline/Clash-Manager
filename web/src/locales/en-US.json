@@ -1812,5 +1812,7 @@
   "更多操作 · {arg0}": "More actions · {arg0}",
   "更多": "More",
   "高级选项": "Advanced options",
-  "全局覆写与脚本": "Global overrides and scripts"
+  "全局覆写与脚本": "Global overrides and scripts",
+  "代理端口": "Proxy ports",
+  "连接选项": "Connection options"
 }
