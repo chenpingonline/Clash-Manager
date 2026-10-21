@@ -3,6 +3,7 @@ ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM node:24.22.1-alpine AS frontend
 WORKDIR /src/web
 COPY web/package*.json ./
+COPY web/scripts/check-node.mjs ./scripts/check-node.mjs
 RUN npm ci
 COPY web/ ./
 COPY VERSION /src/VERSION
