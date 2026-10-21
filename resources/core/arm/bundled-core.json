@@ -1,8 +1,8 @@
 {
-  "tag": "v1.19.32",
+  "tag": "v1.19.33",
   "arch": "arm64",
-  "size": 20809592,
-  "sha256": "9dd862e28b46ff7d775f169cceebc28deccaa0a9e804237d421cd2571e0caba0",
+  "size": 20824326,
+  "sha256": "ba408b317080ee265c46cb923a50018c1b82cbd708551cdd46a1e3e307396187",
   "upstream": "MetaCubeX/mihomo",
   "license": "GPL-3.0-or-later"
 }

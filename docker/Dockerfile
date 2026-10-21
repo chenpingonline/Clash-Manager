@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 ARG BUILDPLATFORM
-FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:24.22.1-alpine AS frontend
 WORKDIR /src/web
 COPY web/package*.json ./
 RUN npm ci
@@ -10,7 +10,7 @@ COPY CHANGELOG.md /src/CHANGELOG.md
 COPY scripts/sync-version.sh /src/scripts/sync-version.sh
 RUN sh /src/scripts/sync-version.sh && VITE_APP_BASE=/ npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS backend
+FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine AS backend
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download

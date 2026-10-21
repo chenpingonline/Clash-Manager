@@ -243,7 +243,7 @@ Clash-Manager/
 
 ## 开发与构建
 
-需要 Go **1.22+**、Node.js **22.12+** 和 npm。Docker 构建需要 Docker；DEB 构建还需要 Python 3 与 `dpkg-deb`，macOS 使用 Docker 完成 DEB 封装。
+需要 Go **1.26.10+**（1.27 系列至少 1.27.3）、Node.js **24.22.1+**（也支持 22.23.4+ / 26.12.1+ 对应发行线） 和 npm。Docker 构建需要 Docker；DEB 构建还需要 Python 3 与 `dpkg-deb`，macOS 使用 Docker 完成 DEB 封装。
 
 ### 开发检查
 

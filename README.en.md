@@ -243,7 +243,7 @@ Clash-Manager/
 
 ## Development and builds
 
-Requires **Go 1.22+**, **Node.js 22.12+** and npm. Docker builds require Docker. DEBs also require Python 3 and `dpkg-deb`; macOS uses Docker for DEB assembly.
+Requires **Go 1.26.10+** (1.27 requires 1.27.3+) and **Node.js 24.22.1+** (also supported: 22.23.4+ / 26.12.1+ in those release lines) and npm. Docker builds require Docker. DEBs also require Python 3 and `dpkg-deb`; macOS uses Docker for DEB assembly.
 
 ### Development checks
 
