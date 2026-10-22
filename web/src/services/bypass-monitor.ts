@@ -7,10 +7,11 @@ export interface MonitorHost {
   interfaces: LanInterface[]; config: MonitorConfig | null; configError?: string
   forwarding: boolean | null; firewall: { readable: boolean; forwardChains?: number; natRules?: number; dropRules?: number }
   legacyJournal: boolean
+  neighbors?: NeighborObservation[]; neighborStatus?: 'available' | 'unavailable' | 'unsupported'
 }
 export interface ObservedConnection {
-  upload?: number; download?: number; rule?: string; rulePayload?: string; chains?: string[]
-  metadata?: { sourceIP?: string; type?: string; network?: string }
+  id?: string; start?: string; upload?: number; download?: number; rule?: string; rulePayload?: string; chains?: string[]
+  metadata?: { sourceIP?: string; type?: string; network?: string; sourcePort?: string | number; host?: string; destinationIP?: string; destinationPort?: string | number }
 }
 export interface DeviceObservation {
   ip: string; count: number; tunCount: number; upload: number; download: number; types: string[]; rules: string[]; chains: string[]
@@ -45,4 +46,62 @@ export function observeDevices(connections: ObservedConnection[], interfaces: La
     groups.set(ip, row)
   }
   return [...groups.values()].sort((a, b) => b.tunCount - a.tunCount || b.count - a.count || a.ip.localeCompare(b.ip))
+}
+
+export interface NeighborObservation { ip: string; mac: string; interface: string; state: string }
+export interface InventoryDevice extends DeviceObservation {
+  mac: string; interface: string; neighborState: string; discovered: boolean; lastObserved: number
+}
+// Session memory only. Counts and evidence always describe the current sample;
+// history keeps identities visible, never stale TUN success or traffic values.
+export class DeviceInventory {
+  private entries = new Map<string, InventoryDevice>()
+  update(connections: ObservedConnection[], neighbors: NeighborObservation[], interfaces: LanInterface[], now = Date.now()): InventoryDevice[] {
+    for (const [ip, row] of this.entries) {
+      if (now - row.lastObserved > 24 * 60 * 60 * 1000) this.entries.delete(ip)
+      else this.entries.set(ip, { ...row, count: 0, tunCount: 0, upload: 0, download: 0, types: [], rules: [], chains: [], discovered: false, neighborState: '' })
+    }
+    const blank = (ip: string): InventoryDevice => ({ ip, mac: '', interface: '', neighborState: '', discovered: false, lastObserved: now, count: 0, tunCount: 0, upload: 0, download: 0, types: [], rules: [], chains: [] })
+    const own = new Set(interfaces.map(i => i.address))
+    for (const n of neighbors) {
+      if (own.has(n.ip) || !interfaces.some(i => i.name === n.interface && inSubnet(n.ip, i.cidr))) continue
+      const previous = this.entries.get(n.ip)
+      const row = previous && (!previous.mac || previous.mac === n.mac) ? previous : blank(n.ip)
+      this.entries.set(n.ip, { ...row, mac: n.mac, interface: n.interface, neighborState: n.state, discovered: true, lastObserved: now })
+    }
+    for (const traffic of observeDevices(connections, interfaces)) {
+      const row = this.entries.get(traffic.ip) || blank(traffic.ip)
+      this.entries.set(traffic.ip, { ...row, ...traffic, lastObserved: now })
+    }
+    const sorted = [...this.entries.values()].sort((a, b) => b.tunCount - a.tunCount || b.count - a.count || b.lastObserved - a.lastObserved || a.ip.localeCompare(b.ip)).slice(0, 256)
+    this.entries = new Map(sorted.map(row => [row.ip, row]))
+    return sorted
+  }
+}
+export function deviceEvidence(device: InventoryDevice, trafficAvailable: boolean): string {
+  if (!trafficAvailable) return device.discovered ? '已发现，流量待验证' : '历史记录，流量待验证'
+  if (device.tunCount > 0) return '已观察到 TUN 流量'
+  if (device.types.some(type => /^(http|https|socks|socks4|socks5)$/i.test(type))) return '仅观察到显式代理'
+  if (device.count > 0) return '有连接，入站类型待确认'
+  return device.discovered ? '已发现，暂无流量证据' : '本页历史记录'
+}
+// Survives navigating between pages, but resets on a browser reload.
+export const bypassInventory = new DeviceInventory()
+
+// Mihomo returns chains from the concrete outbound toward the outer groups.
+// Only an explicit terminal DIRECT / REJECT establishes those outcomes.
+export function connectionExit(connection: ObservedConnection): string {
+  const terminal = connection.chains?.[0]
+  if (!terminal) return '出口待确认'
+  if (terminal.toUpperCase() === 'DIRECT') return '直连'
+  if (/^REJECT(?:-DROP)?$/i.test(terminal)) return '规则拒绝'
+  return '代理出口'
+}
+// Match the source endpoint, not a destination address or an IP prefix collision.
+// Unstructured messages without a known source marker remain in global logs.
+export function logFromDevice(message: string, ip: string): boolean {
+  if (ipv4(ip) === null) return false
+  const escaped = ip.replace(/\./g, '\\.')
+  return new RegExp(`(?:^|\\s|\\])${escaped}:\\d+(?=\\s+-->|\\s+->)`).test(message)
+    || new RegExp(`\\bfrom ${escaped}:\\d+(?=\\s|$)`).test(message)
 }

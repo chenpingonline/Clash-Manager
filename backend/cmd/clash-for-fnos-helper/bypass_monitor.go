@@ -42,7 +42,7 @@ func monitorInterfaces() []bypassInterface {
 // This endpoint never creates a config, binds a port, changes sysctls, or
 // modifies firewall rules. Missing evidence is returned as unknown.
 func (h *helper) bypassMonitor(ctx context.Context) map[string]any {
-	result := map[string]any{"interfaces": monitorInterfaces(), "config": nil, "forwarding": nil, "firewall": map[string]any{"readable": false}, "legacyJournal": fileExists(h.bypassStatePathForMonitor())}
+	result := map[string]any{"interfaces": monitorInterfaces(), "config": nil, "forwarding": nil, "firewall": map[string]any{"readable": false}, "legacyJournal": fileExists(h.bypassStatePathForMonitor()), "neighbors": []bypassNeighbor{}, "neighborStatus": "unsupported"}
 	path := h.config.managedConfig
 	if proc := h.primary(); proc != nil && proc.ConfigPath != "" {
 		path = proc.ConfigPath
@@ -59,6 +59,11 @@ func (h *helper) bypassMonitor(ctx context.Context) map[string]any {
 	}
 	if runtime.GOOS != "linux" {
 		return result
+	}
+	result["neighborStatus"] = "unavailable"
+	if neighbors, e := readBypassNeighbors(ctx, result["interfaces"].([]bypassInterface)); e == nil {
+		result["neighbors"] = neighbors
+		result["neighborStatus"] = "available"
 	}
 	if raw, e := os.ReadFile("/proc/sys/net/ipv4/ip_forward"); e == nil {
 		switch strings.TrimSpace(string(raw)) {
