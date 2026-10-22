@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectionExit, logFromDevice, DeviceInventory, deviceEvidence, inSubnet, observeDevices } from './bypass-monitor'
+import { connectionExit, logFromDevice, isContainerInterface, DeviceInventory, deviceEvidence, inSubnet, observeDevices } from './bypass-monitor'
 const interfaces = [{ name: 'eth0', address: '192.168.1.20', cidr: '192.168.1.0/24' }]
 describe('bypass traffic evidence', () => {
   it('only considers other devices within observed LAN subnets', () => {
@@ -74,5 +74,21 @@ describe('diagnostic evidence', () => {
     expect(connectionExit({ chains: ['REJECT', 'Policy'] })).toBe('规则拒绝')
     expect(connectionExit({ chains: ['Hong Kong', 'Proxy', 'Global'] })).toBe('代理出口')
     expect(connectionExit({})).toBe('出口待确认')
+  })
+})
+
+
+describe('container network scope', () => {
+  it('separates Docker bridges without hiding normal LAN bridges or private ranges', () => {
+    expect(isContainerInterface('docker0')).toBe(true)
+    expect(isContainerInterface('br-0430179e2c1a')).toBe(true)
+    for (const name of ['br0', 'br-lan', 'bond0', 'eth0', 'macvlan0']) expect(isContainerInterface(name)).toBe(false)
+    const inventory = new DeviceInventory()
+    const interfaces = [{ name: 'docker0', address: '172.17.0.1', cidr: '172.17.0.0/16' }, { name: 'br0', address: '172.20.0.1', cidr: '172.20.0.0/24' }]
+    const rows = inventory.update(['172.17.0.3', '172.20.0.50'].map(sourceIP => ({ metadata: { sourceIP, type: 'TUN' } })), [], interfaces)
+    expect(rows.filter(row => !isContainerInterface(row.interface)).map(row => row.ip)).toEqual(['172.20.0.50'])
+    expect(rows.find(row => row.ip === '172.17.0.3')?.interface).toBe('docker0')
+    const history = inventory.update([], [], interfaces)
+    expect(history.find(row => row.ip === '172.17.0.3')?.interface).toBe('docker0')
   })
 })

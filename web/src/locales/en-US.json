@@ -1921,5 +1921,9 @@
   "基础检查与配置": "System checks and configuration",
   "出口待确认": "Outbound unconfirmed",
   "规则拒绝": "Rejected by rule",
-  "代理出口": "Proxy outbound"
+  "代理出口": "Proxy outbound",
+  "显示容器网络": "Show container networks",
+  "容器网络设备": "Container network devices",
+  "默认隐藏 Docker 内部网桥；直接接入局域网的容器仍会显示。": "Docker internal bridges are hidden by default. Containers directly attached to the LAN remain visible.",
+  "容器网络": "Container network"
 }

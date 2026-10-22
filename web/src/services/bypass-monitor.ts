@@ -1,3 +1,8 @@
+// Docker's standard bridge names; never classify by private IP range or the
+// generic "br" prefix (fnOS LAN bridges may be br0 / br-lan).
+export function isContainerInterface(name: string): boolean {
+  return /^docker\d+$/.test(name) || /^br-[0-9a-f]{12}$/i.test(name)
+}
 export interface LanInterface { name: string; address: string; cidr: string }
 export interface MonitorConfig {
   tun: boolean | null; autoRoute: boolean | null; autoRedirect: boolean | null
@@ -71,7 +76,10 @@ export class DeviceInventory {
     }
     for (const traffic of observeDevices(connections, interfaces)) {
       const row = this.entries.get(traffic.ip) || blank(traffic.ip)
-      this.entries.set(traffic.ip, { ...row, ...traffic, lastObserved: now })
+      // Neighbor interface is authoritative. For connection-only rows, infer
+      // the most specific matching interface so container traffic stays scoped.
+      const inferred = [...interfaces].filter(i => inSubnet(traffic.ip, i.cidr)).sort((a, b) => Number(b.cidr.split('/')[1]) - Number(a.cidr.split('/')[1]))[0]
+      this.entries.set(traffic.ip, { ...row, ...traffic, interface: row.interface || inferred?.name || '', lastObserved: now })
     }
     const sorted = [...this.entries.values()].sort((a, b) => b.tunCount - a.tunCount || b.count - a.count || b.lastObserved - a.lastObserved || a.ip.localeCompare(b.ip)).slice(0, 256)
     this.entries = new Map(sorted.map(row => [row.ip, row]))

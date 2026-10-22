@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, errorMessage } from '@/services/api'
 import { t } from '@/services/i18n'
 import { formatBytes } from '@/services/format'
-import { bypassInventory, deviceEvidence, type InventoryDevice, type MonitorHost, type ObservedConnection } from '@/services/bypass-monitor'
+import { bypassInventory, deviceEvidence, isContainerInterface, type InventoryDevice, type MonitorHost, type ObservedConnection } from '@/services/bypass-monitor'
 import BypassDeviceDetails from '@/components/BypassDeviceDetails.vue'
 import AppSelect from '@/components/AppSelect.vue'
 
@@ -17,6 +17,11 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 const devices = ref<InventoryDevice[]>([])
 const selectedDevice = ref('')
+const showContainers = ref(false)
+const lanDevices = computed(() => devices.value.filter(device => !isContainerInterface(device.interface)))
+const containerCount = computed(() => devices.value.length - lanDevices.value.length)
+const visibleDevices = computed(() => showContainers.value ? devices.value : lanDevices.value)
+const lanInterfaces = computed(() => (host.value?.interfaces || []).filter(i => !isContainerInterface(i.name)))
 const diagnosticHints = computed(() => {
   const hints: string[] = []
   if (runtimeTun.value === false) hints.push('TUN 当前未运行，网关流量的透明接管待验证。')
@@ -26,7 +31,7 @@ const diagnosticHints = computed(() => {
   if (config.value?.dnsEnabled === false) hints.push('Mihomo DNS 未开启，请确认设备使用的 DNS 服务可达。')
   return hints
 })
-const observed = computed(() => devices.value.some(device => device.tunCount > 0))
+const observed = computed(() => lanDevices.value.some(device => device.tunCount > 0))
 const selectedInterface = computed(() => host.value?.interfaces.find(i => `${i.name}/${i.address}` === selected.value))
 const config = computed(() => host.value?.config)
 function boolLabel(value: boolean | null | undefined): string { return value === true ? '已开启' : value === false ? '未开启' : '待验证' }
@@ -48,8 +53,8 @@ async function load() {
   const [h, r, c] = results
   if (h.status === 'fulfilled') {
     host.value = h.value; hostError.value = ''
-    if (!h.value.interfaces.some(i => `${i.name}/${i.address}` === selected.value)) {
-      const first = h.value.interfaces[0]; selected.value = first ? `${first.name}/${first.address}` : ''
+    if (!h.value.interfaces.filter(i => !isContainerInterface(i.name)).some(i => `${i.name}/${i.address}` === selected.value)) {
+      const first = h.value.interfaces.find(i => !isContainerInterface(i.name)); selected.value = first ? `${first.name}/${first.address}` : ''
     }
   } else { host.value = null; hostError.value = errorMessage(h.reason) }
   if (r.status === 'fulfilled') { runtimeTun.value = typeof r.value.configs?.tun?.enable === 'boolean' ? r.value.configs.tun.enable : null; runtimeError.value = '' }
@@ -73,15 +78,16 @@ defineExpose({ refreshPage: load })
     <div class="monitor-summary" role="status"><strong>{{ t(connectionError || hostError ? '流量状态待验证' : observed ? '已观察到局域网 TUN 连接' : '尚未观察到局域网 TUN 连接') }}</strong><span>{{ t('仅代表当前可见连接，不证明全部设备、全部流量已接管。') }}</span><small v-if="updatedAt">{{ t('最近检查') }} {{ updatedAt }}</small></div>
     <div v-if="diagnosticHints.length" class="card diagnostic-hints" role="status"><h3>{{ t('需要关注') }}</h3><p v-for="hint in diagnosticHints" :key="hint">{{ t(hint) }}</p><small>{{ t('以上为配置提示，不是设备失败日志；具体结果需要结合连接与日志验证。') }}</small></div>
     <div class="card monitor-devices">
-      <div class="section-head"><div><h3>{{ t('局域网设备') }}</h3><p class="muted">{{ t('结合邻居表与当前连接展示设备；已发现不代表在线，也不代表正在使用旁路由。') }}</p></div><span class="tag">{{ devices.length }}</span></div>
+      <div class="section-head"><div><h3>{{ t('局域网设备') }}</h3><p class="muted">{{ t('结合邻居表与当前连接展示设备；已发现不代表在线，也不代表正在使用旁路由。') }}</p></div><span class="tag">{{ visibleDevices.length }}</span></div>
+      <div class="network-filter"><label><input v-model="showContainers" type="checkbox">{{ t('显示容器网络') }}</label><span class="muted">{{ t('容器网络设备') }} {{ containerCount }} · {{ t('默认隐藏 Docker 内部网桥；直接接入局域网的容器仍会显示。') }}</span></div>
       <p v-if="host?.neighborStatus !== 'available'" class="muted">{{ t('邻居表不可读取，当前仅展示连接来源和本页会话记录。') }}</p>
       <p v-if="connectionError" class="warn-text" role="alert">{{ t('连接数据不可用，当前接管状态待验证。') }}</p>
-      <div v-if="devices.length" class="monitor-table"><table><thead><tr><th>{{ t('设备 / MAC') }}</th><th>{{ t('观察结果') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('规则与出口') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('最近观察') }}</th><th>{{ t('诊断') }}</th></tr></thead><tbody><tr v-for="device in devices" :key="device.ip" :class="{ 'selected-device': selectedDevice === device.ip }"><td><strong>{{ device.ip }}</strong><small>{{ device.mac || t('MAC 未知') }}</small><small v-if="device.interface">{{ device.interface }}</small></td><td><span class="tag">{{ t(deviceEvidence(device, !connectionError)) }}</span><small>{{ device.types.join(', ') || '—' }}</small></td><td>{{ connectionError ? '—' : device.count }}<small v-if="!connectionError">TUN {{ device.tunCount }}</small></td><td>{{ device.rules.join(' / ') || '—' }}<small>{{ device.chains.join(' / ') || '—' }}</small></td><td>{{ connectionError ? '—' : `↑ ${formatBytes(device.upload)}` }}<small v-if="!connectionError">↓ {{ formatBytes(device.download) }}</small></td><td>{{ new Date(device.lastObserved).toLocaleTimeString() }}</td><td><button type="button" class="ghost" :aria-pressed="selectedDevice === device.ip" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr></tbody></table></div>
+      <div v-if="visibleDevices.length" class="monitor-table"><table><thead><tr><th>{{ t('设备 / MAC') }}</th><th>{{ t('观察结果') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('规则与出口') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('最近观察') }}</th><th>{{ t('诊断') }}</th></tr></thead><tbody><tr v-for="device in visibleDevices" :key="device.ip" :class="{ 'selected-device': selectedDevice === device.ip }"><td><strong>{{ device.ip }}</strong><small>{{ device.mac || t('MAC 未知') }}</small><small v-if="device.interface">{{ device.interface }}<span v-if="isContainerInterface(device.interface)"> · {{ t('容器网络') }}</span></small></td><td><span class="tag">{{ t(deviceEvidence(device, !connectionError)) }}</span><small>{{ device.types.join(', ') || '—' }}</small></td><td>{{ connectionError ? '—' : device.count }}<small v-if="!connectionError">TUN {{ device.tunCount }}</small></td><td>{{ device.rules.join(' / ') || '—' }}<small>{{ device.chains.join(' / ') || '—' }}</small></td><td>{{ connectionError ? '—' : `↑ ${formatBytes(device.upload)}` }}<small v-if="!connectionError">↓ {{ formatBytes(device.download) }}</small></td><td>{{ new Date(device.lastObserved).toLocaleTimeString() }}</td><td><button type="button" class="ghost" :aria-pressed="selectedDevice === device.ip" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr></tbody></table></div>
       <p v-else class="muted">{{ t('尚未发现其他局域网设备。请让设备发起访问后刷新；空列表不代表不支持旁路由。') }}</p>
       <p class="muted">{{ t('邻居表可能不完整。最近观察表示看到邻居记录或连接的时间，不是设备最后在线时间。本页会话最多保留 256 个设备、24 小时；刷新浏览器后清除。') }}</p>
       <a href="#connections">{{ t('查看全部连接') }}</a>
     </div>
-    <BypassDeviceDetails v-if="selectedDevice" :key="selectedDevice" :ip="selectedDevice" :connections="connections" :traffic-available="!connectionError" @close="selectedDevice = ''" />
+    <BypassDeviceDetails v-if="selectedDevice && visibleDevices.some(device => device.ip === selectedDevice)" :key="selectedDevice" :ip="selectedDevice" :connections="connections" :traffic-available="!connectionError" @close="selectedDevice = ''" />
     <details class="card monitor-checks">
       <summary>{{ t('基础检查与配置') }}</summary>
 
@@ -102,7 +108,7 @@ defineExpose({ refreshPage: load })
       <a href="#settings">{{ t('前往设置检查 TUN 与 DNS') }}</a>
     </details>
     <details class="card monitor-guide"><summary>{{ t('设备接入与验证') }}</summary>
-      <div v-if="host?.interfaces.length" class="guide-interface"><span>{{ t('接入网卡') }}</span><AppSelect v-model="selected" :label="t('接入网卡')" :options="host.interfaces.map(i => ({ value: `${i.name}/${i.address}`, label: `${i.name} · ${i.address}` }))" /></div>
+      <div v-if="lanInterfaces.length" class="guide-interface"><span>{{ t('接入网卡') }}</span><AppSelect v-model="selected" :label="t('接入网卡')" :options="lanInterfaces.map(i => ({ value: `${i.name}/${i.address}`, label: `${i.name} · ${i.address}` }))" /></div>
       <p>{{ t('设备默认网关可填写所选 NAS IPv4；DNS 仅在 NAS 已提供可达的 DNS 服务时指向该地址。') }}</p>
       <dl class="guide-address"><div><dt>{{ t('NAS IPv4') }}</dt><dd>{{ selectedInterface?.address || '—' }}</dd></div><div><dt>{{ t('局域网网段') }}</dt><dd>{{ selectedInterface?.cidr || '—' }}</dd></div></dl>
       <p>{{ t('在设备上访问网站，然后观察此页是否出现该设备源 IP 的 TUN 连接、命中规则和出口链。') }}</p>
@@ -111,6 +117,9 @@ defineExpose({ refreshPage: load })
   </div>
 </template>
 <style scoped>
+.network-filter { display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:12px 0;font-size:12px; }
+.network-filter label { display:flex;align-items:center;gap:6px;white-space:nowrap; }
+.network-filter input { width:14px;height:14px;min-height:0;margin:0; }
 summary { cursor:pointer;font-weight:600;padding:2px 0; }
 .diagnostic-hints { padding:14px 18px;border-left:3px solid var(--accent); }
 .diagnostic-hints p { margin:6px 0;font-size:13px; }
@@ -118,7 +127,10 @@ summary { cursor:pointer;font-weight:600;padding:2px 0; }
 .monitor-table button { white-space:nowrap; }
 .bypass-monitor { display: grid; gap: 14px; }
 .monitor-checks, .monitor-devices, .monitor-guide { padding: 18px; min-width: 0; }
-.monitor-summary { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline; }
+.monitor-.network-filter { display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:12px 0;font-size:12px; }
+.network-filter label { display:flex;align-items:center;gap:6px;white-space:nowrap; }
+.network-filter input { width:14px;height:14px;min-height:0;margin:0; }
+summary { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline; }
 .monitor-summary span, .monitor-summary small { color:var(--muted); }
 .check-list { margin:12px 0; }
 .check-list > div { display:grid;grid-template-columns:minmax(140px,1fr) 2fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--line); }
