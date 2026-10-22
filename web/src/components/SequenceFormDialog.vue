@@ -2,7 +2,7 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { t } from '@/services/i18n'
 
-const props = defineProps<{ open: boolean; title: string; subtitle?: string; inlineSubtitle?: boolean; hideFooter?: boolean; compact?: boolean }>()
+const props = defineProps<{ open: boolean; title: string; subtitle?: string; inlineSubtitle?: boolean; hideFooter?: boolean; compact?: boolean; wide?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 const dialog = ref<HTMLDialogElement | null>(null), body = ref<HTMLElement | null>(null)
 watch(() => props.open, async open => {
@@ -31,7 +31,7 @@ onBeforeUnmount(() => dialog.value?.close())
 
 <template>
   <Teleport to="body">
-    <dialog ref="dialog" class="modal-card sequence-form-dialog" :class="{ 'sequence-form-dialog-compact': compact }" :aria-label="title" @cancel.prevent.stop="emit('close')" @keydown.esc.stop @keydown="keyboard" @click="backdrop">
+    <dialog ref="dialog" class="modal-card sequence-form-dialog" :class="{ 'sequence-form-dialog-compact': compact, 'sequence-form-dialog-wide': wide }" :aria-label="title" @cancel.prevent.stop="emit('close')" @keydown.esc.stop @keydown="keyboard" @click="backdrop">
       <template v-if="open">
         <header class="sequence-dialog-header"><div :class="{ 'sequence-dialog-title-inline': inlineSubtitle }"><h3>{{ title }}</h3><p v-if="subtitle">{{ subtitle }}</p></div><button type="button" class="ghost small sequence-dialog-close" autofocus :aria-label="t('关闭')" @click="emit('close')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" /></svg></button></header>
         <div ref="body" class="sequence-dialog-body" tabindex="0" :aria-label="title"><slot /></div>
@@ -43,6 +43,8 @@ onBeforeUnmount(() => dialog.value?.close())
 
 <style scoped>
 .sequence-form-dialog{width:min(720px,calc(100% - 32px));max-height:calc(100dvh - 32px);margin:auto;color:var(--text)}
+.sequence-form-dialog-wide{width:min(1040px,calc(100% - 32px))}
+.sequence-form-dialog-wide .sequence-dialog-body{max-height:min(72dvh,680px)}
 .sequence-form-dialog::backdrop{background:rgba(0,0,0,.45);backdrop-filter:blur(2px)}
 .sequence-dialog-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
 .sequence-dialog-header>div{min-width:0}.sequence-dialog-header h3{font-size:17px;margin:0}.sequence-dialog-header p{margin:6px 0 0;font-size:12px;color:var(--muted);overflow-wrap:anywhere}

@@ -1925,5 +1925,8 @@
   "显示容器网络": "Show container networks",
   "容器网络设备": "Container network devices",
   "默认隐藏 Docker 内部网桥；直接接入局域网的容器仍会显示。": "Docker internal bridges are hidden by default. Containers directly attached to the LAN remain visible.",
-  "容器网络": "Container network"
+  "容器网络": "Container network",
+  "设备 IP": "Device IP",
+  "每 10 秒刷新，仅代表当前可见连接；不会修改网络设置。": "Refreshes every 10 seconds. Visible connections only; network settings remain unchanged.",
+  "诊断说明": "Diagnostic notes"
 }

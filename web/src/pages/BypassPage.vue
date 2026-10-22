@@ -5,6 +5,7 @@ import { t } from '@/services/i18n'
 import { formatBytes } from '@/services/format'
 import { bypassInventory, deviceEvidence, isContainerInterface, type InventoryDevice, type MonitorHost, type ObservedConnection } from '@/services/bypass-monitor'
 import BypassDeviceDetails from '@/components/BypassDeviceDetails.vue'
+import SequenceFormDialog from '@/components/SequenceFormDialog.vue'
 import AppSelect from '@/components/AppSelect.vue'
 
 const host = ref<MonitorHost | null>(null)
@@ -21,6 +22,7 @@ const showContainers = ref(false)
 const lanDevices = computed(() => devices.value.filter(device => !isContainerInterface(device.interface)))
 const containerCount = computed(() => devices.value.length - lanDevices.value.length)
 const visibleDevices = computed(() => showContainers.value ? devices.value : lanDevices.value)
+const activeDevice = computed(() => visibleDevices.value.find(device => device.ip === selectedDevice.value))
 const lanInterfaces = computed(() => (host.value?.interfaces || []).filter(i => !isContainerInterface(i.name)))
 const diagnosticHints = computed(() => {
   const hints: string[] = []
@@ -73,21 +75,25 @@ defineExpose({ refreshPage: load })
 
 <template>
   <div class="bypass-monitor">
-    <div class="section-head"><div><h2>{{ t('旁路由检查与监控') }}</h2><p>{{ t('只读取现有配置和连接，每 10 秒刷新；不会修改网络设置。') }}</p></div><span class="tag">{{ t(refreshing ? '检查中…' : '只读检查') }}</span></div>
-    <p v-if="host?.legacyJournal" class="warn-text" role="alert">{{ t('检测到旧开发版的旁路由恢复记录，请先使用旧版本停止并恢复；本页不会自动修改网络。') }}</p>
-    <div class="monitor-summary" role="status"><strong>{{ t(connectionError || hostError ? '流量状态待验证' : observed ? '已观察到局域网 TUN 连接' : '尚未观察到局域网 TUN 连接') }}</strong><span>{{ t('仅代表当前可见连接，不证明全部设备、全部流量已接管。') }}</span><small v-if="updatedAt">{{ t('最近检查') }} {{ updatedAt }}</small></div>
-    <div v-if="diagnosticHints.length" class="card diagnostic-hints" role="status"><h3>{{ t('需要关注') }}</h3><p v-for="hint in diagnosticHints" :key="hint">{{ t(hint) }}</p><small>{{ t('以上为配置提示，不是设备失败日志；具体结果需要结合连接与日志验证。') }}</small></div>
+    <div class="monitor-overview">
+      <div class="monitor-summary" role="status"><strong>{{ t(connectionError || hostError ? '流量状态待验证' : observed ? '已观察到局域网 TUN 连接' : '尚未观察到局域网 TUN 连接') }}</strong><span>{{ t(refreshing ? '检查中…' : '只读检查') }}<template v-if="updatedAt"> · {{ updatedAt }}</template></span></div>
+      <p class="muted overview-help">{{ t('每 10 秒刷新，仅代表当前可见连接；不会修改网络设置。') }}</p>
+      <details v-if="diagnosticHints.length" class="diagnostic-hints"><summary>{{ t('需要关注') }} · {{ diagnosticHints.length }}<span>{{ t(diagnosticHints[0] || '') }}</span></summary><p v-for="hint in diagnosticHints" :key="hint">{{ t(hint) }}</p><small>{{ t('以上为配置提示，不是设备失败日志；具体结果需要结合连接与日志验证。') }}</small></details>
+      <p v-if="host?.legacyJournal" class="warn-text" role="alert">{{ t('检测到旧开发版的旁路由恢复记录，请先使用旧版本停止并恢复；本页不会自动修改网络。') }}</p>
+    </div>
     <div class="card monitor-devices">
       <div class="section-head"><div><h3>{{ t('局域网设备') }}</h3><p class="muted">{{ t('结合邻居表与当前连接展示设备；已发现不代表在线，也不代表正在使用旁路由。') }}</p></div><span class="tag">{{ visibleDevices.length }}</span></div>
       <div class="network-filter"><label><input v-model="showContainers" type="checkbox">{{ t('显示容器网络') }}</label><span class="muted">{{ t('容器网络设备') }} {{ containerCount }} · {{ t('默认隐藏 Docker 内部网桥；直接接入局域网的容器仍会显示。') }}</span></div>
       <p v-if="host?.neighborStatus !== 'available'" class="muted">{{ t('邻居表不可读取，当前仅展示连接来源和本页会话记录。') }}</p>
       <p v-if="connectionError" class="warn-text" role="alert">{{ t('连接数据不可用，当前接管状态待验证。') }}</p>
-      <div v-if="visibleDevices.length" class="monitor-table"><table><thead><tr><th>{{ t('设备 / MAC') }}</th><th>{{ t('观察结果') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('规则与出口') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('最近观察') }}</th><th>{{ t('诊断') }}</th></tr></thead><tbody><tr v-for="device in visibleDevices" :key="device.ip" :class="{ 'selected-device': selectedDevice === device.ip }"><td><strong>{{ device.ip }}</strong><small>{{ device.mac || t('MAC 未知') }}</small><small v-if="device.interface">{{ device.interface }}<span v-if="isContainerInterface(device.interface)"> · {{ t('容器网络') }}</span></small></td><td><span class="tag">{{ t(deviceEvidence(device, !connectionError)) }}</span><small>{{ device.types.join(', ') || '—' }}</small></td><td>{{ connectionError ? '—' : device.count }}<small v-if="!connectionError">TUN {{ device.tunCount }}</small></td><td>{{ device.rules.join(' / ') || '—' }}<small>{{ device.chains.join(' / ') || '—' }}</small></td><td>{{ connectionError ? '—' : `↑ ${formatBytes(device.upload)}` }}<small v-if="!connectionError">↓ {{ formatBytes(device.download) }}</small></td><td>{{ new Date(device.lastObserved).toLocaleTimeString() }}</td><td><button type="button" class="ghost" :aria-pressed="selectedDevice === device.ip" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr></tbody></table></div>
+      <div v-if="visibleDevices.length" class="monitor-table"><table><thead><tr><th>{{ t('设备 IP') }}</th><th>{{ t('观察结果') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('操作') }}</th></tr></thead><tbody><tr v-for="device in visibleDevices" :key="device.ip"><td><strong>{{ device.ip }}</strong><small v-if="isContainerInterface(device.interface)">{{ t('容器网络') }}</small></td><td><span class="tag">{{ t(deviceEvidence(device, !connectionError)) }}</span></td><td>{{ connectionError ? '—' : device.count }}</td><td>{{ connectionError ? '—' : `↑ ${formatBytes(device.upload)}` }}<small v-if="!connectionError">↓ {{ formatBytes(device.download) }}</small></td><td><button type="button" class="ghost" aria-haspopup="dialog" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr></tbody></table></div>
       <p v-else class="muted">{{ t('尚未发现其他局域网设备。请让设备发起访问后刷新；空列表不代表不支持旁路由。') }}</p>
       <p class="muted">{{ t('邻居表可能不完整。最近观察表示看到邻居记录或连接的时间，不是设备最后在线时间。本页会话最多保留 256 个设备、24 小时；刷新浏览器后清除。') }}</p>
       <a href="#connections">{{ t('查看全部连接') }}</a>
     </div>
-    <BypassDeviceDetails v-if="selectedDevice && visibleDevices.some(device => device.ip === selectedDevice)" :key="selectedDevice" :ip="selectedDevice" :connections="connections" :traffic-available="!connectionError" @close="selectedDevice = ''" />
+    <SequenceFormDialog :open="!!activeDevice" :title="`${t('设备诊断')} · ${activeDevice?.ip || ''}`" hide-footer wide @close="selectedDevice = ''">
+      <BypassDeviceDetails v-if="activeDevice" :key="activeDevice.ip" :ip="activeDevice.ip" :device="activeDevice" :connections="connections" :traffic-available="!connectionError" />
+    </SequenceFormDialog>
     <details class="card monitor-checks">
       <summary>{{ t('基础检查与配置') }}</summary>
 
@@ -121,23 +127,25 @@ defineExpose({ refreshPage: load })
 .network-filter label { display:flex;align-items:center;gap:6px;white-space:nowrap; }
 .network-filter input { width:14px;height:14px;min-height:0;margin:0; }
 summary { cursor:pointer;font-weight:600;padding:2px 0; }
-.diagnostic-hints { padding:14px 18px;border-left:3px solid var(--accent); }
+.monitor-overview { padding:2px 0 0;min-width:0; }
+.overview-help { margin:5px 0 10px;font-size:12px; }
+.monitor-summary { display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px;font-size:13px; }
+.monitor-summary>span { font-size:12px;white-space:nowrap; }
+.diagnostic-hints { padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:12px; }
+.diagnostic-hints summary { font-size:12px;line-height:1.6; }
+.diagnostic-hints summary span { margin-left:12px;color:var(--muted);font-weight:400; }
+.diagnostic-hints[open] summary span { display:none; }
 .diagnostic-hints p { margin:6px 0;font-size:13px; }
-.selected-device { background:color-mix(in srgb,var(--accent) 7%,transparent); }
 .monitor-table button { white-space:nowrap; }
 .bypass-monitor { display: grid; gap: 14px; }
 .monitor-checks, .monitor-devices, .monitor-guide { padding: 18px; min-width: 0; }
-.monitor-.network-filter { display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:12px 0;font-size:12px; }
-.network-filter label { display:flex;align-items:center;gap:6px;white-space:nowrap; }
-.network-filter input { width:14px;height:14px;min-height:0;margin:0; }
-summary { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline; }
 .monitor-summary span, .monitor-summary small { color:var(--muted); }
 .check-list { margin:12px 0; }
 .check-list > div { display:grid;grid-template-columns:minmax(140px,1fr) 2fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--line); }
 .check-list dd, .guide-address dd { margin:0;overflow-wrap:anywhere; }
 small { display:block;color:var(--muted);margin-top:5px; }
 .monitor-table { overflow-x:auto; }
-.monitor-table td { max-width:230px;overflow-wrap:anywhere;vertical-align:top; }
+.monitor-table td { max-width:300px;padding-top:10px;padding-bottom:10px;overflow-wrap:anywhere;vertical-align:top; }
 .monitor-table th { white-space:nowrap; }
 .guide-interface { display:grid;grid-template-columns:140px minmax(0,340px);align-items:center;gap:12px;margin:14px 0; }
 .guide-address { display:flex;gap:30px;flex-wrap:wrap; }
