@@ -162,6 +162,7 @@ function syncDnsText() {
 const categoryLabels: Record<Section, string> = { core: '内核管理', network: '网络与端口', dns: 'DNS 与解析', tun: '虚拟网卡(TUN)设置', advanced: '环境变量设置', behavior: '其他设置', update: '更新设置' }
 function selectSection(section: Section) {
   open.value = section
+  document.querySelector<HTMLElement>('.content')?.scrollTo({ top: 0 })
   history.replaceState(history.state, '', `#settings?section=${section}`)
 }
 function navigateCategory(event: KeyboardEvent, index: number) {
@@ -557,11 +558,13 @@ onMounted(initialize)
 
   <AsyncState :loading="loading" :error="t(error)">
     <div class="settings-home settings-compact">
+      <Teleport defer to="#page-navigation">
       <div class="settings-category-tabs" role="tablist" :aria-label="t('设置')">
         <button v-for="(category, index) in categories" :id="`settings-tab-${category.key}`" :key="category.key" type="button" role="tab" :aria-selected="open === category.key" :aria-controls="`settings-panel-${category.key}`" :tabindex="open === category.key ? 0 : -1" @click="selectSection(category.key)" @keydown="navigateCategory($event, index)">
           {{ t(categoryLabels[category.key]) }}<span v-if="category.key === 'update' && appUpdateAvailable" class="update-notice-dot" :aria-label="t('有新版本')" />
         </button>
       </div>
+      </Teleport>
       <div class="settings-tab-content">
         <template v-for="category in categories" :key="category.key">
         <div v-if="open === category.key" :id="`settings-panel-${category.key}`" class="settings-category-panel" role="tabpanel" :aria-labelledby="`settings-tab-${category.key}`" tabindex="0">
@@ -608,7 +611,9 @@ onMounted(initialize)
               <div v-show="dnsTab === 'fallback'" id="dns-panel-fallback" class="dns-tab-panel" role="tabpanel" aria-labelledby="dns-tab-fallback"><div class="dns-toggle-grid single"><SettingToggle v-model="network.dns.fallbackGeoip" :title="t('启用 GeoIP 过滤')" :description="t('结果不属于指定国家时采用 fallback')" @change="saveDns(180)" /></div><div class="dns-field-grid dns-fallback-fields"><div class="field full dns-country-code-row"><label for="dns-fallback-geoip-code">{{ t("GeoIP 国家代码") }}</label><input id="dns-fallback-geoip-code" v-model="network.dns.fallbackGeoipCode" maxlength="2" @change="saveDns(80)"></div><div class="field"><label for="dns-fallback-ip-cidr">{{ t("污染结果 IP CIDR") }}</label><textarea id="dns-fallback-ip-cidr" v-model="dnsText.fallbackIpCidr" class="dns-list-input mono" @change="saveDns(80)" @input="saveDns(1000)" /></div><div class="field"><label for="dns-fallback-domain">{{ t("直接使用 fallback 的域名") }}</label><textarea id="dns-fallback-domain" v-model="dnsText.fallbackDomain" class="dns-list-input mono" @change="saveDns(80)" @input="saveDns(1000)" /></div></div></div>
               <div v-show="dnsTab === 'hosts'" id="dns-panel-hosts" class="dns-tab-panel" role="tabpanel" aria-labelledby="dns-tab-hosts"><div class="field"><label for="dns-hosts">Hosts</label><textarea id="dns-hosts" v-model="dnsText.hosts" class="dns-list-input mono" placeholder="example.com = 1.1.1.1; 2.2.2.2" @change="saveDns(80)" @input="saveDns(1000)" /></div></div>
             </div>
-            <div class="dns-savebar"><div><div class="dns-autosave-state" :class="netState" role="status" aria-live="polite">{{ t(dnsStatus) }}</div><div class="hint">{{ t("开启后自动备份、校验并应用；Controller 无法恢复时由后端自动回滚。") }}</div></div><div class="actions"><a class="ghost btn small" href="#config">{{ t("查看原始配置") }}</a><button class="ghost small" @click="resetDns">{{ t("恢复默认值") }}</button></div></div>
+            <Teleport defer to="#page-footer">
+              <div class="dns-savebar"><div><div class="dns-autosave-state" :class="netState" role="status" aria-live="polite">{{ t(dnsStatus) }}</div><div class="hint">{{ t("开启后自动备份、校验并应用；Controller 无法恢复时由后端自动回滚。") }}</div></div><div class="actions"><a class="ghost btn small" href="#config">{{ t("查看原始配置") }}</a><button class="ghost small" @click="resetDns">{{ t("恢复默认值") }}</button></div></div>
+            </Teleport>
           </div>
 
           <div v-else-if="category.key === 'advanced'" class="settings-accordion-panel proxy-env-card"><div v-if="environment.error" class="local-warning">{{ t("读取系统代理环境失败：") }}{{ t(environment.error) }}</div><div class="proxy-env-manage"><div v-if="!proxyAvailable" class="local-warning">{{ t("Root Helper 不可用，当前只能查看环境变量，无法修改系统文件。") }}</div><div class="proxy-env-manage-grid"><SettingToggle v-model="proxyForm.enabled" :title="t('启用代理环境变量')" :description="t('关闭时仅移除本应用管理的配置块')" :disabled="!proxyAvailable" @change="saveEnvironment(120)" /><SettingToggle v-model="proxyForm.followMixedPort" :title="t('自动跟随 Mixed Port')" :description="t('端口变化时自动同步')" :disabled="!proxyAvailable" @change="saveEnvironment(120)" /><div class="field proxy-env-no-proxy"><label for="proxy-bypass-input">{{ t("代理绕过设置") }}</label><div class="system-proxy-bypass-editor" :class="{ disabled: !proxyAvailable }"><span v-for="(item, index) in proxyBypassItems" :key="item" class="system-proxy-bypass-tag">{{ item }}<button type="button" :aria-label="t(`移除 ${item}`)" :disabled="!proxyAvailable" @click="removeProxyBypass(index)">×</button></span><input id="proxy-bypass-input" v-model="proxyBypassInput" :disabled="!proxyAvailable" :aria-label="t('添加代理绕过地址')" :placeholder="t('输入域名、IP 或 CIDR，按回车添加')" @keydown="proxyBypassKeydown" @blur="addProxyBypass"></div><small>{{ t("保存为 NO_PROXY；多个条目会以英文逗号分隔。") }}</small></div></div><div class="proxy-env-target-title">{{ t("应用范围") }}</div><div class="proxy-env-target-grid"><SettingToggle v-model="proxyForm.targets.environment" :title="t('系统登录环境')" description="/etc/environment" :disabled="!proxyAvailable" @change="saveEnvironment(120)" /><SettingToggle v-model="proxyForm.targets.profile" :title="t('登录 Shell')" description="/etc/profile" :disabled="!proxyAvailable" @change="saveEnvironment(120)" /><SettingToggle v-model="proxyForm.targets.bashrc" :title="t('Bash 交互环境')" description="/etc/bash.bashrc" :disabled="!proxyAvailable" @change="saveEnvironment(120)" /></div><div class="hint proxy-env-manage-note">{{ t("修改前由后端自动备份原文件；关闭后只移除 Clash for fnos 管理块。新值主要对新登录会话生效。") }}</div></div><div class="proxy-env-divider"><span>{{ t("当前检测结果") }}</span></div><div class="proxy-env-files"><div v-for="file in environment.files || []" :key="file.path" class="proxy-env-source"><div class="proxy-env-source-head"><strong class="mono">{{ file.path || '--' }}</strong><span class="proxy-env-status" :class="file.variables?.length ? 'active' : ''">{{ t(!file.exists ? '不存在' : file.readable === false ? '不可读' : file.variables?.length ? '已检测到代理设置' : '未设置') }}</span></div><div v-if="file.error" class="proxy-env-error">{{ t(file.error) }}</div><div v-else class="proxy-env-vars"><div v-for="variable in file.variables || []" :key="`${variable.key}-${variable.line}`" class="proxy-env-var"><span class="mono proxy-env-key">{{ variable.key }}</span><span class="mono proxy-env-value">{{ variable.value }}</span><span v-if="variable.line" class="proxy-env-line">L{{ t(variable.line) }}</span></div><span v-if="!file.variables?.length" class="proxy-env-empty">{{ t("未设置代理环境变量") }}</span></div></div></div><div class="dns-autosave-state" :class="envState">{{ t(envMessage) }}</div></div>
@@ -618,6 +623,7 @@ onMounted(initialize)
               <button v-for="(tab, index) in coreTabs" :id="`core-tab-${tab.key}`" :key="tab.key" type="button" role="tab" :aria-selected="coreTab === tab.key" :aria-controls="`core-panel-${tab.key}`" :tabindex="coreTab === tab.key ? 0 : -1" @click="coreTab = tab.key" @keydown="navigateCoreTab($event, index)">{{ t(tab.label) }}</button>
             </div>
             <div v-show="coreTab === 'manage'" id="core-panel-manage" role="tabpanel" aria-labelledby="core-tab-manage">
+            <div class="core-status-card">
             <div class="update-row core-update-row">
               <div class="update-row-copy">
                 <h2>Mihomo Core</h2>
@@ -626,13 +632,13 @@ onMounted(initialize)
               <div class="update-row-facts" :aria-label="t('Mihomo Core 版本信息')">
                 <strong>{{ system.currentVersion || system.controllerVersion?.version || '--' }}</strong>
                 <span class="update-meta">{{ t(system.mode === 'managed' ? 'Manager 托管' : system.mode === 'external' ? '本机 Core' : '自动检测') }}</span>
-              </div>
               <div class="update-details" @mouseleave="coreDetailsOpen = false">
                 <button class="update-details-trigger" type="button" :aria-expanded="coreDetailsOpen" @click="coreDetailsOpen = !coreDetailsOpen">{{ t("查看详情") }}</button>
                 <div v-if="coreDetailsOpen" class="update-details-body">
                   <div><span>{{ t("二进制") }}</span><strong class="mono">{{ system.binaryPath || '--' }}</strong></div>
                   <div><span>{{ t("启动配置") }}</span><strong class="mono">{{ system.configPath || '--' }}</strong></div>
                 </div>
+              </div>
               </div>
               <div class="update-row-actions">
                 <button v-if="system.bootstrap?.state === 'error'" :disabled="busy === 'bootstrap'" @click="retryBootstrap">{{ t("重新检测并启用") }}</button>
@@ -654,6 +660,7 @@ onMounted(initialize)
               </div>
             </div>
 
+            </div>
             <div class="settings-accordion-subsection core-mode-section">
               <div class="core-mode-row">
                 <div class="section-head"><div><h2 id="core-mode-label">{{ t("Core 运行方式") }}</h2><p>{{ t("切换后保存选择，下次启动时沿用。") }}</p></div></div>
@@ -666,8 +673,7 @@ onMounted(initialize)
             <div v-if="coreModeError || system.bootstrap?.error" class="local-warning">{{ t(coreModeError || system.bootstrap?.error) }}</div>
             <PortConflictHelp :managed="system.mode === 'managed'" @updated="load" :error="t(coreModeError || system.bootstrap?.error || '')" />
             <div class="core-startup-preference">
-              <label class="core-check"><input v-model="manager.persistSelections" type="checkbox" @change="saveBehavior(120)"> {{ t("重启 Core 后恢复策略组选择") }}</label>
-              <p class="hint">{{ t("恢复“代理节点”页面中仍然有效的手动策略组选择。") }}</p>
+              <SettingToggle :model-value="Boolean(manager.persistSelections)" @update:model-value="manager.persistSelections = $event" :title="t('重启 Core 后恢复策略组选择')" :description="t('恢复“代理节点”页面中仍然有效的手动策略组选择。')" @change="saveBehavior(120)" />
               <div class="dns-autosave-state" :class="behaviorState">{{ t(behaviorMessage) }}</div>
             </div>
             </div>
@@ -803,7 +809,7 @@ onMounted(initialize)
 
 /* Flat category tabs and compact forms share the existing theme tokens. */
 .settings-compact { max-width: none; }
-.settings-category-tabs { display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.settings-category-tabs { display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--line); margin: 0; }
 .settings-category-tabs > button { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: 14px; box-shadow: none; white-space: nowrap; }
 .settings-category-tabs > button:hover { color: var(--text); background: var(--accent-soft); }
 .settings-category-tabs > button[aria-selected="true"] { color: var(--accent-ink); border-bottom-color: var(--accent); }
@@ -815,8 +821,11 @@ onMounted(initialize)
 .network-columns > section { min-width: 0; }
 .network-option-section { border-left: 1px solid var(--line); padding-left: 28px; }
 .network-columns h2 { margin: 0; padding: 0 0 12px; border-bottom: 1px solid var(--line); font-size: 15px; font-weight: 650; }
-.settings-compact .port-list, .settings-compact .network-options { display: flex; flex-direction: column; gap: 0; margin: 0; }
-.settings-compact :deep(.port-row), .settings-compact :deep(.setting-toggle) { min-width: 0; min-height: 64px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
+.settings-compact .port-list, .settings-compact .network-options { display: flex; flex-direction: column; gap: 12px; margin: 12px 0 0; }
+.settings-compact :deep(.port-row), .settings-compact :deep(.setting-toggle), .settings-compact .app-update-preference { min-width: 0; min-height: 76px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-inset); box-shadow: none; }
+.settings-compact :deep(.setting-toggle.disabled) { background: var(--surface-disabled); }
+.settings-compact .app-update-preference .switch { flex: none; }
+.settings-compact .app-update-preference-copy small { white-space: normal; }
 .settings-compact :deep(.port-row) { gap: 12px; }
 .settings-compact :deep(.port-row-copy) { min-width: 0; }
 .settings-compact :deep(.port-row-copy strong), .settings-compact :deep(.setting-toggle strong) { font-size: 14px; }
@@ -826,8 +835,11 @@ onMounted(initialize)
 .settings-compact :deep(.auth-setting) { order: 4; }
 .settings-compact :deep(.setting-toggle > div) { min-width: 0; }
 .settings-compact :deep(.setting-toggle > .switch) { flex: none; }
+.settings-compact .proxy-env-manage-grid,
+.settings-compact .proxy-env-target-grid { gap: 12px; }
+
 .settings-compact .port-dependency-note { margin: 0 0 16px; }
-.settings-compact .dns-toggle-grid, .settings-compact .tun-option-grid { column-gap: 28px; row-gap: 0; }
+.settings-compact .dns-toggle-grid, .settings-compact .tun-option-grid { gap: 12px; }
 .settings-compact .core-tabs, .settings-compact .dns-tabs { padding: 0 0 12px; }
 @media (max-width: 1100px) {
   .network-columns { gap: 20px; }
@@ -840,7 +852,6 @@ onMounted(initialize)
   .settings-compact :deep(.port-row) { grid-template-columns: minmax(0, 1fr) auto; }
   .settings-compact :deep(.port-input) { width: 72px !important; }
   .network-option-section { border-left: 0; padding-left: 0; }
-  .settings-category-tabs { margin-bottom: 16px; }
   .settings-category-tabs > button { font-size: 13px; }
   .settings-compact .dns-toggle-grid, .settings-compact .tun-option-grid { grid-template-columns: minmax(0, 1fr); }
 }
@@ -908,4 +919,20 @@ onMounted(initialize)
 
 /* A label that wraps its control stays a .field column so spacing matches sibling fields. */
 .field > label.field-control-label { display: flex; flex-direction: column; gap: inherit; }
+/* Group Core status/actions separately from persistent startup choices. */
+.settings-compact #core-settings #core-panel-manage { display: flex; flex-direction: column; gap: 14px; }
+.settings-compact #core-settings .core-status-card,
+.settings-compact #core-settings .core-mode-section { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-inset); }
+.settings-compact #core-settings .core-update-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "copy actions" "facts actions"; gap: 8px 20px; min-height: 0; padding: 0; border: 0; }
+.settings-compact #core-settings .core-update-row .update-row-copy { grid-area: copy; }
+.settings-compact #core-settings .core-update-row .update-row-copy p { margin: 4px 0 0; }
+.settings-compact #core-settings .core-update-row .update-row-facts { grid-area: facts; justify-content: flex-start; }
+.settings-compact #core-settings .core-update-row .update-row-actions { grid-area: actions; margin-left: 0; align-self: center; }
+.settings-compact #core-settings .core-mode-section .core-startup-preference { margin-top: 14px; }
+.settings-compact #core-settings .core-mode-section .core-startup-preference > .dns-autosave-state:empty { display: none; }
+@media (max-width: 720px) {
+  .settings-compact #core-settings .core-update-row { grid-template-columns: minmax(0, 1fr); grid-template-areas: "copy" "facts" "actions"; gap: 12px; }
+  .settings-compact #core-settings .core-update-row .update-row-actions { justify-content: flex-start; }
+}
+
 </style>

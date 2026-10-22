@@ -624,14 +624,16 @@ html[data-theme="light"] .app-icon-choice.active{background:#f4fbf7;border-color
 .dns-fallback-fields{margin-top:16px}.dns-country-code-row{display:flex;flex-direction:row;align-items:center;gap:12px;min-height:38px}.dns-country-code-row label{flex:none;margin:0}.dns-country-code-row input{flex:none;width:120px;max-width:120px}
 .dns-toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}.dns-toggle-grid.single{grid-template-columns:1fr}.dns-toggle-grid>.setting-toggle{min-height:70px}
 .dns-list-input{min-height:92px;resize:vertical;line-height:1.5}.dns-tab-panel .field small{color:var(--muted);font-size:var(--text-xs);line-height:1.45}
-.dns-savebar{position:sticky;z-index:4;bottom:0;margin:14px -20px 0;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid var(--line);border-radius:0 0 13px 13px;background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(12px)}
+.page-footer{flex:none;min-width:0;overflow:hidden;border-radius:0 0 var(--window-radius) var(--window-radius)}
+.page-footer:empty{display:none}
+.dns-savebar{padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid var(--line);background:var(--panel)}
 .dns-savebar>div:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}.dns-savebar .hint{max-width:660px;line-height:1.5}.dns-autosave-state{font-size:11px;font-weight:700;color:var(--muted)}.dns-autosave-state.pending,.dns-autosave-state.saving{color:var(--warn)}.dns-autosave-state.saved{color:var(--good)}.dns-autosave-state.error{color:var(--bad)}
 html[data-theme="light"] .dns-overview{background:#f6f8ff}html[data-theme="light"] .dns-settings-panel.dns-on .dns-overview{background:#f3fbf6}
 html[data-theme="light"] .dns-tab-panel{background:#fff}
 html[data-theme="light"] .dns-tabs button{border-color:#d5dae2}
-html[data-theme="light"] .dns-savebar{background:rgba(255,255,255,.94)}
+html[data-theme="light"] .dns-savebar{background:var(--panel)}
 @media(max-width:900px){.dns-field-grid,.dns-text-grid,.dns-toggle-grid{grid-template-columns:1fr}.dns-field-grid .field.full{grid-column:auto}.dns-savebar{align-items:flex-start;flex-direction:column}.dns-savebar .actions{width:100%}}
-@media(max-width:720px){.dns-overview{align-items:flex-start}.dns-tabs{margin-right:-14px;padding-right:14px}.dns-savebar{margin:14px -14px 0;padding:12px 14px}.dns-savebar .actions button{flex:1}}
+@media(max-width:720px){.dns-overview{align-items:flex-start}.dns-tabs{margin-right:-14px;padding-right:14px}.dns-savebar{padding:12px 14px}.dns-savebar .actions button{flex:1}}
 
 /* Log filters share the existing toolbar and wrap within narrow windows. */
 .topbar:has(.log-tools){flex-wrap:nowrap;gap:14px;height:46px}

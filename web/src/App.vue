@@ -186,7 +186,7 @@ onBeforeUnmount(() => {
       <span v-if="appUpdateAvailable" class="sidebar-update-notice" role="status"><span class="update-notice-dot" aria-hidden="true" />{{ t("有新版本") }}</span>
     </div>
   </aside>
-  <main class="main">
+  <main class="main" :class="{ 'settings-page': current === 'settings' }">
     <header class="topbar">
       <div class="topbar-title"><h1 ref="pageTitleRef" tabindex="-1">{{ t(activePage.label) }}</h1><div id="page-title-meta" class="page-title-meta" /></div>
       <div class="top-actions">
@@ -196,9 +196,11 @@ onBeforeUnmount(() => {
         <button class="ghost page-refresh" :disabled="pageRefreshing" :aria-busy="pageRefreshing" @click="refreshActivePage"><RefreshCw :size="14" :stroke-width="1.8" aria-hidden="true" /><span>{{ t(pageRefreshing ? '刷新中…' : '刷新') }}</span></button>
       </div>
     </header>
+    <div id="page-navigation" class="page-navigation" />
     <section ref="contentRef" class="content" :class="{ 'config-content': current === 'config', 'logs-content': current === 'logs', 'rules-content': current === 'rules' }" @scroll.passive="markScrollActivity">
       <component :is="activePage.component" :key="`${current}-${refreshKey}`" ref="activePageRef" />
     </section>
+    <div id="page-footer" class="page-footer" />
   </main>
   <ToastHost />
 </template>

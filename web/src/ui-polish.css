@@ -5,6 +5,12 @@ html[data-theme="light"] .main { background: var(--bg); }
 html[data-theme="light"] .sidebar { background: #fff; }
 html[data-theme="light"] .topbar { background: var(--panel); }
 
+/* Settings keep a distinct opaque canvas inside the outer window frame. */
+.main.settings-page, html[data-theme="light"] .main.settings-page { background: var(--panel); }
+.page-navigation { flex: none; min-width: 0; padding: 0 24px; background: var(--panel); }
+.page-navigation:empty { display: none; }
+@media (max-width: 680px) { .page-navigation { padding: 0 14px; } }
+
 /* Readable text keeps controls compact without relying on tiny labels. */
 .node-name,.proxy-current strong,.profile-name,.port-row-copy strong,.setting-toggle strong { font-size: 13px; }
 .node-type { font-size: 11px; line-height: 15px; }
@@ -478,7 +484,7 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
 .port-row-copy strong { font-size: var(--text-base); font-weight: 600; }
 .port-row-copy span { font-size: var(--text-sm); color: var(--muted); }
 .port-input { height: 36px !important; font-size: var(--text-base); }
-.setting-toggle, html[data-theme="light"] .setting-toggle { min-height: 66px; padding: 12px 14px; border-radius: 12px; background: var(--panel); border-color: var(--line); }
+.setting-toggle, html[data-theme="light"] .setting-toggle { min-height: 76px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-inset); gap: 16px; }
 .setting-toggle strong { font-size: var(--text-base); font-weight: 600; }
 .setting-toggle>div>span { font-size: var(--text-sm); color: var(--muted); }
 .field label { font-size: var(--text-sm); font-weight: 500; color: var(--muted); }
