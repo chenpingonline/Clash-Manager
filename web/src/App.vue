@@ -14,6 +14,7 @@ import RulesPage from '@/pages/RulesPage.vue'
 import ConnectionsPage from '@/pages/ConnectionsPage.vue'
 import LogsPage from '@/pages/LogsPage.vue'
 import SettingsPage from '@/pages/SettingsPage.vue'
+import BypassPage from '@/pages/BypassPage.vue'
 import { useCoreHealth } from '@/composables/useCoreHealth'
 import { useAppUpdateNotice } from '@/composables/useAppUpdateNotice'
 import { useFnosTheme } from '@/composables/useFnosTheme'
@@ -23,7 +24,7 @@ import type { AppIconsResponse } from '@/types/api'
 
 import { appDisplayName, runtime, setDocumentTitle } from '@/services/runtime'
 
-type PageName = 'dashboard' | 'proxies' | 'profiles' | 'config' | 'rules' | 'connections' | 'logs' | 'settings'
+type PageName = 'dashboard' | 'proxies' | 'profiles' | 'config' | 'rules' | 'connections' | 'logs' | 'settings' | 'bypass'
 const pages: Array<{ name: PageName; label: string; component: Component }> = [
   { name: 'dashboard', label: '仪表盘', component: DashboardPage },
   { name: 'proxies', label: '代理节点', component: ProxiesPage },
@@ -32,6 +33,7 @@ const pages: Array<{ name: PageName; label: string; component: Component }> = [
   { name: 'rules', label: '规则', component: RulesPage },
   { name: 'connections', label: '连接', component: ConnectionsPage },
   { name: 'logs', label: '日志', component: LogsPage },
+  { name: 'bypass', label: '旁路由检查', component: BypassPage },
   { name: 'settings', label: '设置', component: SettingsPage },
 ]
 

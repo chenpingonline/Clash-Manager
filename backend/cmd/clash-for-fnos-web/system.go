@@ -30,6 +30,8 @@ func (g *gateway) helperJSON(ctx context.Context, method, apiPath string, payloa
 
 func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, requestPath string) bool {
 	switch {
+	case requestPath == "/api/network/bypass" && r.Method == http.MethodGet:
+		g.forwardHelper(w, r, http.MethodGet, "/network/bypass", nil, 5*time.Second)
 	case requestPath == "/api/app/icons" && r.Method == http.MethodGet:
 		g.forwardHelper(w, r, http.MethodGet, "/app/icon/status", nil, 10*time.Second)
 	case requestPath == "/api/app/icon" && r.Method == http.MethodPut:

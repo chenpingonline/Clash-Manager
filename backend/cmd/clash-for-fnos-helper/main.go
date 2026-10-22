@@ -129,6 +129,8 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			result, err = h.proxyGroupOrder()
 		case "/config/active-raw":
 			result, err = h.activeRaw()
+		case "/network/bypass":
+			result = h.bypassMonitor(r.Context())
 		case "/network/status":
 			result, err = h.networkStatus(r.Context())
 		case "/geo/status":
