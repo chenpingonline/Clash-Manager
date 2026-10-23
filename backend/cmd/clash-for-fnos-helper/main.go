@@ -346,7 +346,7 @@ func run() error {
 	}
 	go h.maintainCoreLogs(ctx)
 	go func() {
-		_, err := h.bootstrapAfterPackageUpgrade(ctx)
+		err := h.restoreStartup(ctx, []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 15 * time.Second})
 		if err != nil {
 			log.Printf("Mihomo bootstrap failed: %v", err)
 		}

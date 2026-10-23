@@ -362,6 +362,7 @@ func (h *helper) startManaged() (*processInfo, error) {
 			}
 		}
 		if time.Now().After(deadline) {
+			terminateManagedPID(cmd.Process.Pid, time.Second)
 			return nil, fmt.Errorf("托管 Core 已启动，但 Controller 在 8 秒内未就绪，请检查监听地址、端口及日志 %s", h.config.managedLog)
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -429,6 +430,9 @@ func (h *helper) stopCore(ctx context.Context) (map[string]any, error) {
 	if h.readMode() != "managed" {
 		return nil, fail(409, "外部 Core 请通过原有服务停止")
 	}
+	if err := h.saveRunIntent(false); err != nil {
+		return nil, err
+	}
 	proc := h.primary()
 	h.stopManagedLocked()
 	if proc != nil {
@@ -449,6 +453,8 @@ func (h *helper) stopCore(ctx context.Context) (map[string]any, error) {
 }
 
 func (h *helper) restartManaged(ctx context.Context) (map[string]any, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	proc := h.primary()
 	if proc != nil && !proc.Managed {
 		return nil, fail(409, "当前不是 Manager 托管的 Mihomo Core，不能自动重启")
@@ -456,8 +462,11 @@ func (h *helper) restartManaged(ctx context.Context) (map[string]any, error) {
 	if proc == nil && h.readMode() != "managed" {
 		return nil, fail(409, "当前没有可重启的 Manager 托管 Mihomo Core")
 	}
+	if err := h.saveRunIntent(true); err != nil {
+		return nil, err
+	}
 	if proc != nil {
-		h.stopManaged()
+		h.stopManagedLocked()
 		deadline := time.Now().Add(1500 * time.Millisecond)
 		for syscall.Kill(proc.PID, 0) == nil {
 			if time.Now().After(deadline) {
@@ -568,6 +577,23 @@ func (h *helper) ensureBootstrapLocked(ctx context.Context, force bool, requeste
 			h.setBootstrap(failure)
 		}
 	}()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if force && requested != "external" && (requested == "managed" || h.readMode() == "managed") {
+		if err := h.saveRunIntent(true); err != nil {
+			return nil, err
+		}
+	}
+	if !force && h.readMode() == "managed" {
+		run, err := h.loadRunIntent()
+		if err != nil {
+			return nil, err
+		}
+		if !run {
+			return h.stoppedBootstrap(), nil
+		}
+	}
 	h.setBootstrap(map[string]any{"state": "checking", "message": "正在检测 Mihomo Core", "progress": 10, "delivery": "bundled"})
 	external := (*processInfo)(nil)
 	managed := (*processInfo)(nil)
@@ -632,6 +658,9 @@ func (h *helper) ensureBootstrapLocked(ctx context.Context, force bool, requeste
 			}
 		}
 		h.setBootstrap(map[string]any{"state": "starting", "mode": "managed", "message": "正在启动 Mihomo Core", "progress": 0, "delivery": delivery})
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		proc, err := h.startManaged()
 		if err != nil {
 			return nil, err

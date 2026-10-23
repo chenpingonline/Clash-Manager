@@ -94,6 +94,19 @@ func bundledVersionNewer(bundled, current string) (bool, error) {
 func (h *helper) bootstrapAfterPackageUpgrade(ctx context.Context) (map[string]any, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if h.readMode() == "managed" {
+		run, err := h.loadRunIntent()
+		if err != nil {
+			h.setBootstrap(map[string]any{"state": "error", "mode": "managed", "message": "无法读取内核运行状态", "error": err.Error(), "progress": 0})
+			return nil, err
+		}
+		if !run {
+			return h.stoppedBootstrap(), nil
+		}
+	}
 	backup, upgradeErr := h.upgradeBundledLocked(ctx)
 	if upgradeErr != nil {
 		log.Printf("Package bundled Core upgrade skipped/failed: %v", upgradeErr)
