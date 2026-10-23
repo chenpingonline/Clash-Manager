@@ -593,3 +593,12 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
   .dashboard-metrics>div { padding: 12px 10px; }
   .dashboard-location-grid>div { padding: 0 12px; }
 }
+
+/* Let settings search keep its dropdown outside the header on small screens. */
+.settings-page .topbar-title { flex: 1; align-items: center; }
+.settings-page .page-title-meta { flex: 1; }
+@media (max-width: 680px) {
+  .settings-page .topbar { height: auto; min-height: 56px; flex-wrap: wrap; padding-block: 10px; gap: 10px; }
+  .settings-page .topbar-title { flex-basis: 100%; }
+  .settings-page .top-actions { margin-left: auto; }
+}

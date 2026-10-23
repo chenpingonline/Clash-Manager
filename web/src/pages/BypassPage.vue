@@ -105,7 +105,7 @@ defineExpose({ refreshPage: load })
       </div>
       <p v-if="host?.neighborStatus !== 'available'" class="muted">{{ t('邻居表不可读取，当前仅展示连接来源和本页会话记录。') }}</p>
       <p v-if="connectionError" class="warn-text" role="alert">{{ t('连接数据不可用，当前接管状态待验证。') }}</p>
-      <div class="monitor-table"><table><thead><tr><th>{{ t('设备 IP') }}</th><th>{{ t('连接状态') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('操作') }}</th></tr></thead><tbody><tr v-for="device in visibleDevices" :key="device.ip"><td><strong>{{ device.ip }}</strong><small v-if="isContainerInterface(device.interface)">{{ t('容器网络') }}</small></td><td><span class="tag connection-state" :class="{ connected: !connectionError && device.recentTraffic }">{{ connectionError ? '—' : t(device.recentTraffic ? '已连接' : '未连接') }}</span></td><td>{{ connectionError ? '—' : device.count }}</td><td>{{ connectionError ? '—' : `↑ ${formatBytes(device.upload)}` }}<small v-if="!connectionError">↓ {{ formatBytes(device.download) }}</small></td><td><button type="button" class="ghost" aria-haspopup="dialog" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr><tr v-if="!visibleDevices.length"><td colspan="5" class="device-empty" role="status">{{ t(connectionError ? '连接数据不可用，当前接管状态待验证。' : onlyConnected ? '暂无已连接设备，可取消筛选查看全部设备。' : '尚未发现其他局域网设备。请让设备发起访问后刷新；空列表不代表不支持旁路由。') }}</td></tr></tbody></table></div>
+      <div class="monitor-table"><table><thead><tr><th>{{ t('设备 IP') }}</th><th>{{ t('连接状态') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('操作') }}</th></tr></thead><tbody><tr v-for="device in visibleDevices" :key="device.ip"><td><strong>{{ device.ip }}</strong><small v-if="isContainerInterface(device.interface)">{{ t('容器网络') }}</small></td><td><span class="tag connection-state" :class="{ connected: !connectionError && device.recentTraffic }">{{ connectionError ? '—' : t(device.recentTraffic ? '已连接' : '未连接') }}</span></td><td>{{ connectionError ? '—' : device.count }}</td><td><span v-if="connectionError">—</span><span v-else class="device-traffic"><span>↑ {{ formatBytes(device.upload) }}</span><span class="device-download">↓ {{ formatBytes(device.download) }}</span></span></td><td><button type="button" class="ghost device-details-button" aria-haspopup="dialog" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr><tr v-if="!visibleDevices.length"><td colspan="5" class="device-empty" role="status">{{ t(connectionError ? '连接数据不可用，当前接管状态待验证。' : onlyConnected ? '暂无已连接设备，可取消筛选查看全部设备。' : '尚未发现其他局域网设备。请让设备发起访问后刷新；空列表不代表不支持旁路由。') }}</td></tr></tbody></table></div>
       <details class="device-help"><summary>{{ t('设备列表说明') }}</summary>
       <p class="muted">{{ t('每 10 秒刷新，仅代表当前可见连接；不会修改网络设置。') }}</p>
       <p class="muted">{{ t('最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或已由 TUN 接管。') }}</p>
@@ -171,6 +171,9 @@ summary { cursor:pointer;font-weight:600;padding:2px 0; }
 .diagnostic-hints[open] summary span { display:none; }
 .diagnostic-hints p { margin:6px 0;font-size:13px; }
 .monitor-table button { white-space:nowrap; }
+.device-traffic { display:inline-flex;align-items:center;gap:12px;white-space:nowrap;font-variant-numeric:tabular-nums; }
+.device-download { color:var(--muted); }
+.monitor-table .device-details-button { min-height:26px;padding:3px 9px;border-radius:6px;font-size:12px;font-weight:500;line-height:18px; }
 .bypass-monitor { display: grid; gap: 10px; }
 .monitor-details { padding:12px 16px;min-width:0; }
 .monitor-checks, .monitor-guide { min-width:0;font-size:13px; }
@@ -182,7 +185,7 @@ summary { cursor:pointer;font-weight:600;padding:2px 0; }
 .monitor-table .device-empty { padding:28px 16px;text-align:center;color:var(--muted); }
 .monitor-details a, .monitor-devices>a { color:var(--accent);font-size:12px;text-decoration:none; }
 .monitor-details a:hover, .monitor-devices>a:hover { text-decoration:underline; }
-.monitor-devices { padding:12px 16px; }
+.monitor-devices { min-width:0;padding:12px 16px; }
 .monitor-summary span, .monitor-summary small { color:var(--muted); }
 .check-list { margin:4px 0 10px; }
 .check-list > div { display:grid;grid-template-columns:minmax(140px,1fr) 2fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--line); }

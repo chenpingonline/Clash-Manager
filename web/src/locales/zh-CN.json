@@ -1937,5 +1937,22 @@
   "最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或已由 TUN 接管。": "最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或已由 TUN 接管。",
   "默认网关": "默认网关",
   "确认 NAS DNS 可用后再填写": "确认 NAS DNS 可用后再填写",
-  "访问网站后，在设备详情中查看 TUN 连接。": "访问网站后，在设备详情中查看 TUN 连接。"
+  "访问网站后，在设备详情中查看 TUN 连接。": "访问网站后，在设备详情中查看 TUN 连接。",
+  "搜索设置": "搜索设置",
+  "搜索设置…": "搜索设置…",
+  "找到 {arg0} 项设置": "找到 {arg0} 项设置",
+  "未找到相关设置": "未找到相关设置",
+  "搜索结果": "搜索结果",
+  "试试其他名称或参数名，如 DNS、端口、MTU": "试试其他名称或参数名，如 DNS、端口、MTU",
+  "bind-address allow-lan 局域网": "bind-address allow-lan 局域网",
+  "内核 更新 停止 重启 core": "内核 更新 停止 重启 core",
+  "managed external 托管 外部": "managed external 托管 外部",
+  "Controller Secret 自动检测": "Controller Secret 自动检测",
+  "healthcheck URL 延迟 测速": "healthcheck URL 延迟 测速",
+  "timeout 延迟 测速": "timeout 延迟 测速",
+  "GeoIP GeoSite MMDB ASN 自动更新 周期": "GeoIP GeoSite MMDB ASN 自动更新 周期",
+  "启用 虚拟网卡": "启用 虚拟网卡",
+  "stack mips mixed system gvisor 拥塞控制 bbr": "stack mips mixed system gvisor 拥塞控制 bbr",
+  "icon 外观": "icon 外观",
+  "版本 应用 更新 通知": "版本 应用 更新 通知"
 }

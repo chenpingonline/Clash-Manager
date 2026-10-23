@@ -1937,5 +1937,22 @@
   "最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或已由 TUN 接管。": "Connected means upload or download increased within the last 60 seconds; otherwise Disconnected is shown. The first sample only establishes a baseline. This does not indicate device availability or TUN routing.",
   "默认网关": "Default gateway",
   "确认 NAS DNS 可用后再填写": "Use the NAS address only after verifying its DNS service",
-  "访问网站后，在设备详情中查看 TUN 连接。": "Visit a website, then check TUN connections in device details."
+  "访问网站后，在设备详情中查看 TUN 连接。": "Visit a website, then check TUN connections in device details.",
+  "搜索设置": "Search settings",
+  "搜索设置…": "Search settings…",
+  "找到 {arg0} 项设置": "Found {arg0} settings",
+  "未找到相关设置": "No matching settings",
+  "搜索结果": "Search results",
+  "试试其他名称或参数名，如 DNS、端口、MTU": "Try another name or parameter, such as DNS, port or MTU",
+  "bind-address allow-lan 局域网": "bind-address allow-lan LAN",
+  "内核 更新 停止 重启 core": "kernel update stop restart core",
+  "managed external 托管 外部": "managed external",
+  "Controller Secret 自动检测": "Controller Secret auto detection",
+  "healthcheck URL 延迟 测速": "healthcheck URL delay latency",
+  "timeout 延迟 测速": "timeout delay latency",
+  "GeoIP GeoSite MMDB ASN 自动更新 周期": "GeoIP GeoSite MMDB ASN auto update interval",
+  "启用 虚拟网卡": "enable virtual interface",
+  "stack mips mixed system gvisor 拥塞控制 bbr": "stack mips mixed system gvisor congestion control bbr",
+  "icon 外观": "icon appearance",
+  "版本 应用 更新 通知": "version application update notification"
 }

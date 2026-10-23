@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { Languages } from 'lucide-vue-next'
 import AppSelect from '@/components/AppSelect.vue'
 import { languagePreference, setLanguage, t, type LanguagePreference } from '@/services/i18n'
 function change(value: LanguagePreference) { setLanguage(value) }
 </script>
 <template>
   <label class="language-select">
-    <span>{{ t('界面语言') }}</span>
+    <Languages :size="15" aria-hidden="true" />
     <AppSelect :model-value="languagePreference" :aria-label="t('界面语言')" @change="change" :options="[{ value: 'system', label: (t('跟随系统')) }, { value: 'zh-CN', label: '简体中文' }, { value: 'en-US', label: 'English' }]" />
   </label>
 </template>
