@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bucketTrafficSamples, compactUTCOffset, formatQuotaPercent, isManualProxyGroup, listeningPorts, memorySample, orderedProxyGroups, profileSource, stabilizeTrafficScale, subscriptionQuota, trafficCurveSegment, trafficSampleIndexAtTime, trafficScaleMaximum, trafficTooltipLeft } from './dashboard'
+import { bucketTrafficSamples, compactUTCOffset, formatQuotaPercent, isManualProxyGroup, listeningPorts, memorySample, orderedProxyGroups, profileSource, stabilizeTrafficScale, subscriptionQuota, trafficCurveSegments, trafficSampleIndexAtTime, trafficScaleMaximum, trafficTooltipLeft } from './dashboard'
 
 describe('dashboard presentation data', () => {
   it('reapplies manual groups without pinning automatic groups on reopening', () => {
@@ -80,12 +80,29 @@ describe('dashboard presentation data', () => {
     expect(trafficTooltipLeft(20, 160)).toBe(8)
   })
 
-  it('keeps every smoothed traffic segment anchored to the real sample', () => {
-    expect(trafficCurveSegment({ x: 10, y: 80 }, { x: 30, y: 20 })).toEqual({
-      control1: { x: 20, y: 80 },
-      control2: { x: 20, y: 20 },
-      end: { x: 30, y: 20 },
+  it('keeps a steady slope straight instead of flattening at every sample', () => {
+    const segments = trafficCurveSegments([{ x: 0, y: 0 }, { x: 3, y: 6 }, { x: 6, y: 12 }])
+    expect(segments[0]).toEqual({ control1: { x: 1, y: 2 }, control2: { x: 2, y: 4 }, end: { x: 3, y: 6 } })
+    expect(segments[1]).toEqual({ control1: { x: 4, y: 8 }, control2: { x: 5, y: 10 }, end: { x: 6, y: 12 } })
+  })
+
+  it('preserves samples, continuous slopes and bounds across peaks and uneven spacing', () => {
+    const points = [{ x: 0, y: 0 }, { x: 1, y: 10 }, { x: 7, y: 12 }, { x: 8, y: 2 }, { x: 11, y: 2 }, { x: 12, y: 20 }]
+    const segments = trafficCurveSegments(points)
+    segments.forEach((segment, index) => {
+      const start = points[index]!, end = points[index + 1]!
+      expect(segment.end).toEqual(end)
+      for (let step = 0; step <= 100; step++) {
+        const t = step / 100, u = 1 - t
+        const y = u ** 3 * start.y + 3 * u ** 2 * t * segment.control1.y + 3 * u * t ** 2 * segment.control2.y + t ** 3 * end.y
+        expect(y).toBeGreaterThanOrEqual(Math.min(start.y, end.y) - 1e-9)
+        expect(y).toBeLessThanOrEqual(Math.max(start.y, end.y) + 1e-9)
+      }
+      const next = segments[index + 1]
+      if (next) expect((end.y - segment.control2.y) / (end.x - segment.control2.x)).toBeCloseTo((next.control1.y - end.y) / (next.control1.x - end.x))
     })
+    expect(trafficCurveSegments([])).toEqual([])
+    expect(trafficCurveSegments([{ x: 0, y: 1 }])).toEqual([])
   })
 
   it('expands the traffic scale immediately but delays a large shrink', () => {

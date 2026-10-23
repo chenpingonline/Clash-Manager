@@ -118,14 +118,29 @@ export function trafficTooltipLeft(cursorX: number, chartWidth: number, tooltipW
 
 export interface TrafficChartPoint { x: number; y: number }
 
-/** Build a smooth segment that ends exactly on the real sample without overshooting its value. */
-export function trafficCurveSegment(previous: TrafficChartPoint, current: TrafficChartPoint) {
-  const middleX = previous.x + (current.x - previous.x) / 2
-  return {
-    control1: { x: middleX, y: previous.y },
-    control2: { x: middleX, y: current.y },
-    end: current,
-  }
+/** Monotone Hermite segments: shared tangents preserve samples without introducing peaks. */
+export function trafficCurveSegments(points: TrafficChartPoint[]) {
+  const slopes = points.slice(1).map((point, index) => {
+    const previous = points[index]!
+    return point.x > previous.x ? (point.y - previous.y) / (point.x - previous.x) : 0
+  })
+  const tangents = points.map((_, index) => {
+    if (index === 0) return slopes[0] || 0
+    if (index === points.length - 1) return slopes[index - 1] || 0
+    const left = slopes[index - 1]!, right = slopes[index]!
+    if (left * right <= 0) return 0
+    // Limit both handles to their segment's value range, including uneven sample spacing.
+    return Math.sign(left) * Math.min(Math.abs((left + right) / 2), 2 * Math.abs(left), 2 * Math.abs(right))
+  })
+  return points.slice(1).map((current, index) => {
+    const previous = points[index]!
+    const third = (current.x - previous.x) / 3
+    return {
+      control1: { x: previous.x + third, y: previous.y + tangents[index]! * third },
+      control2: { x: current.x - third, y: current.y - tangents[index + 1]! * third },
+      end: current,
+    }
+  })
 }
 
 /** Keep completed history stable by anchoring every aggregate to an absolute time bucket. */

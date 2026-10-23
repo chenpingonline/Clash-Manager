@@ -7,6 +7,7 @@ import { bypassInventory, isContainerInterface, type InventoryDevice, type Monit
 import BypassDeviceDetails from '@/components/BypassDeviceDetails.vue'
 import SequenceFormDialog from '@/components/SequenceFormDialog.vue'
 import AppSelect from '@/components/AppSelect.vue'
+import HelpPopover from '@/components/HelpPopover.vue'
 
 const host = ref<MonitorHost | null>(null)
 const runtimeTun = ref<boolean | null>(null)
@@ -20,6 +21,18 @@ const devices = ref<InventoryDevice[]>([])
 const selectedDevice = ref('')
 const showContainers = ref(false)
 const onlyConnected = ref(true)
+const detailTabs = [{ key: 'checks', label: '基础检查' }, { key: 'guide', label: '设备接入' }] as const
+const detailTab = ref<(typeof detailTabs)[number]['key']>('checks')
+function navigateDetailTab(event: KeyboardEvent, index: number) {
+  let next = index
+  if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') next = (index + 1) % detailTabs.length
+  else if (event.key === 'Home') next = 0
+  else if (event.key === 'End') next = detailTabs.length - 1
+  else return
+  event.preventDefault()
+  detailTab.value = detailTabs[next]!.key
+  document.getElementById(`bypass-tab-${detailTab.value}`)?.focus()
+}
 const lanDevices = computed(() => devices.value.filter(device => !isContainerInterface(device.interface)))
 const containerCount = computed(() => devices.value.length - lanDevices.value.length)
 const visibleDevices = computed(() => (showContainers.value ? devices.value : lanDevices.value)
@@ -92,8 +105,7 @@ defineExpose({ refreshPage: load })
       </div>
       <p v-if="host?.neighborStatus !== 'available'" class="muted">{{ t('邻居表不可读取，当前仅展示连接来源和本页会话记录。') }}</p>
       <p v-if="connectionError" class="warn-text" role="alert">{{ t('连接数据不可用，当前接管状态待验证。') }}</p>
-      <div v-if="visibleDevices.length" class="monitor-table"><table><thead><tr><th>{{ t('设备 IP') }}</th><th>{{ t('连接状态') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('操作') }}</th></tr></thead><tbody><tr v-for="device in visibleDevices" :key="device.ip"><td><strong>{{ device.ip }}</strong><small v-if="isContainerInterface(device.interface)">{{ t('容器网络') }}</small></td><td><span class="tag connection-state" :class="{ connected: !connectionError && device.recentTraffic }">{{ connectionError ? '—' : t(device.recentTraffic ? '已连接' : '未连接') }}</span></td><td>{{ connectionError ? '—' : device.count }}</td><td>{{ connectionError ? '—' : `↑ ${formatBytes(device.upload)}` }}<small v-if="!connectionError">↓ {{ formatBytes(device.download) }}</small></td><td><button type="button" class="ghost" aria-haspopup="dialog" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr></tbody></table></div>
-      <p v-else class="muted">{{ t(connectionError ? '连接数据不可用，当前接管状态待验证。' : onlyConnected ? '暂无已连接设备，可取消筛选查看全部设备。' : '尚未发现其他局域网设备。请让设备发起访问后刷新；空列表不代表不支持旁路由。') }}</p>
+      <div class="monitor-table"><table><thead><tr><th>{{ t('设备 IP') }}</th><th>{{ t('连接状态') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('操作') }}</th></tr></thead><tbody><tr v-for="device in visibleDevices" :key="device.ip"><td><strong>{{ device.ip }}</strong><small v-if="isContainerInterface(device.interface)">{{ t('容器网络') }}</small></td><td><span class="tag connection-state" :class="{ connected: !connectionError && device.recentTraffic }">{{ connectionError ? '—' : t(device.recentTraffic ? '已连接' : '未连接') }}</span></td><td>{{ connectionError ? '—' : device.count }}</td><td>{{ connectionError ? '—' : `↑ ${formatBytes(device.upload)}` }}<small v-if="!connectionError">↓ {{ formatBytes(device.download) }}</small></td><td><button type="button" class="ghost" aria-haspopup="dialog" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr><tr v-if="!visibleDevices.length"><td colspan="5" class="device-empty" role="status">{{ t(connectionError ? '连接数据不可用，当前接管状态待验证。' : onlyConnected ? '暂无已连接设备，可取消筛选查看全部设备。' : '尚未发现其他局域网设备。请让设备发起访问后刷新；空列表不代表不支持旁路由。') }}</td></tr></tbody></table></div>
       <details class="device-help"><summary>{{ t('设备列表说明') }}</summary>
       <p class="muted">{{ t('每 10 秒刷新，仅代表当前可见连接；不会修改网络设置。') }}</p>
       <p class="muted">{{ t('最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或已由 TUN 接管。') }}</p>
@@ -104,8 +116,11 @@ defineExpose({ refreshPage: load })
     <SequenceFormDialog :open="!!activeDevice" :title="`${t('设备诊断')} · ${activeDevice?.ip || ''}`" hide-footer wide @close="selectedDevice = ''">
       <BypassDeviceDetails v-if="activeDevice" :key="activeDevice.ip" :ip="activeDevice.ip" :device="activeDevice" :connections="connections" :traffic-available="!connectionError" />
     </SequenceFormDialog>
-    <details class="card monitor-checks">
-      <summary>{{ t('基础检查与配置') }}</summary>
+    <section class="card monitor-details">
+      <div class="detail-tabs" role="tablist" :aria-label="t('旁路由检查')">
+        <button v-for="(tab, index) in detailTabs" :id="`bypass-tab-${tab.key}`" :key="tab.key" type="button" role="tab" :aria-selected="detailTab === tab.key" :aria-controls="`bypass-panel-${tab.key}`" :tabindex="detailTab === tab.key ? 0 : -1" @click="detailTab = tab.key" @keydown="navigateDetailTab($event, index)">{{ t(tab.label) }}</button>
+      </div>
+      <div v-show="detailTab === 'checks'" id="bypass-panel-checks" class="monitor-checks" role="tabpanel" aria-labelledby="bypass-tab-checks" tabindex="0">
 
       <dl class="check-list">
         <div><dt>{{ t('TUN 配置') }}</dt><dd>{{ t(boolLabel(config?.tun)) }}</dd></div>
@@ -122,14 +137,17 @@ defineExpose({ refreshPage: load })
       <p v-else-if="host?.configError" class="muted">{{ t('启动配置不可读取或格式无效，配置项显示为待验证。') }}</p>
       <p class="muted">{{ t('未显式配置的选项显示为待验证。规则数量不代表放行或拦截结果，也不表示必须额外添加 NAT。') }}</p>
       <a href="#settings">{{ t('前往设置检查 TUN 与 DNS') }}</a>
-    </details>
-    <details class="card monitor-guide"><summary>{{ t('设备接入与验证') }}</summary>
+      </div>
+      <div v-show="detailTab === 'guide'" id="bypass-panel-guide" class="monitor-guide" role="tabpanel" aria-labelledby="bypass-tab-guide" tabindex="0">
       <div v-if="lanInterfaces.length" class="guide-interface"><span>{{ t('接入网卡') }}</span><AppSelect v-model="selected" :label="t('接入网卡')" :options="lanInterfaces.map(i => ({ value: `${i.name}/${i.address}`, label: `${i.name} · ${i.address}` }))" /></div>
-      <p>{{ t('设备默认网关可填写所选 NAS IPv4；DNS 仅在 NAS 已提供可达的 DNS 服务时指向该地址。') }}</p>
-      <dl class="guide-address"><div><dt>{{ t('NAS IPv4') }}</dt><dd>{{ selectedInterface?.address || '—' }}</dd></div><div><dt>{{ t('局域网网段') }}</dt><dd>{{ selectedInterface?.cidr || '—' }}</dd></div></dl>
-      <p>{{ t('在设备上访问网站，然后观察此页是否出现该设备源 IP 的 TUN 连接、命中规则和出口链。') }}</p>
-      <p class="muted">{{ t('IPv6、同网段直连和被排除的目标可能绕过 TUN；本页不证明这些流量已接管。') }}</p>
-    </details>
+      <dl class="guide-address">
+        <div><dt>{{ t('默认网关') }}</dt><dd>{{ selectedInterface?.address || '—' }}</dd></div>
+        <div><dt>{{ t('局域网网段') }}</dt><dd>{{ selectedInterface?.cidr || '—' }}</dd></div>
+        <div><dt>DNS <HelpPopover label="DNS"><span>{{ t('设备默认网关可填写所选 NAS IPv4；DNS 仅在 NAS 已提供可达的 DNS 服务时指向该地址。') }}</span></HelpPopover></dt><dd>{{ t('确认 NAS DNS 可用后再填写') }}</dd></div>
+      </dl>
+      <div class="guide-verify"><span>{{ t('访问网站后，在设备详情中查看 TUN 连接。') }}</span><HelpPopover :label="t('设备接入')"><span>{{ t('在设备上访问网站，然后观察此页是否出现该设备源 IP 的 TUN 连接、命中规则和出口链。') }}</span><span>{{ t('IPv6、同网段直连和被排除的目标可能绕过 TUN；本页不证明这些流量已接管。') }}</span></HelpPopover></div>
+      </div>
+    </section>
   </div>
 </template>
 <style scoped>
@@ -154,18 +172,29 @@ summary { cursor:pointer;font-weight:600;padding:2px 0; }
 .diagnostic-hints p { margin:6px 0;font-size:13px; }
 .monitor-table button { white-space:nowrap; }
 .bypass-monitor { display: grid; gap: 10px; }
-.monitor-checks, .monitor-devices, .monitor-guide { padding: 18px; min-width: 0; }
+.monitor-details { padding:12px 16px;min-width:0; }
+.monitor-checks, .monitor-guide { min-width:0;font-size:13px; }
+.detail-tabs { display:flex;gap:4px;padding-bottom:10px;border-bottom:1px solid var(--line); }
+.detail-tabs button { border:1px solid var(--line);background:transparent;color:var(--muted);box-shadow:none;border-radius:7px;padding:6px 12px;font-size:12px;line-height:18px; }
+.detail-tabs button:hover { border-color:var(--accent);color:var(--text); }
+.detail-tabs button[aria-selected="true"] { border-color:color-mix(in srgb,var(--accent) 48%,var(--line));background:color-mix(in srgb,var(--accent) 14%,var(--panel2));color:var(--accent); }
+.detail-tabs button:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+.monitor-table .device-empty { padding:28px 16px;text-align:center;color:var(--muted); }
+.monitor-details a, .monitor-devices>a { color:var(--accent);font-size:12px;text-decoration:none; }
+.monitor-details a:hover, .monitor-devices>a:hover { text-decoration:underline; }
 .monitor-devices { padding:12px 16px; }
 .monitor-summary span, .monitor-summary small { color:var(--muted); }
-.check-list { margin:12px 0; }
-.check-list > div { display:grid;grid-template-columns:minmax(140px,1fr) 2fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--line); }
+.check-list { margin:4px 0 10px; }
+.check-list > div { display:grid;grid-template-columns:minmax(140px,1fr) 2fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--line); }
 .check-list dd, .guide-address dd { margin:0;overflow-wrap:anywhere; }
 small { display:block;color:var(--muted);margin-top:5px; }
 .monitor-table { overflow-x:auto; }
 .monitor-table td { max-width:300px;padding-top:10px;padding-bottom:10px;overflow-wrap:anywhere;vertical-align:top; }
 .monitor-table th { white-space:nowrap; }
 .guide-interface { display:grid;grid-template-columns:140px minmax(0,340px);align-items:center;gap:12px;margin:14px 0; }
-.guide-address { display:flex;gap:30px;flex-wrap:wrap; }
+.guide-address { display:flex;gap:16px 36px;flex-wrap:wrap;margin:12px 0; }
+.guide-address dt { display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px; }
+.guide-verify { display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;margin-top:16px; }
 .guide-address dd { margin-top:6px; }
 p { line-height:1.65; }
 @media(max-width:600px) { .check-list > div,.guide-interface { grid-template-columns:1fr;gap:6px; } }

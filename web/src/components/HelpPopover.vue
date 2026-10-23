@@ -5,6 +5,7 @@ import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 
 defineProps<{
   label: string
+  triggerText?: string
 }>()
 
 const open = ref(false)
@@ -85,13 +86,14 @@ onBeforeUnmount(() => {
     <button
       ref="trigger"
       class="help-popover-trigger"
+      :class="{ 'help-popover-text-trigger': triggerText }"
       type="button"
       :aria-label="t('{arg0}说明', { arg0: t(label) })"
       aria-haspopup="dialog"
       :aria-expanded="open"
       :aria-controls="panelId"
       @click="toggle"
-    >?</button>
+    >{{ triggerText || '?' }}</button>
     <Teleport to="body">
       <span
         v-if="open"
@@ -109,3 +111,7 @@ onBeforeUnmount(() => {
     </Teleport>
   </span>
 </template>
+
+<style scoped>
+.help-popover-text-trigger { display:inline-flex;width:auto;height:auto;padding:2px 0;border:0;border-radius:4px;font-size:12px;font-weight:400;line-height:1.5; }
+</style>

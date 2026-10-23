@@ -2,7 +2,7 @@
 import { t, getLocale, locale } from '@/services/i18n'
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { bucketTrafficSamples, stabilizeTrafficScale, trafficCurveSegment, trafficSampleIndexAtTime, trafficScaleMaximum, trafficTooltipLeft, type TrafficScaleState } from '@/services/dashboard'
+import { bucketTrafficSamples, stabilizeTrafficScale, trafficCurveSegments, trafficSampleIndexAtTime, trafficScaleMaximum, trafficTooltipLeft, type TrafficScaleState } from '@/services/dashboard'
 import { formatRate } from '@/services/format'
 import type { TrafficSample } from '@/types/api'
 
@@ -143,10 +143,10 @@ function draw() {
       x: pointX(item.time, windowStart, now, frame, plotWidth),
       y: frame.top + (1 - Math.max(0, Math.min(1, item[key] / maximum))) * plotHeight,
     }))
+    const segments = trafficCurveSegments(points)
     const traceCurve = () => {
       context.moveTo(points[0]!.x, points[0]!.y)
-      for (let index = 1; index < points.length; index += 1) {
-        const segment = trafficCurveSegment(points[index - 1]!, points[index]!)
+      for (const segment of segments) {
         context.bezierCurveTo(segment.control1.x, segment.control1.y, segment.control2.x, segment.control2.y, segment.end.x, segment.end.y)
       }
     }

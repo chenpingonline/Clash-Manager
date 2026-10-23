@@ -1857,7 +1857,7 @@
   "当前连接累计流量": "Bytes on active connections",
   "当前未看到局域网其他设备的连接。请让设备发起访问后刷新；没有连接不代表不支持旁路由。": "No connections from other LAN devices are currently visible. Generate traffic on a device and refresh; an empty list does not mean bypass routing is unsupported.",
   "查看全部连接": "View all connections",
-  "设备接入与验证": "Device setup and verification",
+  "设备接入": "Device setup",
   "接入网卡": "LAN interface",
   "NAS IPv4": "NAS IPv4",
   "局域网网段": "LAN subnet",
@@ -1918,7 +1918,7 @@
   "需要关注": "Needs attention",
   "以上为配置提示，不是设备失败日志；具体结果需要结合连接与日志验证。": "These are configuration hints, not device error logs. Verify actual behavior using connections and logs.",
   "诊断": "Diagnose",
-  "基础检查与配置": "System checks and configuration",
+  "基础检查": "System checks",
   "出口待确认": "Outbound unconfirmed",
   "规则拒绝": "Rejected by rule",
   "代理出口": "Proxy outbound",
@@ -1934,5 +1934,8 @@
   "暂无已连接设备，可取消筛选查看全部设备。": "No connected devices. Clear the filter to show all devices.",
   "设备列表说明": "About this device list",
   "连接状态仅表示当前是否存在可见连接，不代表设备在线或已由 TUN 接管。": "Connection status indicates visible active connections only, not whether a device is online or routed through TUN.",
-  "最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或已由 TUN 接管。": "Connected means upload or download increased within the last 60 seconds; otherwise Disconnected is shown. The first sample only establishes a baseline. This does not indicate device availability or TUN routing."
+  "最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或已由 TUN 接管。": "Connected means upload or download increased within the last 60 seconds; otherwise Disconnected is shown. The first sample only establishes a baseline. This does not indicate device availability or TUN routing.",
+  "默认网关": "Default gateway",
+  "确认 NAS DNS 可用后再填写": "Use the NAS address only after verifying its DNS service",
+  "访问网站后，在设备详情中查看 TUN 连接。": "Visit a website, then check TUN connections in device details."
 }

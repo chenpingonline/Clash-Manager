@@ -47,7 +47,6 @@ const requestedSection = (['core', 'network', 'dns', 'tun', 'advanced', 'behavio
 const loading = ref(true), error = ref(''), open = ref<Section>(requestedSection || 'core'), busy = ref(''), tunSwitching = ref(false)
 const tunProgress = ref('')
 const tunFeatures = ref<TunFeatures>({})
-const coreDetailsOpen = ref(false)
 const changelogOpen = ref(false), changelogLatest = ref(false)
 function showChangelog(latest = false) { changelogLatest.value = latest; changelogOpen.value = true }
 const coreTabs = [{ key: 'manage', label: '内核管理' }, { key: 'connection', label: '连接管理' }, { key: 'delay', label: '延迟测试' }, { key: 'geo', label: 'GEO 数据' }] as const
@@ -627,18 +626,14 @@ onMounted(initialize)
             <div class="update-row core-update-row">
               <div class="update-row-copy">
                 <h2>Mihomo Core</h2>
-                <p>{{ t("核心版本与运行方式") }}</p>
               </div>
               <div class="update-row-facts" :aria-label="t('Mihomo Core 版本信息')">
                 <strong>{{ system.currentVersion || system.controllerVersion?.version || '--' }}</strong>
                 <span class="update-meta">{{ t(system.mode === 'managed' ? 'Manager 托管' : system.mode === 'external' ? '本机 Core' : '自动检测') }}</span>
-              <div class="update-details" @mouseleave="coreDetailsOpen = false">
-                <button class="update-details-trigger" type="button" :aria-expanded="coreDetailsOpen" @click="coreDetailsOpen = !coreDetailsOpen">{{ t("查看详情") }}</button>
-                <div v-if="coreDetailsOpen" class="update-details-body">
-                  <div><span>{{ t("二进制") }}</span><strong class="mono">{{ system.binaryPath || '--' }}</strong></div>
-                  <div><span>{{ t("启动配置") }}</span><strong class="mono">{{ system.configPath || '--' }}</strong></div>
-                </div>
-              </div>
+              <HelpPopover :label="t('Mihomo Core')" :trigger-text="t('查看详情')">
+                <span>{{ t('二进制') }}</span><strong class="mono core-detail-path">{{ system.binaryPath || '--' }}</strong>
+                <span>{{ t('启动配置') }}</span><strong class="mono core-detail-path">{{ system.configPath || '--' }}</strong>
+              </HelpPopover>
               </div>
               <div class="update-row-actions">
                 <button v-if="system.bootstrap?.state === 'error'" :disabled="busy === 'bootstrap'" @click="retryBootstrap">{{ t("重新检测并启用") }}</button>
@@ -663,7 +658,7 @@ onMounted(initialize)
             </div>
             <div class="settings-accordion-subsection core-mode-section">
               <div class="core-mode-row">
-                <div class="section-head"><div><h2 id="core-mode-label">{{ t("Core 运行方式") }}</h2><p>{{ t("切换后保存选择，下次启动时沿用。") }}</p></div></div>
+                <div class="section-head"><div><h2 id="core-mode-label">{{ t("Core 运行方式") }}</h2></div></div>
                 <div class="core-mode-controls">
                   <AppSelect id="core-mode" v-model="selectedCoreMode" aria-labelledby="core-mode-label" :disabled="Boolean(busy)" :options="[{ value: 'managed', label: (t('Manager 托管')) }, ...(runtime.capabilities.externalCore ? [{ value: 'external', label: (t('外部 Mihomo')) }] : [])]" />
                   <button :disabled="Boolean(busy) || system.available === false" @click="switchCoreMode">{{ t(busy === 'core-mode' ? '正在切换…' : '应用') }}</button>
@@ -673,7 +668,10 @@ onMounted(initialize)
             <div v-if="coreModeError || system.bootstrap?.error" class="local-warning">{{ t(coreModeError || system.bootstrap?.error) }}</div>
             <PortConflictHelp :managed="system.mode === 'managed'" @updated="load" :error="t(coreModeError || system.bootstrap?.error || '')" />
             <div class="core-startup-preference">
-              <SettingToggle :model-value="Boolean(manager.persistSelections)" @update:model-value="manager.persistSelections = $event" :title="t('重启 Core 后恢复策略组选择')" :description="t('恢复“代理节点”页面中仍然有效的手动策略组选择。')" @change="saveBehavior(120)" />
+              <div class="setting-toggle">
+                <div class="field-label-row persist-selections-label"><label for="persist-selections"><strong>{{ t('重启 Core 后恢复策略组选择') }}</strong></label><HelpPopover :label="t('重启 Core 后恢复策略组选择')"><span>{{ t('恢复“代理节点”页面中仍然有效的手动策略组选择。') }}</span></HelpPopover></div>
+                <span class="switch"><input id="persist-selections" v-model="manager.persistSelections" type="checkbox" @change="saveBehavior(120)"><span /></span>
+              </div>
               <div class="dns-autosave-state" :class="behaviorState">{{ t(behaviorMessage) }}</div>
             </div>
             </div>
@@ -883,9 +881,11 @@ onMounted(initialize)
 .changelog-link { padding: 2px 0; min-height: 0; background: transparent; border: 0; box-shadow: none; color: var(--accent); font-size: 12px; white-space: nowrap; }
 .changelog-link:hover { text-decoration: underline; }
 .core-mode-section .core-mode-controls button { height:32px; min-height:32px; padding:0 13px; border-radius:8px; font-size:11px; line-height:30px; }
+.settings-compact .setting-toggle > .persist-selections-label { flex-direction:row;align-items:center;gap:6px; }
+.core-detail-path { overflow-wrap:anywhere;white-space:normal; }
 .connection-title { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
-.core-tabs { display: flex; gap: 4px; padding: 8px 20px; border-bottom: 1px solid var(--line); }
+.core-tabs { display: flex; gap: 4px; padding: 8px 20px; }
 .core-tabs button { border: 1px solid var(--line); background: transparent; color: var(--muted); box-shadow: none; border-radius: 7px; padding: 6px 12px; font-size: 12px; line-height: 18px; transition: border-color .16s ease, background .16s ease, color .16s ease; }
 .core-tabs button:hover { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); background: color-mix(in srgb, var(--accent) 6%, transparent); color: var(--text); }
 .core-tabs button[aria-selected="true"] { border-color: color-mix(in srgb, var(--accent) 48%, var(--line)); background: color-mix(in srgb, var(--accent) 14%, var(--panel2)); color: var(--accent); }
