@@ -1044,18 +1044,32 @@ onMounted(initialize)
 /* A label that wraps its control stays a .field column so spacing matches sibling fields. */
 .field > label.field-control-label { display: flex; flex-direction: column; gap: inherit; }
 /* Group Core status/actions separately from persistent startup choices. */
-.settings-compact #core-settings #core-panel-manage { display: flex; flex-direction: column; gap: 10px; }
+.settings-compact #core-settings #core-panel-manage { display: flex; flex-direction: column; gap: 8px; }
 .settings-compact #core-settings .core-status-card,
-.settings-compact #core-settings .core-mode-section { min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-inset); }
-.settings-compact #core-settings .core-update-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "copy actions" "facts actions"; gap: 8px 20px; min-height: 0; padding: 0; border: 0; }
+.settings-compact #core-settings .core-mode-section { min-width: 0; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-inset); }
+.settings-compact #core-settings .core-update-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "copy actions" "facts actions"; gap: 4px 16px; min-height: 0; padding: 0; border: 0; }
 .settings-compact #core-settings .core-update-row .update-row-copy { grid-area: copy; }
 .settings-compact #core-settings .core-update-row .update-row-copy p { margin: 4px 0 0; }
 .settings-compact #core-settings .core-update-row .update-row-facts { grid-area: facts; justify-content: flex-start; }
 .settings-compact #core-settings .core-update-row .update-row-actions { grid-area: actions; margin-left: 0; align-self: center; }
-.settings-compact #core-settings .core-mode-section .core-startup-preference { margin-top: 14px; }
+.settings-compact #core-settings .core-mode-section .core-startup-preference { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
 .settings-compact #core-settings .core-mode-section .core-startup-preference > .dns-autosave-state:empty { display: none; }
+/* Match the network settings rows instead of repeating large nested cards. */
+.settings-compact #core-panel-manage h2 { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.5; }
+.settings-compact #core-panel-manage .update-row-facts > strong { font-size: 12px; }
+.settings-compact #core-panel-manage .update-meta { padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 12px; line-height: 1.5; }
+.settings-compact #core-panel-manage .core-mode-row { gap: 8px; }
+.settings-compact #core-panel-manage .core-mode-row .section-head { margin: 0; }
+.settings-compact #core-panel-manage .core-mode-section > .hint { margin: 6px 0 0; font-size: 12px; line-height: 1.5; }
+.settings-compact #core-panel-manage .core-startup-preference .setting-toggle { min-height: 32px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.settings-compact #core-panel-manage .core-startup-preference strong { font-size: 13px; font-weight: 600; }
+.settings-compact #core-panel-manage .update-row-actions { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+.settings-compact #core-panel-manage .update-row-actions button,
+.settings-compact #core-panel-manage .core-mode-controls button { height: 28px; min-height: 28px; padding: 4px 9px; font-size: 12px; line-height: 18px; }
+.settings-compact #core-panel-manage .core-mode-controls :deep(.app-select) { height: 28px; min-height: 28px; padding: 4px 9px; font-size: 12px; }
+
 @media (max-width: 720px) {
-  .settings-compact #core-settings .core-update-row { grid-template-columns: minmax(0, 1fr); grid-template-areas: "copy" "facts" "actions"; gap: 12px; }
+  .settings-compact #core-settings .core-update-row { grid-template-columns: minmax(0, 1fr); grid-template-areas: "copy" "facts" "actions"; gap: 8px; }
   .settings-compact #core-settings .core-update-row .update-row-actions { justify-content: flex-start; }
 }
 
