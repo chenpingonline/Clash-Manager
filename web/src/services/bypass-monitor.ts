@@ -56,21 +56,50 @@ export function observeDevices(connections: ObservedConnection[], interfaces: La
 export interface NeighborObservation { ip: string; mac: string; interface: string; state: string }
 export interface InventoryDevice extends DeviceObservation {
   mac: string; interface: string; neighborState: string; discovered: boolean; lastObserved: number
+  lastTrafficAt: number | null; recentTraffic: boolean
 }
-// Session memory only. Counts and evidence always describe the current sample;
-// history keeps identities visible, never stale TUN success or traffic values.
+export const DEVICE_ACTIVITY_WINDOW_MS = 60_000
+// Compare individual connections: closing a large connection must not hide
+// growth on a smaller one. Unknown/invalid counters provide no evidence.
+function trafficCounter(value: number | undefined): number {
+  return Number.isFinite(value) ? Math.max(0, value!) : 0
+}
+function trafficKey(connection: ObservedConnection): string {
+  const m = connection.metadata
+  return JSON.stringify([m?.sourceIP, connection.id || [connection.start, m?.sourcePort, m?.destinationIP, m?.destinationPort, m?.host, m?.network, m?.type]])
+}
+// Session memory only. Counts and totals describe the current sample; activity
+// expires after 60 seconds even if the core keeps returning idle connections.
 export class DeviceInventory {
   private entries = new Map<string, InventoryDevice>()
-  update(connections: ObservedConnection[], neighbors: NeighborObservation[], interfaces: LanInterface[], now = Date.now()): InventoryDevice[] {
+  private samples = new Map<string, { upload: number; download: number }>()
+  private sampledAt: number | null = null
+  update(connections: ObservedConnection[], neighbors: NeighborObservation[], interfaces: LanInterface[], now = Date.now(), trafficAvailable = true): InventoryDevice[] {
+    const continuous = trafficAvailable && this.sampledAt !== null && now >= this.sampledAt && now - this.sampledAt <= 30_000
+    const activeIPs = new Set<string>()
+    const nextSamples = new Map<string, { upload: number; download: number }>()
+    for (const connection of connections) {
+      const key = trafficKey(connection)
+      const sample = { upload: trafficCounter(connection.upload), download: trafficCounter(connection.download) }
+      const previous = this.samples.get(key)
+      const started = Date.parse(connection.start || '')
+      const newDuringSample = !previous && Number.isFinite(started) && this.sampledAt !== null && started >= this.sampledAt && started <= now
+      if (continuous && ((previous && (sample.upload > previous.upload || sample.download > previous.download))
+        || (newDuringSample && (sample.upload > 0 || sample.download > 0)))) activeIPs.add(connection.metadata?.sourceIP || '')
+      nextSamples.set(key, sample)
+    }
+    this.samples = trafficAvailable ? nextSamples : new Map()
+    this.sampledAt = trafficAvailable ? now : null
     for (const [ip, row] of this.entries) {
       if (now - row.lastObserved > 24 * 60 * 60 * 1000) this.entries.delete(ip)
       else this.entries.set(ip, { ...row, count: 0, tunCount: 0, upload: 0, download: 0, types: [], rules: [], chains: [], discovered: false, neighborState: '' })
     }
-    const blank = (ip: string): InventoryDevice => ({ ip, mac: '', interface: '', neighborState: '', discovered: false, lastObserved: now, count: 0, tunCount: 0, upload: 0, download: 0, types: [], rules: [], chains: [] })
+    const blank = (ip: string): InventoryDevice => ({ ip, mac: '', interface: '', neighborState: '', discovered: false, lastObserved: now, lastTrafficAt: null, recentTraffic: false, count: 0, tunCount: 0, upload: 0, download: 0, types: [], rules: [], chains: [] })
     const own = new Set(interfaces.map(i => i.address))
     for (const n of neighbors) {
       if (own.has(n.ip) || !interfaces.some(i => i.name === n.interface && inSubnet(n.ip, i.cidr))) continue
       const previous = this.entries.get(n.ip)
+      if (previous?.mac && previous.mac !== n.mac) activeIPs.delete(n.ip)
       const row = previous && (!previous.mac || previous.mac === n.mac) ? previous : blank(n.ip)
       this.entries.set(n.ip, { ...row, mac: n.mac, interface: n.interface, neighborState: n.state, discovered: true, lastObserved: now })
     }
@@ -80,6 +109,10 @@ export class DeviceInventory {
       // the most specific matching interface so container traffic stays scoped.
       const inferred = [...interfaces].filter(i => inSubnet(traffic.ip, i.cidr)).sort((a, b) => Number(b.cidr.split('/')[1]) - Number(a.cidr.split('/')[1]))[0]
       this.entries.set(traffic.ip, { ...row, ...traffic, interface: row.interface || inferred?.name || '', lastObserved: now })
+    }
+    for (const [ip, row] of this.entries) {
+      const lastTrafficAt = activeIPs.has(ip) ? now : row.lastTrafficAt
+      this.entries.set(ip, { ...row, lastTrafficAt, recentTraffic: lastTrafficAt !== null && now >= lastTrafficAt && now - lastTrafficAt < DEVICE_ACTIVITY_WINDOW_MS })
     }
     const sorted = [...this.entries.values()].sort((a, b) => b.tunCount - a.tunCount || b.count - a.count || b.lastObserved - a.lastObserved || a.ip.localeCompare(b.ip)).slice(0, 256)
     this.entries = new Map(sorted.map(row => [row.ip, row]))

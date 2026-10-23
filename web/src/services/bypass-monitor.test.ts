@@ -92,3 +92,40 @@ describe('container network scope', () => {
     expect(history.find(row => row.ip === '172.17.0.3')?.interface).toBe('docker0')
   })
 })
+
+describe('recent device traffic', () => {
+  const connection = (id: string, upload = 0, download = 0, start?: string) => ({
+    id, upload, download, start, metadata: { sourceIP: '192.168.1.100', type: 'TUN' },
+  })
+  it('ignores historical totals, expires idle residual connections, and recovers on growth', () => {
+    const inventory = new DeviceInventory()
+    expect(inventory.update([connection('a', 500)], [], interfaces, 0)[0]?.recentTraffic).toBe(false)
+    expect(inventory.update([connection('a', 600)], [], interfaces, 10_000)[0]?.recentTraffic).toBe(true)
+    for (const now of [20_000, 30_000, 40_000, 50_000, 60_000]) {
+      expect(inventory.update([connection('a', 600)], [], interfaces, now)[0]?.recentTraffic).toBe(true)
+    }
+    expect(inventory.update([connection('a', 600)], [], interfaces, 70_000)[0]).toMatchObject({ count: 1, recentTraffic: false })
+    expect(inventory.update([connection('a', 600, 1)], [], interfaces, 80_000)[0]?.recentTraffic).toBe(true)
+  })
+  it('detects growth per connection even when total traffic falls as another connection closes', () => {
+    const inventory = new DeviceInventory()
+    inventory.update([connection('large', 10000), connection('small', 1)], [], interfaces, 0)
+    expect(inventory.update([connection('small', 2)], [], interfaces, 10_000)[0]?.recentTraffic).toBe(true)
+  })
+  it('only counts new connections with bytes and a start within the observed interval', () => {
+    const inventory = new DeviceInventory()
+    inventory.update([], [], interfaces, 100_000)
+    expect(inventory.update([connection('old', 500, 0, new Date(0).toISOString()), connection('empty', 0, 0, new Date(105_000).toISOString())], [], interfaces, 110_000)[0]?.recentTraffic).toBe(false)
+    expect(inventory.update([connection('new', 1, 0, new Date(115_000).toISOString())], [], interfaces, 120_000)[0]?.recentTraffic).toBe(true)
+  })
+  it('rebaselines after failed samples, long gaps, and counter resets', () => {
+    const inventory = new DeviceInventory()
+    inventory.update([connection('a', 500)], [], interfaces, 0)
+    expect(inventory.update([connection('a', 1)], [], interfaces, 10_000)[0]?.recentTraffic).toBe(false)
+    inventory.update([], [], interfaces, 20_000, false)
+    expect(inventory.update([connection('a', 600)], [], interfaces, 30_000)[0]?.recentTraffic).toBe(false)
+    expect(inventory.update([connection('a', 700)], [], interfaces, 100_000)[0]?.recentTraffic).toBe(false)
+    expect(inventory.update([connection('a', 701)], [], interfaces, 110_000)[0]?.recentTraffic).toBe(true)
+    expect(inventory.update([], [], interfaces, 170_000)[0]?.recentTraffic).toBe(false)
+  })
+})

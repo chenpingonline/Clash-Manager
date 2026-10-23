@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, errorMessage } from '@/services/api'
 import { t } from '@/services/i18n'
 import { formatBytes } from '@/services/format'
-import { bypassInventory, deviceEvidence, isContainerInterface, type InventoryDevice, type MonitorHost, type ObservedConnection } from '@/services/bypass-monitor'
+import { bypassInventory, isContainerInterface, type InventoryDevice, type MonitorHost, type ObservedConnection } from '@/services/bypass-monitor'
 import BypassDeviceDetails from '@/components/BypassDeviceDetails.vue'
 import SequenceFormDialog from '@/components/SequenceFormDialog.vue'
 import AppSelect from '@/components/AppSelect.vue'
@@ -19,10 +19,12 @@ let disposed = false
 const devices = ref<InventoryDevice[]>([])
 const selectedDevice = ref('')
 const showContainers = ref(false)
+const onlyConnected = ref(true)
 const lanDevices = computed(() => devices.value.filter(device => !isContainerInterface(device.interface)))
 const containerCount = computed(() => devices.value.length - lanDevices.value.length)
-const visibleDevices = computed(() => showContainers.value ? devices.value : lanDevices.value)
-const activeDevice = computed(() => visibleDevices.value.find(device => device.ip === selectedDevice.value))
+const visibleDevices = computed(() => (showContainers.value ? devices.value : lanDevices.value)
+  .filter(device => !onlyConnected.value || (!connectionError.value && device.recentTraffic)))
+const activeDevice = computed(() => devices.value.find(device => device.ip === selectedDevice.value))
 const lanInterfaces = computed(() => (host.value?.interfaces || []).filter(i => !isContainerInterface(i.name)))
 const diagnosticHints = computed(() => {
   const hints: string[] = []
@@ -63,7 +65,7 @@ async function load() {
   else { runtimeTun.value = null; runtimeError.value = errorMessage(r.reason) }
   if (c.status === 'fulfilled') { connections.value = c.value.connections || []; connectionError.value = '' }
   else { connections.value = []; connectionError.value = errorMessage(c.reason) }
-  devices.value = bypassInventory.update(connections.value, host.value?.neighbors || [], host.value?.interfaces || [])
+  devices.value = bypassInventory.update(connections.value, host.value?.neighbors || [], host.value?.interfaces || [], Date.now(), !connectionError.value && !hostError.value)
   updatedAt.value = new Date().toLocaleTimeString()
   refreshing.value = false
 }
@@ -77,18 +79,26 @@ defineExpose({ refreshPage: load })
   <div class="bypass-monitor">
     <div class="monitor-overview">
       <div class="monitor-summary" role="status"><strong>{{ t(connectionError || hostError ? '流量状态待验证' : observed ? '已观察到局域网 TUN 连接' : '尚未观察到局域网 TUN 连接') }}</strong><span>{{ t(refreshing ? '检查中…' : '只读检查') }}<template v-if="updatedAt"> · {{ updatedAt }}</template></span></div>
-      <p class="muted overview-help">{{ t('每 10 秒刷新，仅代表当前可见连接；不会修改网络设置。') }}</p>
       <details v-if="diagnosticHints.length" class="diagnostic-hints"><summary>{{ t('需要关注') }} · {{ diagnosticHints.length }}<span>{{ t(diagnosticHints[0] || '') }}</span></summary><p v-for="hint in diagnosticHints" :key="hint">{{ t(hint) }}</p><small>{{ t('以上为配置提示，不是设备失败日志；具体结果需要结合连接与日志验证。') }}</small></details>
       <p v-if="host?.legacyJournal" class="warn-text" role="alert">{{ t('检测到旧开发版的旁路由恢复记录，请先使用旧版本停止并恢复；本页不会自动修改网络。') }}</p>
     </div>
     <div class="card monitor-devices">
-      <div class="section-head"><div><h3>{{ t('局域网设备') }}</h3><p class="muted">{{ t('结合邻居表与当前连接展示设备；已发现不代表在线，也不代表正在使用旁路由。') }}</p></div><span class="tag">{{ visibleDevices.length }}</span></div>
-      <div class="network-filter"><label><input v-model="showContainers" type="checkbox">{{ t('显示容器网络') }}</label><span class="muted">{{ t('容器网络设备') }} {{ containerCount }} · {{ t('默认隐藏 Docker 内部网桥；直接接入局域网的容器仍会显示。') }}</span></div>
+      <div class="device-toolbar">
+        <div class="device-heading"><h3>{{ t('局域网设备') }}</h3><span class="tag">{{ visibleDevices.length }}</span></div>
+        <div class="network-filter">
+          <label><input v-model="onlyConnected" type="checkbox">{{ t('仅显示已连接') }}</label>
+          <label :title="t('默认隐藏 Docker 内部网桥；直接接入局域网的容器仍会显示。')"><input v-model="showContainers" type="checkbox">{{ t('显示容器网络') }}<span class="muted">({{ containerCount }})</span></label>
+        </div>
+      </div>
       <p v-if="host?.neighborStatus !== 'available'" class="muted">{{ t('邻居表不可读取，当前仅展示连接来源和本页会话记录。') }}</p>
       <p v-if="connectionError" class="warn-text" role="alert">{{ t('连接数据不可用，当前接管状态待验证。') }}</p>
-      <div v-if="visibleDevices.length" class="monitor-table"><table><thead><tr><th>{{ t('设备 IP') }}</th><th>{{ t('观察结果') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('操作') }}</th></tr></thead><tbody><tr v-for="device in visibleDevices" :key="device.ip"><td><strong>{{ device.ip }}</strong><small v-if="isContainerInterface(device.interface)">{{ t('容器网络') }}</small></td><td><span class="tag">{{ t(deviceEvidence(device, !connectionError)) }}</span></td><td>{{ connectionError ? '—' : device.count }}</td><td>{{ connectionError ? '—' : `↑ ${formatBytes(device.upload)}` }}<small v-if="!connectionError">↓ {{ formatBytes(device.download) }}</small></td><td><button type="button" class="ghost" aria-haspopup="dialog" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr></tbody></table></div>
-      <p v-else class="muted">{{ t('尚未发现其他局域网设备。请让设备发起访问后刷新；空列表不代表不支持旁路由。') }}</p>
+      <div v-if="visibleDevices.length" class="monitor-table"><table><thead><tr><th>{{ t('设备 IP') }}</th><th>{{ t('连接状态') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('操作') }}</th></tr></thead><tbody><tr v-for="device in visibleDevices" :key="device.ip"><td><strong>{{ device.ip }}</strong><small v-if="isContainerInterface(device.interface)">{{ t('容器网络') }}</small></td><td><span class="tag connection-state" :class="{ connected: !connectionError && device.recentTraffic }">{{ connectionError ? '—' : t(device.recentTraffic ? '已连接' : '未连接') }}</span></td><td>{{ connectionError ? '—' : device.count }}</td><td>{{ connectionError ? '—' : `↑ ${formatBytes(device.upload)}` }}<small v-if="!connectionError">↓ {{ formatBytes(device.download) }}</small></td><td><button type="button" class="ghost" aria-haspopup="dialog" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr></tbody></table></div>
+      <p v-else class="muted">{{ t(connectionError ? '连接数据不可用，当前接管状态待验证。' : onlyConnected ? '暂无已连接设备，可取消筛选查看全部设备。' : '尚未发现其他局域网设备。请让设备发起访问后刷新；空列表不代表不支持旁路由。') }}</p>
+      <details class="device-help"><summary>{{ t('设备列表说明') }}</summary>
+      <p class="muted">{{ t('每 10 秒刷新，仅代表当前可见连接；不会修改网络设置。') }}</p>
+      <p class="muted">{{ t('最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或已由 TUN 接管。') }}</p>
       <p class="muted">{{ t('邻居表可能不完整。最近观察表示看到邻居记录或连接的时间，不是设备最后在线时间。本页会话最多保留 256 个设备、24 小时；刷新浏览器后清除。') }}</p>
+      </details>
       <a href="#connections">{{ t('查看全部连接') }}</a>
     </div>
     <SequenceFormDialog :open="!!activeDevice" :title="`${t('设备诊断')} · ${activeDevice?.ip || ''}`" hide-footer wide @close="selectedDevice = ''">
@@ -123,12 +133,18 @@ defineExpose({ refreshPage: load })
   </div>
 </template>
 <style scoped>
-.network-filter { display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:12px 0;font-size:12px; }
+.network-filter { display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:0;font-size:12px; }
 .network-filter label { display:flex;align-items:center;gap:6px;white-space:nowrap; }
 .network-filter input { width:14px;height:14px;min-height:0;margin:0; }
 summary { cursor:pointer;font-weight:600;padding:2px 0; }
 .monitor-overview { padding:2px 0 0;min-width:0; }
-.overview-help { margin:5px 0 10px;font-size:12px; }
+.device-toolbar { display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin-bottom:12px; }
+.device-heading { display:flex;align-items:center;gap:8px; }
+.device-heading h3 { margin:0;font-size:15px; }
+.device-help { margin:10px 0;font-size:12px;color:var(--muted); }
+.connection-state { color:var(--muted); }
+.connection-state.connected { color:var(--good);background:color-mix(in srgb,var(--good) 10%,transparent);border-color:color-mix(in srgb,var(--good) 25%,transparent); }
+.diagnostic-hints { margin-top:8px; }
 .monitor-summary { display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px;font-size:13px; }
 .monitor-summary>span { font-size:12px;white-space:nowrap; }
 .diagnostic-hints { padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:12px; }
@@ -137,8 +153,9 @@ summary { cursor:pointer;font-weight:600;padding:2px 0; }
 .diagnostic-hints[open] summary span { display:none; }
 .diagnostic-hints p { margin:6px 0;font-size:13px; }
 .monitor-table button { white-space:nowrap; }
-.bypass-monitor { display: grid; gap: 14px; }
+.bypass-monitor { display: grid; gap: 10px; }
 .monitor-checks, .monitor-devices, .monitor-guide { padding: 18px; min-width: 0; }
+.monitor-devices { padding:12px 16px; }
 .monitor-summary span, .monitor-summary small { color:var(--muted); }
 .check-list { margin:12px 0; }
 .check-list > div { display:grid;grid-template-columns:minmax(140px,1fr) 2fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--line); }

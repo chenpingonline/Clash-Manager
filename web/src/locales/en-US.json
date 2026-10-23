@@ -1928,5 +1928,11 @@
   "容器网络": "Container network",
   "设备 IP": "Device IP",
   "每 10 秒刷新，仅代表当前可见连接；不会修改网络设置。": "Refreshes every 10 seconds. Visible connections only; network settings remain unchanged.",
-  "诊断说明": "Diagnostic notes"
+  "诊断说明": "Diagnostic notes",
+  "仅显示已连接": "Connected only",
+  "连接状态": "Connection status",
+  "暂无已连接设备，可取消筛选查看全部设备。": "No connected devices. Clear the filter to show all devices.",
+  "设备列表说明": "About this device list",
+  "连接状态仅表示当前是否存在可见连接，不代表设备在线或已由 TUN 接管。": "Connection status indicates visible active connections only, not whether a device is online or routed through TUN.",
+  "最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或已由 TUN 接管。": "Connected means upload or download increased within the last 60 seconds; otherwise Disconnected is shown. The first sample only establishes a baseline. This does not indicate device availability or TUN routing."
 }

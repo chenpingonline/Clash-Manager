@@ -809,38 +809,52 @@ onMounted(initialize)
 
 /* Flat category tabs and compact forms share the existing theme tokens. */
 .settings-compact { max-width: none; }
-.settings-category-tabs { display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--line); margin: 0; }
-.settings-category-tabs > button { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: 14px; box-shadow: none; white-space: nowrap; }
+.settings-category-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); margin: 0; }
+.settings-category-tabs > button { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: 13px; box-shadow: none; white-space: nowrap; }
 .settings-category-tabs > button:hover { color: var(--text); background: var(--accent-soft); }
 .settings-category-tabs > button[aria-selected="true"] { color: var(--accent-ink); border-bottom-color: var(--accent); }
 .settings-category-tabs > button:focus-visible, .settings-category-panel:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .settings-category-panel { min-width: 0; }
 .settings-compact .settings-accordion-panel { padding: 0; }
-.settings-compact .settings-accordion-subsection { padding: 16px 0; }
-.network-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+.settings-compact .settings-accordion-subsection { padding: 12px 0; }
+.network-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
 .network-columns > section { min-width: 0; }
-.network-option-section { border-left: 1px solid var(--line); padding-left: 28px; }
-.network-columns h2 { margin: 0; padding: 0 0 12px; border-bottom: 1px solid var(--line); font-size: 15px; font-weight: 650; }
-.settings-compact .port-list, .settings-compact .network-options { display: flex; flex-direction: column; gap: 12px; margin: 12px 0 0; }
-.settings-compact :deep(.port-row), .settings-compact :deep(.setting-toggle), .settings-compact .app-update-preference { min-width: 0; min-height: 76px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-inset); box-shadow: none; }
+.network-option-section { border-left: 1px solid var(--line); padding-left: 20px; }
+.network-columns h2 { margin: 0; padding: 0 0 8px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 650; }
+.settings-compact .port-list, .settings-compact .network-options { display: flex; flex-direction: column; gap: 0; margin: 8px 0 0; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.settings-compact :deep(.port-row), .settings-compact :deep(.setting-toggle), .settings-compact .app-update-preference { min-width: 0; min-height: 58px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-inset); box-shadow: none; }
 .settings-compact :deep(.setting-toggle.disabled) { background: var(--surface-disabled); }
+/* Group related rows instead of repeating a separate card around every option. */
+.settings-compact .port-list :deep(.port-row),
+.settings-compact .network-options :deep(.setting-toggle) { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+.settings-compact .port-list :deep(.port-row:last-child),
+.settings-compact .network-options :deep(.auth-setting) { border-bottom: 0; }
+.settings-compact .port-list :deep(.port-row:focus-within) { box-shadow: inset 3px 0 var(--accent); }
+.settings-compact :deep(.port-input) { height: 32px; min-height: 32px; padding-block: 5px !important; }
+.settings-compact :deep(.auth-setting > button) { min-height: 30px; padding: 5px 10px; font-size: 12px; }
+.settings-compact .dns-tab-panel { padding: 10px; border-radius: 9px; }
+.settings-compact .section-head { margin-bottom: 10px; }
+.settings-compact .tun-main-grid :deep(input),
+.settings-compact .tun-main-grid :deep(.app-select),
+.settings-compact .dns-field-grid input,
+.settings-compact .dns-field-grid :deep(.app-select) { min-height: 32px; height: 32px; padding-block: 5px; }
 .settings-compact .app-update-preference .switch { flex: none; }
 .settings-compact .app-update-preference-copy small { white-space: normal; }
 .settings-compact :deep(.port-row) { gap: 12px; }
 .settings-compact :deep(.port-row-copy) { min-width: 0; }
-.settings-compact :deep(.port-row-copy strong), .settings-compact :deep(.setting-toggle strong) { font-size: 14px; }
-.settings-compact :deep(.port-row-copy span), .settings-compact :deep(.setting-toggle small), .settings-compact :deep(.setting-toggle > div > span), .settings-compact :deep(.lan-description) { font-size: 12px; line-height: 1.5; }
+.settings-compact :deep(.port-row-copy strong), .settings-compact :deep(.setting-toggle strong) { font-size: 13px; }
+.settings-compact :deep(.port-row-copy span), .settings-compact :deep(.setting-toggle small), .settings-compact :deep(.setting-toggle > div > span), .settings-compact :deep(.lan-description) { font-size: 11px; line-height: 1.45; }
 .settings-compact :deep(.port-row-control) { flex: none; gap: 10px; }
 .settings-compact :deep(.port-input) { width: 82px !important; }
 .settings-compact :deep(.auth-setting) { order: 4; }
 .settings-compact :deep(.setting-toggle > div) { min-width: 0; }
 .settings-compact :deep(.setting-toggle > .switch) { flex: none; }
 .settings-compact .proxy-env-manage-grid,
-.settings-compact .proxy-env-target-grid { gap: 12px; }
+.settings-compact .proxy-env-target-grid { gap: 8px; }
 
-.settings-compact .port-dependency-note { margin: 0 0 16px; }
-.settings-compact .dns-toggle-grid, .settings-compact .tun-option-grid { gap: 12px; }
-.settings-compact .core-tabs, .settings-compact .dns-tabs { padding: 0 0 12px; }
+.settings-compact .port-dependency-note { margin: 0 0 12px; padding: 7px 10px; }
+.settings-compact .dns-toggle-grid, .settings-compact .tun-option-grid { gap: 8px; }
+.settings-compact .core-tabs, .settings-compact .dns-tabs { padding: 0 0 8px; }
 @media (max-width: 1100px) {
   .network-columns { gap: 20px; }
   .network-option-section { padding-left: 20px; }
@@ -920,9 +934,9 @@ onMounted(initialize)
 /* A label that wraps its control stays a .field column so spacing matches sibling fields. */
 .field > label.field-control-label { display: flex; flex-direction: column; gap: inherit; }
 /* Group Core status/actions separately from persistent startup choices. */
-.settings-compact #core-settings #core-panel-manage { display: flex; flex-direction: column; gap: 14px; }
+.settings-compact #core-settings #core-panel-manage { display: flex; flex-direction: column; gap: 10px; }
 .settings-compact #core-settings .core-status-card,
-.settings-compact #core-settings .core-mode-section { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-inset); }
+.settings-compact #core-settings .core-mode-section { min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-inset); }
 .settings-compact #core-settings .core-update-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "copy actions" "facts actions"; gap: 8px 20px; min-height: 0; padding: 0; border: 0; }
 .settings-compact #core-settings .core-update-row .update-row-copy { grid-area: copy; }
 .settings-compact #core-settings .core-update-row .update-row-copy p { margin: 4px 0 0; }
