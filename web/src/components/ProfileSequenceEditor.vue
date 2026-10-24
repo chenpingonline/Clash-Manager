@@ -15,13 +15,14 @@ import SequenceFormDialog from './SequenceFormDialog.vue'
 import HelpPopover from './HelpPopover.vue'
 import RuleTypeSelect from './RuleTypeSelect.vue'
 
-const props = defineProps<{ kind: SequenceKind; modelValue: SequenceExtension; data: SequenceEditorData; disabled: boolean }>()
+const props = defineProps<{ kind: SequenceKind; modelValue: SequenceExtension; data: SequenceEditorData; disabled: boolean; global?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: SequenceExtension]; 'view-count': [value: number]; advanced: [] }>()
 const search = ref(''), error = ref(''), input = ref('')
 const nodeInputId = `sequence-node-links-${useId()}`
 const nodePlaceholder = computed(() => `${t('每行一条 URI，也可粘贴 Base64 编码的节点列表')}\n${t('示例：')}trojan://password@example.com:443#Trojan\nsocks5://user:password@example.com:1080#SOCKS5`)
 const addSide = ref<'prepend' | 'append'>('prepend'), sourceFilter = ref<SequenceSourceFilter>('all')
-const sourceOptions: { value: SequenceSourceFilter; label: string }[] = [{ value: 'all', label: '全部' }, { value: 'prepend', label: '前置' }, { value: 'base', label: '订阅原始' }, { value: 'append', label: '后置' }, { value: 'deleted', label: '已排除' }]
+const baseSourceLabel = computed(() => props.global ? '订阅增强后' : '订阅原始')
+const sourceOptions = computed<{ value: SequenceSourceFilter; label: string }[]>(() => [{ value: 'all', label: '全部' }, { value: 'prepend', label: '前置' }, { value: 'base', label: baseSourceLabel.value }, { value: 'append', label: '后置' }, { value: 'deleted', label: '已排除' }])
 const ruleType = ref('DOMAIN'), payload = ref(''), policy = ref('DIRECT'), noResolve = ref(false)
 const groupType = ref('select'), name = ref(''), icon = ref(''), members = ref<string[]>([]), providers = ref<string[]>([])
 const url = ref('https://www.gstatic.com/generate_204'), interval = ref(300), timeout = ref(5000), tolerance = ref(50), expectedStatus = ref('*'), lazy = ref(true), strategy = ref('consistent-hashing')
@@ -162,7 +163,7 @@ async function add(side: 'prepend' | 'append') {
       for (const item of effectiveEntries(baseEntries(props.data.base, otherKind), sequence(otherKind))) existing.add(entryIdentity(item))
       for (const item of ['DIRECT', 'REJECT', 'REJECT-DROP', 'PASS', 'GLOBAL']) existing.add(item)
     }
-    for (const item of additions) if (existing.has(entryIdentity(item))) throw new Error(`${noun.value}已存在；修改订阅原始条目时请先排除原条目`)
+    for (const item of additions) if (existing.has(entryIdentity(item))) throw new Error(props.global ? '规则已存在；修改参考条目时请先排除原条目' : `${noun.value}已存在；修改订阅原始条目时请先排除原条目`)
     if (editing && editSide.value === side) next[side].splice(editIndex.value!, 0, ...additions)
     else if (side === 'prepend') next.prepend.unshift(...additions)
     else next.append.push(...additions)
@@ -241,7 +242,7 @@ function reorder(row: Row, delta: number) {
         <HelpPopover class="sequence-sort-help" :label="t('排序')"><span>{{ t('点击表头排序，仅影响列表显示') }}</span></HelpPopover>
       </div>
       <div v-if="data.warning" class="muted">{{ t(data.warning) }}</div>
-      <div class="sequence-table-shell" role="table" :aria-label="t(`订阅${noun}`)" :aria-rowcount="rows.length + 1">
+      <div class="sequence-table-shell" role="table" :aria-label="global ? t('全局规则') : t(`订阅${noun}`)" :aria-rowcount="rows.length + 1">
         <div class="rule-table-heading rule-table-grid" :class="{ 'sequence-named-grid': kind !== 'rules' }" role="row" aria-rowindex="1"><span v-for="column in columns" :key="column.key" role="columnheader" :aria-sort="sortColumn === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"><button type="button" class="sequence-sort-button" :class="{ active: sortColumn === column.key }" :aria-label="t('按{arg0}排序', { arg0: column.label })" @click="toggleSort(column.key)"><span>{{ column.label }}</span><span aria-hidden="true">{{ sortColumn === column.key ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span></button></span><div class="sequence-batch-heading" role="columnheader" :aria-label="t('操作')">
           <button type="button" class="rule-text-action rule-exclude-action" :disabled="disabled || !canBatchExclude" :aria-label="t('排除筛选结果中的原始{arg0}', { arg0: t(noun) })" :title="t('排除筛选结果中的原始{arg0}', { arg0: t(noun) })" @click="batchExclude(true)">{{ t(kind === 'proxies' ? '全部排除' : '排除全部') }}</button>
           <button type="button" class="rule-text-action rule-restore-action" :disabled="disabled || !canBatchRestore" :aria-label="t('恢复筛选结果中的原始{arg0}', { arg0: t(noun) })" :title="t('恢复筛选结果中的原始{arg0}', { arg0: t(noun) })" @click="batchExclude(false)">{{ t(kind === 'proxies' ? '全部恢复' : '恢复全部') }}</button>
@@ -250,7 +251,7 @@ function reorder(row: Row, delta: number) {
           <div v-if="!rows.length" class="sequence-empty muted">{{ t(viewChanged ? '没有匹配的条目' : '暂无条目') }}</div>
           <div :style="{ height: `${start * rowHeight}px` }" />
           <div v-for="(row, offset) in visibleRows" :key="row.key" class="rule-table-row rule-table-grid" :class="{ 'sequence-named-grid': kind !== 'rules', 'rule-excluded': row.deleted, 'rule-editing': editIndex === row.index && editSide === row.side }" role="row" :aria-rowindex="start + offset + 2">
-            <span class="muted" role="cell">{{ t(row.order) }}</span><span class="rule-table-content" role="cell" :title="describe(row.item)">{{ details(row.item).title }}</span><span role="cell" :title="details(row.item).type">{{ details(row.item).type }}</span><span role="cell" :title="kind === 'groups' ? undefined : sequenceEntrySummary(row.item, kind)"><button v-if="kind === 'groups' && typeof row.item !== 'string'" type="button" class="sequence-member-summary" aria-haspopup="dialog" :aria-label="t('查看代理组 {arg0} 的全部成员与集合', { arg0: row.item.name })" :title="t('查看全部成员与集合')" @click="inspectedGroup = row.item">{{ sequenceEntrySummary(row.item, kind) }}</button><template v-else>{{ sequenceEntrySummary(row.item, kind) }}</template></span><span role="cell" class="rule-table-source">{{ t(row.side === 'base' ? '订阅原始' : row.side === 'prepend' ? '前置' : '后置') }}</span>
+            <span class="muted" role="cell">{{ t(row.order) }}</span><span class="rule-table-content" role="cell" :title="describe(row.item)">{{ details(row.item).title }}</span><span role="cell" :title="details(row.item).type">{{ details(row.item).type }}</span><span role="cell" :title="kind === 'groups' ? undefined : sequenceEntrySummary(row.item, kind)"><button v-if="kind === 'groups' && typeof row.item !== 'string'" type="button" class="sequence-member-summary" aria-haspopup="dialog" :aria-label="t('查看代理组 {arg0} 的全部成员与集合', { arg0: row.item.name })" :title="t('查看全部成员与集合')" @click="inspectedGroup = row.item">{{ sequenceEntrySummary(row.item, kind) }}</button><template v-else>{{ sequenceEntrySummary(row.item, kind) }}</template></span><span role="cell" class="rule-table-source">{{ t(row.side === 'base' ? baseSourceLabel : row.side === 'prepend' ? '前置' : '后置') }}</span>
             <div class="rule-table-actions" role="cell">
               <template v-if="row.side !== 'base'"><button class="rule-text-action" :disabled="disabled" :aria-label="t(`编辑 ${entryIdentity(row.item)}`)" :title="t(kind === 'proxies' ? '在高级 YAML 中编辑节点参数' : undefined)" @click="edit(row)">{{ t("编辑") }}</button><button class="rule-text-action rule-move" :disabled="disabled || sortColumn !== null || row.index === 0" :aria-label="t(`上移 ${entryIdentity(row.item)}`)" :title="t(sortColumn ? '请恢复默认排序后调整顺序' : '上移')" @click="reorder(row, -1)">↑</button><button class="rule-text-action rule-move" :disabled="disabled || sortColumn !== null || row.index === modelValue[row.side].length - 1" :aria-label="t(`下移 ${entryIdentity(row.item)}`)" :title="t(sortColumn ? '请恢复默认排序后调整顺序' : '下移')" @click="reorder(row, 1)">↓</button></template>
               <button class="rule-text-action" :class="{ 'rule-delete-action': row.side !== 'base', 'rule-exclude-action': row.side === 'base' && !row.deleted, 'rule-restore-action': row.deleted }" :disabled="disabled" :aria-label="`${t(row.deleted ? '恢复' : row.side === 'base' ? '排除' : '删除')} ${entryIdentity(row.item)}`" @click="remove(row)">{{ t(row.deleted ? '恢复' : row.side === 'base' ? '排除' : '删除') }}</button>

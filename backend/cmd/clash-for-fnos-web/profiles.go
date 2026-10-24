@@ -462,10 +462,13 @@ func (g *gateway) handleProfileExtensionAPI(w http.ResponseWriter, r *http.Reque
 }
 
 func (g *gateway) handleGlobalProfileExtensionAPI(w http.ResponseWriter, r *http.Request, kind string) bool {
+	if kind == "rules/editor" {
+		return g.handleGlobalRuleEditorAPI(w, r)
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodDelete {
 		return false
 	}
-	if kind != "override" && kind != "script" {
+	if kind != "override" && kind != "script" && kind != "rules" {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "全局增强类型不存在"})
 		return true
 	}

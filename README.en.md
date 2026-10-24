@@ -53,6 +53,12 @@ The Go Web service handles the UI, APIs and Mihomo Controller communication. A s
 
 Docker and Linux show controls according to runtime capabilities. fnOS application icons, FPK updates and fnOS Shell proxy environment settings are provided by the native fnOS edition.
 
+## Global rules
+
+Under **Profiles → Advanced options → Global rules**, the visual editor supports prepend, append, reorder and exclusion. Changes apply to all subscriptions and survive updates. Global rules wrap subscription sequence enhancements, before global and subscription overrides/scripts. Later overrides may replace rules. Policy names must exist in every subscription; trailing rules may be unreachable after MATCH.
+
+The fnOS global rule editor can list installed apps and generate prepended DIRECT rules from their real installation directories, enabling process lookup without manual process names. Save and apply in the main editor to activate. Coverage is limited to programs inside the installation directory; system interpreters, external child processes and Docker containers may not be covered. Re-select apps after moving their installation directories.
+
 ## Languages
 
 The default follows the browser language: Chinese locales use Simplified Chinese; others use English. Switch under **Settings → Language (top right)**. Changes take effect immediately and are remembered in the current browser. Proxy names, profile names, YAML, addresses and original logs keep their original values.

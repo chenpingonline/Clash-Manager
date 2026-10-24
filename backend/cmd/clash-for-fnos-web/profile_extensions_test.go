@@ -116,7 +116,7 @@ func TestGlobalProfileExtensionAPIUsesIndependentValidatedFiles(t *testing.T) {
 	}
 
 	unsupported := httptest.NewRecorder()
-	handler.ServeHTTP(unsupported, httptest.NewRequest(http.MethodGet, "/app/clash-for-fnos/api/profiles/global/extensions/rules", nil))
+	handler.ServeHTTP(unsupported, httptest.NewRequest(http.MethodGet, "/app/clash-for-fnos/api/profiles/global/extensions/proxies", nil))
 	if unsupported.Code != http.StatusNotFound {
 		t.Fatalf("unsupported status=%d body=%s", unsupported.Code, unsupported.Body.String())
 	}

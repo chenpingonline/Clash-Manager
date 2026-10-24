@@ -6,6 +6,7 @@ import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 defineProps<{
   label: string
   triggerText?: string
+  teleport?: boolean
 }>()
 
 const open = ref(false)
@@ -94,7 +95,7 @@ onBeforeUnmount(() => {
       :aria-controls="panelId"
       @click="toggle"
     >{{ triggerText || '?' }}</button>
-    <Teleport to="body">
+    <Teleport to="body" :disabled="teleport === false">
       <span
         v-if="open"
         :id="panelId"

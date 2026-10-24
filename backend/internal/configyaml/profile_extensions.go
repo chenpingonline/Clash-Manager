@@ -25,9 +25,10 @@ var ExtensionKinds = map[string]string{
 }
 
 type SequenceExtension struct {
-	Prepend []any    `yaml:"prepend"`
-	Append  []any    `yaml:"append"`
-	Delete  []string `yaml:"delete"`
+	FindProcessMode string   `yaml:"find-process-mode,omitempty"`
+	Prepend         []any    `yaml:"prepend"`
+	Append          []any    `yaml:"append"`
+	Delete          []string `yaml:"delete"`
 }
 
 func DefaultExtension(kind string) string {
@@ -68,6 +69,9 @@ func ValidateExtension(kind, content string) error {
 	if err := yaml.Unmarshal([]byte(content), &extension); err != nil {
 		return fmt.Errorf("增强配置 YAML 错误: %w", err)
 	}
+	if extension.FindProcessMode != "" && (kind != "rules" || (extension.FindProcessMode != "always" && extension.FindProcessMode != "strict" && extension.FindProcessMode != "off")) {
+		return errors.New("find-process-mode 仅支持规则增强中的 always、strict 或 off")
+	}
 	return nil
 }
 
@@ -86,9 +90,8 @@ func ApplyProfileExtensions(raw []byte, profileName string, extensions map[strin
 	return marshalProfileConfig(config)
 }
 
-// ApplyProfileExtensionChain follows Clash Verge's extension order:
-// profile sequence editors, global override, global script, profile override,
-// then profile script.
+// ApplyProfileExtensionChain applies profile sequences, global rules, global
+// override/script, then profile override/script.
 func ApplyProfileExtensionChain(raw []byte, profileName string, globalExtensions, profileExtensions map[string]string) ([]byte, error) {
 	config, err := parseProfileConfig(raw)
 	if err != nil {
@@ -96,6 +99,9 @@ func ApplyProfileExtensionChain(raw []byte, profileName string, globalExtensions
 	}
 	if err = applySequenceExtensions(config, profileExtensions); err != nil {
 		return nil, err
+	}
+	if err = applySequenceExtensions(config, map[string]string{"rules": globalExtensions["rules"]}); err != nil {
+		return nil, fmt.Errorf("应用全局规则失败: %w", err)
 	}
 	config, err = applyOverrideAndScript(config, profileName, globalExtensions)
 	if err != nil {
@@ -128,6 +134,12 @@ func applySequenceExtensions(config map[string]any, extensions map[string]string
 		var extension SequenceExtension
 		if err := yaml.Unmarshal([]byte(content), &extension); err != nil {
 			return fmt.Errorf("%s 增强配置无效: %w", item.kind, err)
+		}
+		if item.kind == "rules" && extension.FindProcessMode != "" {
+			if err := ValidateExtension(item.kind, content); err != nil {
+				return err
+			}
+			config["find-process-mode"] = extension.FindProcessMode
 		}
 		applySequence(config, item.field, extension)
 		if item.kind == "proxies" {

@@ -54,3 +54,59 @@ func (g *gateway) handleProfileSequenceEditorAPI(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, map[string]any{"content": content, "customized": customized, "base": base, "sequences": sequences, "warning": warning})
 	return true
 }
+
+// Global rules wrap the profile sequence result. Preview that input instead of
+// the running config, which already contains global rules and runtime overrides.
+func (g *gateway) handleGlobalRuleEditorAPI(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	g.profileMu.Lock()
+	defer g.profileMu.Unlock()
+	extensions, err := g.readProfileExtensions("_global")
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return true
+	}
+	content, customized := extensions["rules"]
+	if !customized {
+		content = configyaml.DefaultExtension("rules")
+	}
+	base := map[string]any{}
+	warning := "当前没有正在使用的订阅，可先添加全局规则；应用订阅后生效。"
+	state, err := g.readProfiles()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return true
+	}
+	if state.Current != nil && findProfile(&state, *state.Current) != nil {
+		id := *state.Current
+		raw, readErr := os.ReadFile(filepath.Join(g.config.profileDir, id+".yaml"))
+		if os.IsNotExist(readErr) {
+			warning = "订阅尚未下载，请先更新订阅以查看原始内容"
+		} else {
+			if readErr == nil {
+				var scoped map[string]string
+				scoped, readErr = g.readProfileExtensions(id)
+				if readErr == nil {
+					raw, readErr = configyaml.ApplyProfileExtensions(raw, "", map[string]string{
+						"rules": scoped["rules"], "proxies": scoped["proxies"], "groups": scoped["groups"],
+					})
+				}
+			}
+			if readErr == nil {
+				readErr = yaml.Unmarshal(raw, &base)
+			}
+			if readErr != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": readErr.Error()})
+				return true
+			}
+			warning = "以当前订阅增强后的规则为参考；全局规则作用于所有订阅，策略名称须在各订阅中存在。"
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"content": content, "customized": customized, "base": base,
+		"sequences": map[string]string{}, "warning": warning,
+	})
+	return true
+}

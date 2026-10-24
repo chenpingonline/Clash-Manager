@@ -5,7 +5,7 @@ import { computed } from 'vue'
 import HelpPopover from '@/components/HelpPopover.vue'
 import { extensionExamples } from '@/services/profile-extension-examples'
 import type { ProfileExtensionKind } from '@/types/api'
-const props = defineProps<{ kind: ProfileExtensionKind }>()
+const props = defineProps<{ kind: ProfileExtensionKind; global?: boolean }>()
 const example = computed(() => extensionExamples[props.kind])
 </script>
 
@@ -14,7 +14,7 @@ const example = computed(() => extensionExamples[props.kind])
     <strong>{{ t(example.title) }} · {{ t(example.language) }}</strong>
     <span>{{ t(example.description) }}</span>
     <pre class="extension-example-code"><code>{{ t(example.content) }}</code></pre>
-    <span v-for="note in example.notes" :key="note">{{ t(note) }}</span>
+    <span v-for="(note, index) in example.notes" :key="note">{{ t(global && kind === 'rules' && index === 1 ? "全局 delete 匹配订阅增强后的完整规则；策略须在所有订阅中存在。" : note) }}</span>
     <span v-if="kind === 'override' || kind === 'script'">{{ t("顺序：全局覆写 → 全局脚本 → 对应订阅覆写 → 对应订阅脚本。") }}</span>
   </HelpPopover>
 </template>

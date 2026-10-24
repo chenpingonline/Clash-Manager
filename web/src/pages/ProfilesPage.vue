@@ -56,7 +56,7 @@ function openExtension(item: ProfileItem, kind: ProfileExtensionKind) {
   extensionProfile.value = item
   extensionKind.value = kind
 }
-function openGlobalExtension(kind: 'override' | 'script') {
+function openGlobalExtension(kind: 'rules' | 'override' | 'script') {
   extensionGlobal.value = true
   extensionProfile.value = null
   extensionKind.value = kind
@@ -242,7 +242,12 @@ onBeforeUnmount(() => {
       </div>
       <div v-else class="empty">{{ t("还没有配置") }}</div>
     </AsyncState>
-    <details class="profile-advanced"><summary>{{ t("高级选项") }}<span>{{ t("全局覆写与脚本") }}</span></summary><div class="global-extension-grid">
+    <details class="profile-advanced"><summary>{{ t("高级选项") }}<span>{{ t("全局规则、覆写与脚本") }}</span></summary><div class="global-extension-grid">
+      <div class="global-extension-card">
+        <span class="global-extension-icon" aria-hidden="true">R</span>
+        <span class="global-extension-copy"><strong>{{ t("全局规则") }}</strong><small>{{ t("所有订阅共用，支持前置、后置与排除") }}</small></span>
+        <span class="global-extension-actions"><button type="button" class="ghost small global-extension-edit" :aria-label="t('编辑全局规则')" @click="openGlobalExtension('rules')">{{ t("编辑") }}</button></span>
+      </div>
       <div class="global-extension-card">
         <span class="global-extension-icon" aria-hidden="true">M</span>
         <span class="global-extension-copy"><strong>{{ t("全局扩展覆写配置") }}</strong><small>{{ t("应用到所有配置，先递归合并") }}</small></span>

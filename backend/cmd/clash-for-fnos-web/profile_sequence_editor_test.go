@@ -70,3 +70,78 @@ func TestSequenceEditorReadsOriginalAndScopedEnhancements(t *testing.T) {
 		t.Fatal(missing.Code)
 	}
 }
+
+func TestGlobalRuleEditorPersistsIndependentRulesAndUsesScopedReference(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	g := newGateway(config{gateway: "/app/clash-for-fnos", profilesFile: filepath.Join(root, "profiles.json"), profileDir: filepath.Join(root, "profiles")})
+	endpoint := "/app/clash-for-fnos/api/profiles/global/extensions/rules"
+	read := func() map[string]any {
+		t.Helper()
+		response := httptest.NewRecorder()
+		g.ServeHTTP(response, httptest.NewRequest(http.MethodGet, endpoint+"/editor", nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("%d %s", response.Code, response.Body.String())
+		}
+		var data map[string]any
+		if err := json.Unmarshal(response.Body.Bytes(), &data); err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	if data := read(); data["customized"] != false || len(data["base"].(map[string]any)) != 0 {
+		t.Fatal(data)
+	}
+	content := "prepend: [\"PROCESS-NAME,fnmusic-go,DIRECT\"]\nappend: []\ndelete: []\n"
+	saved := httptest.NewRecorder()
+	g.ServeHTTP(saved, httptest.NewRequest(http.MethodPut, endpoint, strings.NewReader(`{"content":`+mustJSON(content)+`,"apply":true}`)))
+	if saved.Code != http.StatusOK {
+		t.Fatal(saved.Body.String())
+	}
+	invalid := httptest.NewRecorder()
+	g.ServeHTTP(invalid, httptest.NewRequest(http.MethodPut, endpoint, strings.NewReader(`{"content":"prepend: ["}`)))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatal(invalid.Body.String())
+	}
+	if data := read(); data["content"] != content || data["customized"] != true {
+		t.Fatal(data)
+	}
+	imported := httptest.NewRecorder()
+	g.ServeHTTP(imported, httptest.NewRequest(http.MethodPost, "/app/clash-for-fnos/api/profiles/import", strings.NewReader(`{"Name":"A","Content":"rules: [\"MATCH,DIRECT\"]"}`)))
+	if imported.Code != http.StatusCreated {
+		t.Fatal(imported.Body.String())
+	}
+	var item profile
+	if err := json.Unmarshal(imported.Body.Bytes(), &item); err != nil {
+		t.Fatal(err)
+	}
+	scoped := "prepend: [\"DOMAIN,scoped,DIRECT\"]\n"
+	if err := os.WriteFile(filepath.Join(root, "profiles", item.ID+".rules.yaml"), []byte(scoped), 0600); err != nil {
+		t.Fatal(err)
+	}
+	state, err := g.readProfiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Current = &item.ID
+	if err := g.writeProfiles(state); err != nil {
+		t.Fatal(err)
+	}
+	data := read()
+	rules := data["base"].(map[string]any)["rules"].([]any)
+	if len(rules) != 2 || rules[0] != "DOMAIN,scoped,DIRECT" || data["content"] != content {
+		t.Fatal(data)
+	}
+	reset := httptest.NewRecorder()
+	g.ServeHTTP(reset, httptest.NewRequest(http.MethodDelete, endpoint, nil))
+	if reset.Code != http.StatusOK {
+		t.Fatal(reset.Body.String())
+	}
+	if data := read(); data["customized"] != false {
+		t.Fatal(data)
+	}
+	body, err := os.ReadFile(filepath.Join(root, "profiles", item.ID+".rules.yaml"))
+	if err != nil || string(body) != scoped {
+		t.Fatalf("scoped rules changed: %s %v", body, err)
+	}
+}

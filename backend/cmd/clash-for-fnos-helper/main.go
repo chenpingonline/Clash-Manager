@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/appupdate"
+	"github.com/chenpingonline/Clash-Manager/backend/internal/fnosapps"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/logstore"
 	"github.com/chenpingonline/Clash-Manager/backend/internal/runtimeenv"
 	"io"
@@ -119,6 +120,14 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var result any
 		var err error
 		switch path {
+		case "/system/installed-apps":
+			if runtimeenv.Platform() != "fnos" {
+				writeJSON(w, 409, map[string]string{"error": "此功能仅适用于 fnOS 原生应用"})
+				return
+			}
+			var apps []fnosapps.App
+			apps, err = fnosapps.Discover("/var/apps")
+			result = map[string]any{"items": apps}
 		case "/logs/core":
 			h.readCoreLogs(w, r)
 			return

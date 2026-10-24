@@ -30,6 +30,13 @@ func (g *gateway) helperJSON(ctx context.Context, method, apiPath string, payloa
 
 func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, requestPath string) bool {
 	switch {
+	case requestPath == "/api/system/installed-apps" && r.Method == http.MethodGet:
+		if g.config.platform != "fnos" {
+			writeJSON(w, 409, map[string]string{"error": "此功能仅适用于 fnOS 原生应用"})
+			return true
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		g.forwardHelper(w, r, http.MethodGet, "/system/installed-apps", nil, 10*time.Second)
 	case requestPath == "/api/network/bypass/csrf" && r.Method == http.MethodGet:
 		g.writeBypassCSRFToken(w, r)
 	case requestPath == "/api/network/bypass/preferences" && r.Method == http.MethodPost:

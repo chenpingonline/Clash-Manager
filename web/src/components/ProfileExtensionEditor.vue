@@ -2,6 +2,10 @@
 import { countLabel, t } from '@/services/i18n'
 
 import { computed, nextTick, ref, watch } from 'vue'
+import FnosAppPicker from '@/components/FnosAppPicker.vue'
+import { addAppDirectRules } from '@/services/installed-apps'
+import type { InstalledApp } from '@/services/installed-apps'
+import { runtime } from '@/services/runtime'
 import BaseModal from '@/components/BaseModal.vue'
 import ProfileSequenceEditor from '@/components/ProfileSequenceEditor.vue'
 import RuleSequenceHelp from '@/components/RuleSequenceHelp.vue'
@@ -18,10 +22,10 @@ const emit = defineEmits<{ close: []; saved: [] }>()
 const content = ref(''), loading = ref(false), saving = ref(false), customized = ref(false)
 const applyMessage = ref(''), original = ref(''), resetting = ref(false)
 const saveButton = ref<HTMLButtonElement | null>(null), cancelButton = ref<HTMLButtonElement | null>(null), resetButton = ref<HTMLButtonElement | null>(null), keepButton = ref<HTMLButtonElement | null>(null), confirmResetButton = ref<HTMLButtonElement | null>(null)
-const isRules = computed(() => !props.global && props.kind === 'rules')
+const isRules = computed(() => props.kind === 'rules')
 const dirty = computed(() => content.value !== original.value)
-const hasSequenceChanges = computed(() => { if (!sequenceKind.value) return false; try { const model = parseSequence(content.value, sequenceKind.value); return !!(model.prepend.length || model.append.length || model.delete.length) } catch { return !!content.value.trim() } })
-const resetTitle = computed(() => `重置本订阅${sequenceKind.value === 'proxies' ? '节点' : sequenceKind.value === 'groups' ? '代理组' : '规则'}增强？`)
+const hasSequenceChanges = computed(() => { if (!sequenceKind.value) return false; try { const model = parseSequence(content.value, sequenceKind.value); return !!(model.prepend.length || model.append.length || model.delete.length || model['find-process-mode']) } catch { return !!content.value.trim() } })
+const resetTitle = computed(() => props.global ? '重置全局规则增强？' : `重置本订阅${sequenceKind.value === 'proxies' ? '节点' : sequenceKind.value === 'groups' ? '代理组' : '规则'}增强？`)
 async function cancelReset() { resetting.value = false; await nextTick(); resetButton.value?.focus({ preventScroll: true }) }
 async function confirmReset() { resetting.value = false; await reset(); await nextTick(); (saveButton.value?.disabled ? cancelButton.value : saveButton.value)?.focus({ preventScroll: true }) }
 function resetKeydown(event: KeyboardEvent) {
@@ -29,10 +33,16 @@ function resetKeydown(event: KeyboardEvent) {
   if (event.key === 'Tab') { event.preventDefault(); (event.target === keepButton.value ? confirmResetButton.value : keepButton.value)?.focus() }
 }
 watch(resetting, async value => { if (value) { await nextTick(); keepButton.value?.focus({ preventScroll: true }) } })
+const appPickerOpen = ref(false)
+const appRules = computed(() => { try { const model = parseSequence(content.value, 'rules'); return [...model.prepend, ...model.append].filter((rule): rule is string => typeof rule === 'string') } catch { return [] } })
+function addApplications(apps: InstalledApp[]) {
+ try { updateSequence(addAppDirectRules(parseSequence(content.value, 'rules'), apps)); advanced.value = false; visualError.value = ''; appPickerOpen.value = false }
+ catch (cause) { notify(errorMessage(cause), true) }
+}
 const advanced = ref(false), visualError = ref('')
 const sequenceData = ref<SequenceEditorData | null>(null), sequenceModel = ref<SequenceExtension>(emptySequence())
 const visibleEntryCount = ref<number | null>(null)
-const sequenceKind = computed(() => !props.global && ['rules', 'proxies', 'groups'].includes(props.kind || '') ? props.kind as SequenceKind : null)
+const sequenceKind = computed(() => (!props.global || props.kind === 'rules') && ['rules', 'proxies', 'groups'].includes(props.kind || '') ? props.kind as SequenceKind : null)
 const excludedEntryCount = computed(() => {
   const kind = sequenceKind.value
   if (!kind || loading.value || !sequenceData.value) return null
@@ -64,13 +74,14 @@ const endpoint = computed(() => props.kind
     ? `/api/profiles/global/extensions/${props.kind}`
     : `/api/profiles/${props.profile?.id}/extensions/${props.kind}`
   : '')
-const title = computed(() => props.global ? t('全局{arg0}', { arg0: t(meta.value.title) }) : `${t(meta.value.title)} · ${props.profile?.name || ''}`)
+const title = computed(() => props.global ? (props.kind === 'rules' ? t('全局规则') : t('全局{arg0}', { arg0: t(meta.value.title) })) : `${t(meta.value.title)} · ${props.profile?.name || ''}`)
 
 async function load() {
   if (!props.open || !props.kind || (!props.global && !props.profile)) return
   const generation = ++loadGeneration
   loading.value = true
   resetting.value = false
+  appPickerOpen.value = false
   advanced.value = false; visualError.value = ''; sequenceData.value = null; visibleEntryCount.value = null
   try {
     const result = await api<SequenceEditorData>(endpoint.value + (sequenceKind.value ? '/editor' : ''))
@@ -136,20 +147,22 @@ watch(() => [props.open, props.profile?.id, props.kind, props.global] as const, 
 </script>
 
 <template>
-  <BaseModal :open="open" :title="title" :card-class="`profile-extension-modal ${sequenceKind ? 'profile-sequence-modal' : ''} ${sequenceKind ? 'profile-table-modal' : ''} ${isRules ? 'profile-rules-modal' : ''}`" :closable="!saving && !resetting" :inert="resetting" @close="emit('close')">
-    <template #header><div class="sequence-modal-heading"><div class="sequence-modal-title"><h3>{{ title }}</h3><RuleSequenceHelp v-if="kind === 'rules' && !global" /><ProfileExtensionHelp v-else-if="kind" :kind="kind" /></div><div v-if="sequenceKind" class="sequence-modal-actions"><button class="ghost small" :disabled="loading || saving" @click="toggleAdvanced">{{ t(advanced ? '可视化' : '高级') }}</button></div></div></template>
+  <BaseModal :open="open" :title="title" :card-class="`profile-extension-modal ${sequenceKind ? 'profile-sequence-modal' : ''} ${sequenceKind ? 'profile-table-modal' : ''} ${isRules ? 'profile-rules-modal' : ''}`" :closable="!saving && !resetting && !appPickerOpen" :inert="resetting || appPickerOpen" @close="emit('close')">
+    <template #header><div class="sequence-modal-heading"><div class="sequence-modal-title"><h3>{{ title }}</h3><RuleSequenceHelp v-if="kind === 'rules'" :global="global" /><ProfileExtensionHelp v-else-if="kind" :kind="kind" /></div><div v-if="sequenceKind" class="sequence-modal-actions"><button v-if="global && isRules && runtime.platform === 'fnos'" type="button" class="ghost small" :disabled="loading || saving" @click="appPickerOpen = true">{{ t("排除飞牛应用") }}</button><button class="ghost small" :disabled="loading || saving" @click="toggleAdvanced">{{ t(advanced ? '可视化' : '高级') }}</button></div></div></template>
+    <p v-if="global && sequenceKind" class="muted">{{ t("顺序：订阅规则增强 → 全局规则 → 全局覆写与脚本 → 订阅覆写与脚本；后续覆写仍可替换规则。") }}</p>
     <div v-if="loading" class="profile-extension-loading">{{ t("正在读取…") }}</div>
-    <ProfileSequenceEditor v-else-if="sequenceKind && sequenceData && !advanced" :kind="sequenceKind" :model-value="sequenceModel" :data="sequenceData" :disabled="saving" @update:model-value="updateSequence" @view-count="visibleEntryCount = $event" @advanced="advanced = true" />
+    <ProfileSequenceEditor v-else-if="sequenceKind && sequenceData && !advanced" :kind="sequenceKind" :global="global" :model-value="sequenceModel" :data="sequenceData" :disabled="saving" @update:model-value="updateSequence" @view-count="visibleEntryCount = $event" @advanced="advanced = true" />
     <template v-else><p v-if="visualError" class="sequence-error" role="alert">{{ t(visualError) }}</p><textarea v-model="content" class="editor profile-extension-editor" spellcheck="false" :aria-label="t(meta.title)" :disabled="saving" /></template>
     <div class="actions profile-extension-actions" :class="{ 'rule-editor-footer': !!sequenceKind }">
-      <span v-if="sequenceKind" class="muted rule-footer-note">{{ t("修改仅作用于当前订阅，更新订阅后保留。") }}</span>
+      <span v-if="sequenceKind" class="muted rule-footer-note">{{ t(global ? "修改作用于所有订阅，更新订阅后保留。" : "修改仅作用于当前订阅，更新订阅后保留。") }}</span>
       <span v-if="sequenceKind && !advanced && !loading && visibleEntryCount !== null" class="muted sequence-footer-count" role="status">{{ countLabel(visibleEntryCount, sequenceKind === 'rules' ? '条规则' : sequenceKind === 'proxies' ? '个节点' : '个代理组') }}</span>
       <span v-if="excludedEntryCount !== null" class="rule-footer-excluded" role="status">{{ t('已排除 {arg0} 条', { arg0: excludedEntryCount }) }}</span>
       <button ref="saveButton" class="small" :disabled="loading || saving || (!!sequenceKind && !dirty)" @click="save">{{ t(saving ? (applyMessage || '保存并应用中…') : '保存并应用') }}</button>
-      <button v-if="sequenceKind || customized" ref="resetButton" class="danger small" :disabled="loading || saving || (!!sequenceKind && !hasSequenceChanges)" @click="sequenceKind ? resetting = true : reset()">{{ t(sequenceKind ? '重置本订阅增强' : '恢复默认') }}</button>
+      <button v-if="sequenceKind || customized" ref="resetButton" class="danger small" :disabled="loading || saving || (!!sequenceKind && !hasSequenceChanges)" @click="sequenceKind ? resetting = true : reset()">{{ t(sequenceKind ? (global ? '重置全局规则' : '重置本订阅增强') : '恢复默认') }}</button>
       <button ref="cancelButton" class="ghost small" :disabled="saving" @click="emit('close')">{{ t("取消") }}</button>
     </div>
   </BaseModal>
+  <FnosAppPicker :open="open && appPickerOpen" :existing-rules="appRules" @close="appPickerOpen = false" @selected="addApplications" />
   <BaseModal :open="open && resetting" :title="t(resetTitle)" card-class="config-discard-modal" @close="cancelReset">
     <div @keydown="resetKeydown"><p class="muted">{{ t("将清除此编辑器中的前置、后置条目与排除记录。保存并应用后生效；其他增强保持不变。") }}</p><div class="actions config-editor-actions"><button ref="keepButton" type="button" class="ghost small" @click="cancelReset">{{ t("继续编辑") }}</button><button ref="confirmResetButton" type="button" class="danger small" @click="confirmReset">{{ t("重置当前增强") }}</button></div></div>
   </BaseModal>
@@ -158,5 +171,5 @@ watch(() => [props.open, props.profile?.id, props.kind, props.global] as const, 
 <style scoped>
 .sequence-modal-title{position:relative;display:flex;align-items:center;gap:8px;min-width:0}
 .sequence-modal-title h3{overflow-wrap:anywhere}
-.sequence-modal-actions{display:flex;align-items:center;gap:8px;flex:none}
+.sequence-modal-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px;flex:none}
 </style>

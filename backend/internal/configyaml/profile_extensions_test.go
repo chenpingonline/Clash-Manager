@@ -1,6 +1,7 @@
 package configyaml
 
 import (
+	"reflect"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -138,5 +139,58 @@ func TestProfileExtensionChainMatchesClashVergeOrder(t *testing.T) {
 	settings, _ := got["settings"].(map[string]any)
 	if settings["base"] != true || settings["global"] != true || settings["profile"] != true {
 		t.Fatalf("settings=%#v", settings)
+	}
+}
+
+func TestGlobalRulesWrapProfileSequencesAndSurviveReapplication(t *testing.T) {
+	raw := []byte("rules: [\"DOMAIN,original,DIRECT\", \"MATCH,DIRECT\"]\n")
+	global := map[string]string{"rules": "prepend: [\"PROCESS-NAME,fnmusic-go,DIRECT\"]\nappend: [\"DOMAIN,global-tail,DIRECT\"]\ndelete: [\"DOMAIN,original,DIRECT\"]\n"}
+	scoped := map[string]string{"rules": "prepend: [\"DOMAIN,profile-first,DIRECT\"]\nappend: [\"DOMAIN,profile-tail,DIRECT\"]\n"}
+	want := []any{"PROCESS-NAME,fnmusic-go,DIRECT", "DOMAIN,profile-first,DIRECT", "MATCH,DIRECT", "DOMAIN,profile-tail,DIRECT", "DOMAIN,global-tail,DIRECT"}
+	for i := 0; i < 2; i++ {
+		out, err := ApplyProfileExtensionChain(raw, "profile", global, scoped)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var config map[string]any
+		if err := yaml.Unmarshal(out, &config); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(config["rules"], want) {
+			t.Fatalf("rules=%v", config["rules"])
+		}
+	}
+	global["override"] = "rules: [\"MATCH,REJECT\"]\n"
+	out, err := ApplyProfileExtensionChain(raw, "profile", global, scoped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if err := yaml.Unmarshal(out, &config); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(config["rules"], []any{"MATCH,REJECT"}) {
+		t.Fatalf("override order: %v", config)
+	}
+}
+
+func TestAppDirectRulesEnableProcessLookup(t *testing.T) {
+	content := "prepend: [\"PROCESS-PATH-REGEX,^/var/apps/music/target/,DIRECT\"]\nfind-process-mode: always\n"
+	if err := ValidateExtension("rules", content); err != nil {
+		t.Fatal(err)
+	}
+	out, err := ApplyProfileExtensionChain([]byte("find-process-mode: off\nrules: [\"MATCH,REJECT\"]\n"), "A", map[string]string{"rules": content}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := yaml.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["find-process-mode"] != "always" || len(got["rules"].([]any)) != 2 {
+		t.Fatal(got)
+	}
+	if err := ValidateExtension("rules", "find-process-mode: invalid\n"); err == nil {
+		t.Fatal("invalid process lookup mode accepted")
 	}
 }
