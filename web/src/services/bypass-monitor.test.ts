@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectionExit, logFromDevice, isContainerInterface, DeviceInventory, deviceEvidence, inSubnet, observeDevices } from './bypass-monitor'
+import { bypassModeChecks, dnsDiagnostic, type MonitorConfig, connectionExit, logFromDevice, isContainerInterface, DeviceInventory, deviceEvidence, inSubnet, observeDevices } from './bypass-monitor'
 const interfaces = [{ name: 'eth0', address: '192.168.1.20', cidr: '192.168.1.0/24' }]
 describe('bypass traffic evidence', () => {
   it('only considers other devices within observed LAN subnets', () => {
@@ -144,5 +144,63 @@ describe('transparent inbound evidence', () => {
       expect(deviceEvidence(device, true)).toBe(`已观察到 ${type} 流量`)
       expect(deviceEvidence(device, false)).toContain('待验证')
     }
+  })
+})
+
+describe('DNS configuration diagnostics', () => {
+  const base: MonitorConfig = { tun: true, autoRoute: true, autoRedirect: true, dnsEnabled: true, dnsListen: '', dnsHijack: ['any:53', 'tcp://any:53'], routeExclude: [] }
+  it('keeps absent standalone listening neutral with TUN hijacking configured', () => {
+    const result = dnsDiagnostic(base, true)
+    expect(result.conflict).toBe(false)
+    expect(result.status).toBe('已开启')
+    expect(result.listen).toBe('未配置独立监听（不代表 DNS 异常）')
+    expect(result.hijack).toBe('any:53, tcp://any:53')
+  })
+  it('preserves an explicitly configured listener without claiming reachability', () => {
+    expect(dnsDiagnostic({ ...base, dnsListen: '192.168.1.20:53' }, true).listen).toBe('192.168.1.20:53')
+  })
+  it('distinguishes unreadable configuration from missing options', () => {
+    expect(dnsDiagnostic(null, true).status).toBe('配置不可读取')
+    expect(dnsDiagnostic(base, true, true).listen).toBe('监听配置无法判断')
+    expect(dnsDiagnostic({ ...base, dnsEnabled: null, dnsHijack: [] }, true)).toMatchObject({ status: '未显式配置 DNS 开关', hijack: '未配置 DNS 劫持', conflict: false })
+  })
+  it('only flags the known active TUN and disabled DNS conflict', () => {
+    const disabled = { ...base, dnsEnabled: false }
+    expect(dnsDiagnostic(disabled, true).conflict).toBe(true)
+    for (const runtime of [false, null]) expect(dnsDiagnostic(disabled, runtime).conflict).toBe(false)
+    expect(dnsDiagnostic({ ...disabled, dnsHijack: [] }, true).conflict).toBe(false)
+    expect(dnsDiagnostic({ ...base, dnsEnabled: null }, true).conflict).toBe(false)
+    expect(dnsDiagnostic(disabled, true, true).conflict).toBe(false)
+  })
+})
+
+describe('mode-specific bypass checks', () => {
+  const config: MonitorConfig = { tun: true, autoRoute: true, autoRedirect: true, dnsEnabled: true, dnsListen: '', dnsHijack: [], routeExclude: [], redirPort: 7895, tproxyPort: 7896 }
+  it('shows running TUN and folds unused configured proxy ports', () => {
+    const result = bypassModeChecks(config, true, [])
+    expect(result.primary).toEqual(['TUN'])
+    expect(result.other).toEqual(['Redir', 'TProxy'])
+    expect(result.evidence('TUN')).toBe('内核运行中')
+  })
+  it('uses actual Redir traffic instead of configured TUN', () => {
+    const result = bypassModeChecks(config, false, ['Redirect'])
+    expect(result.primary).toEqual(['Redir'])
+    expect(result.evidence('Redir')).toBe('已观察到局域网连接')
+  })
+  it('retains simultaneous observed modes and runtime evidence', () => {
+    expect(bypassModeChecks(config, true, ['TProxy', 'Redir']).primary).toEqual(['TUN', 'Redir', 'TProxy'])
+  })
+  it('never promotes a configured port to runtime evidence', () => {
+    const result = bypassModeChecks({ ...config, tun: false, tproxyPort: 0 }, false, ['HTTP', 'Socks5'])
+    expect(result.primary).toEqual(['Redir'])
+    expect(result.evidence('Redir')).toBe('仅有配置，接管状态未确认')
+    expect(bypassModeChecks({ ...config, redirPort: 0, tproxyPort: 0 }, false, []).evidence('TUN')).toBe('配置已开启，运行未开启')
+  })
+  it('distinguishes missing configuration from installed rule evidence', () => {
+    expect(bypassModeChecks(null, null, []).primary).toEqual([])
+    expect(bypassModeChecks(null, null, []).other).toEqual(['TUN', 'Redir', 'TProxy'])
+    const managed = { active: true, mode: 'tproxy' as const, rulesPresent: true }
+    expect(bypassModeChecks(null, null, [], managed).primary).toEqual(['TProxy'])
+    expect(bypassModeChecks(null, null, [], { ...managed, rulesPresent: false }).primary).toEqual([])
   })
 })

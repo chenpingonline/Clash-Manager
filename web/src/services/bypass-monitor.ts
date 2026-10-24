@@ -8,6 +8,23 @@ export interface MonitorConfig {
   tun: boolean | null; autoRoute: boolean | null; autoRedirect: boolean | null
   redirPort?: number; tproxyPort?: number; dnsEnabled: boolean | null; dnsListen: string; dnsHijack: string[]; routeExclude: string[]
 }
+// Configuration evidence only; this does not probe a DNS listener or resolve names.
+export function dnsDiagnostic(config: MonitorConfig | null | undefined, runtimeTun: boolean | null, configError = false) {
+  const unavailable = !config || configError
+  const hijack = config?.dnsHijack || []
+  const conflict = !unavailable && runtimeTun === true && config.dnsEnabled === false && hijack.length > 0
+  return {
+    status: unavailable ? '配置不可读取' : config.dnsEnabled === true ? '已开启' : config.dnsEnabled === false ? '未开启' : '未显式配置 DNS 开关',
+    listen: unavailable ? '监听配置无法判断' : config.dnsListen.trim() || '未配置独立监听（不代表 DNS 异常）',
+    hijack: unavailable ? '劫持配置无法判断' : hijack.join(', ') || '未配置 DNS 劫持',
+    note: unavailable ? '无法读取配置，不能据此判断 DNS 是否正常。'
+      : conflict ? '配置冲突：TUN 正在运行且配置了 DNS 劫持，但 Mihomo DNS 已关闭。'
+      : config.dnsEnabled === false ? 'Mihomo DNS 未启用；设备可使用其他 DNS 服务。'
+      : hijack.length > 0 ? '已配置 TUN DNS 劫持；独立监听与劫持配置是不同选项。'
+      : '独立监听供直接 DNS 请求使用；未配置不代表解析异常。',
+    conflict,
+  }
+}
 export interface MonitorHost {
   interfaces: LanInterface[]; config: MonitorConfig | null; configError?: string
   forwarding: boolean | null; firewall: { readable: boolean; forwardChains?: number; natRules?: number; dropRules?: number }
@@ -15,6 +32,25 @@ export interface MonitorHost {
   managed?: { active: boolean; rulesPresent?: boolean | null; mode?: 'redir' | 'tproxy'; interface?: LanInterface; port?: number; error?: string }
   legacyJournal: boolean
   neighbors?: NeighborObservation[]; neighborStatus?: 'available' | 'unavailable' | 'unsupported'
+}
+export const BYPASS_MODES = ['TUN', 'Redir', 'TProxy'] as const
+export type BypassMode = (typeof BYPASS_MODES)[number]
+// Prefer traffic/runtime evidence; configured ports alone do not prove interception.
+export function bypassModeChecks(config: MonitorConfig | null | undefined, runtimeTun: boolean | null, observed: string[], managed?: MonitorHost['managed']) {
+  const traffic = transparentTypes(observed)
+  const installed = managed?.active && managed.rulesPresent === true ? (managed.mode === 'tproxy' ? 'TProxy' : managed.mode === 'redir' ? 'Redir' : null) : null
+  const running = BYPASS_MODES.filter(mode => traffic.includes(mode) || (mode === 'TUN' && runtimeTun === true) || mode === installed)
+  const configured = BYPASS_MODES.filter(mode => mode === 'TUN' ? config?.tun === true : mode === 'Redir' ? (config?.redirPort || 0) > 0 : (config?.tproxyPort || 0) > 0)
+  const primary = running.length ? running : configured
+  return {
+    primary,
+    other: BYPASS_MODES.filter(mode => !primary.includes(mode)),
+    evidence: (mode: BypassMode) => traffic.includes(mode) ? '已观察到局域网连接'
+      : mode === 'TUN' && runtimeTun === true ? '内核运行中'
+      : mode === installed ? '接管规则已安装，流量待验证'
+      : mode === 'TUN' && runtimeTun === false ? '配置已开启，运行未开启'
+      : '仅有配置，接管状态未确认',
+  }
 }
 export interface ObservedConnection {
   id?: string; start?: string; upload?: number; download?: number; rule?: string; rulePayload?: string; chains?: string[]

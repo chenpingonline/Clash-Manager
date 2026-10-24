@@ -4,7 +4,9 @@ import { api, errorMessage } from '@/services/api'
 import { t } from '@/services/i18n'
 import { formatBytes } from '@/services/format'
 import BypassSetup from '@/components/BypassSetup.vue'
-import { transparentTypes, bypassInventory, isContainerInterface, type InventoryDevice, type MonitorHost, type ObservedConnection } from '@/services/bypass-monitor'
+import BypassFirewallRules from '@/components/BypassFirewallRules.vue'
+import BypassModeChecks from '@/components/BypassModeChecks.vue'
+import { bypassModeChecks, dnsDiagnostic, transparentTypes, bypassInventory, isContainerInterface, type InventoryDevice, type MonitorHost, type ObservedConnection } from '@/services/bypass-monitor'
 import BypassDeviceDetails from '@/components/BypassDeviceDetails.vue'
 import SequenceFormDialog from '@/components/SequenceFormDialog.vue'
 import AppSelect from '@/components/AppSelect.vue'
@@ -46,13 +48,16 @@ const diagnosticHints = computed(() => {
   if (host.value?.forwarding === false) hints.push('IPv4 转发已关闭，可能影响设备的 UDP 与 DNS；TCP 可用也不代表旁路接入完整。')
   if (runtimeTun.value === true && !observedTypes.value.some(type => type !== 'TUN') && config.value?.autoRoute === false) hints.push('自动路由未开启，需要核对是否存在其他流量接管规则。')
   if (runtimeTun.value === true && !observedTypes.value.some(type => type !== 'TUN') && config.value?.autoRedirect === false) hints.push('Auto Redirect 未开启，发往 NAS 的 DNS 和部分路由路径需要另行验证。')
-  if (config.value?.dnsEnabled === false) hints.push('Mihomo DNS 未开启，请确认设备使用的 DNS 服务可达。')
+  if (dns.value.conflict) hints.push(dns.value.note)
   return hints
 })
 const observedTypes = computed(() => transparentTypes(lanDevices.value.flatMap(device => device.types)))
 const observed = computed(() => observedTypes.value.length > 0)
 const selectedInterface = computed(() => host.value?.interfaces.find(i => `${i.name}/${i.address}` === selected.value))
 const config = computed(() => host.value?.config)
+const configUnavailable = computed(() => !config.value || !!host.value?.configError)
+const modes = computed(() => bypassModeChecks(configUnavailable.value ? null : config.value, runtimeTun.value, observedTypes.value, host.value?.managed))
+const dns = computed(() => dnsDiagnostic(config.value, runtimeTun.value, !!host.value?.configError))
 function boolLabel(value: boolean | null | undefined): string { return value === true ? '已开启' : value === false ? '未开启' : '待验证' }
 async function load() {
   if (refreshing.value || disposed) return
@@ -97,7 +102,7 @@ defineExpose({ refreshPage: load })
       <details v-if="diagnosticHints.length" class="diagnostic-hints"><summary>{{ t('需要关注') }} · {{ diagnosticHints.length }}<span>{{ t(diagnosticHints[0] || '') }}</span></summary><p v-for="hint in diagnosticHints" :key="hint">{{ t(hint) }}</p><small>{{ t('以上为配置提示，不是设备失败日志；具体结果需要结合连接与日志验证。') }}</small></details>
       <p v-if="host?.legacyJournal" class="warn-text" role="alert">{{ t('检测到旧开发版的旁路由恢复记录，请先使用旧版本停止并恢复；本页不会自动修改网络。') }}</p>
     </div>
-    <BypassSetup :host="host" @changed="load" />
+    <BypassSetup :host="host" :runtime-tun="runtimeTun" @changed="load" />
     <div class="card monitor-devices">
       <div class="device-toolbar">
         <div class="device-heading"><h3>{{ t('局域网设备') }}</h3><span class="tag">{{ visibleDevices.length }}</span></div>
@@ -125,22 +130,29 @@ defineExpose({ refreshPage: load })
       </div>
       <div v-show="detailTab === 'checks'" id="bypass-panel-checks" class="monitor-checks" role="tabpanel" aria-labelledby="bypass-tab-checks" tabindex="0">
 
+      <div class="current-mode"><strong>{{ t('当前接管方式') }}</strong><span>{{ modes.primary.join(' / ') || t('尚未识别') }}</span></div>
+      <p v-if="!modes.primary.length" class="muted">{{ t('尚无运行或配置证据；可展开其他接管方式查看配置。') }}</p>
+      <section v-for="mode in modes.primary" :key="mode" class="mode-section" :aria-label="mode">
+        <div class="mode-heading"><strong>{{ mode }}</strong><span>{{ t(modes.evidence(mode)) }}</span></div>
+        <BypassModeChecks :mode="mode" :config="config" :runtime-tun="runtimeTun" :runtime-error="runtimeError" :unavailable="configUnavailable" />
+      </section>
+      <h4 class="common-check-heading">{{ t('通用检查') }}</h4>
       <dl class="check-list">
-        <div><dt>{{ t('Redir 监听端口') }}</dt><dd>{{ config?.redirPort || t('未启用或未读到配置') }}</dd></div>
-        <div><dt>{{ t('TProxy 监听端口') }}</dt><dd>{{ config?.tproxyPort || t('未启用或未读到配置') }}</dd></div>
-        <div><dt>{{ t('TUN 配置') }}</dt><dd>{{ t(boolLabel(config?.tun)) }}</dd></div>
-        <div><dt>{{ t('TUN 运行态') }}</dt><dd>{{ t(boolLabel(runtimeTun)) }}<small v-if="runtimeError">{{ t('Controller 不可用，无法读取实际运行态。') }}</small></dd></div>
-        <div><dt>Auto Route</dt><dd>{{ t(boolLabel(config?.autoRoute)) }}</dd></div>
-        <div><dt>Auto Redirect</dt><dd>{{ t(boolLabel(config?.autoRedirect)) }}</dd></div>
-        <div><dt>{{ t('DNS 配置') }}</dt><dd>{{ t(boolLabel(config?.dnsEnabled)) }}<small>{{ config?.dnsListen || t('未读到监听地址') }} · {{ t('设备可达性待验证') }}</small></dd></div>
-        <div><dt>{{ t('DNS 劫持配置') }}</dt><dd>{{ config?.dnsHijack?.join(', ') || t('未读到配置') }}</dd></div>
-        <div><dt>{{ t('TUN 排除网段') }}</dt><dd>{{ config?.routeExclude?.join(', ') || t('未读到配置') }}</dd></div>
-        <div><dt>{{ t('系统 IPv4 转发') }}</dt><dd>{{ t(boolLabel(host?.forwarding)) }}<small>{{ t('此项单独不能判定 TUN 能否代理其他设备。') }}</small></dd></div>
-        <div><dt>{{ t('防火墙与 NAT') }}</dt><dd>{{ t(host?.firewall.readable ? '已读取，转发效果待验证' : '无法读取，待验证') }}<small v-if="host?.firewall.readable">{{ t('转发链') }} {{ host.firewall.forwardChains }} · {{ t('源 NAT 规则') }} {{ host.firewall.natRules }} · {{ t('丢弃规则') }} {{ host.firewall.dropRules }}</small></dd></div>
+        <div><dt>{{ t('DNS 配置') }}</dt><dd>{{ t(dns.status) }}<small>{{ t('独立监听') }}：{{ t(dns.listen) }}</small><small :class="{ 'warn-text': dns.conflict }">{{ t(dns.note) }}</small><small>{{ t('本页未执行 DNS 解析或端口连通性测试。') }}</small></dd></div>
+        <div><dt>{{ t('系统 IPv4 转发') }}</dt><dd>{{ t(boolLabel(host?.forwarding)) }}<small>{{ t('此项单独不能判定设备流量是否已被接管。') }}</small></dd></div>
       </dl>
+      <BypassFirewallRules :firewall="host?.firewall" />
+      <details v-if="modes.other.length" class="other-modes">
+        <summary>{{ t('其他接管方式') }}<span class="muted"> · {{ modes.other.join(' / ') }}</span></summary>
+        <p class="muted">{{ t('其他方式无需同时开启；未配置不代表当前接管异常。') }}</p>
+        <section v-for="mode in modes.other" :key="mode" class="mode-section" :aria-label="mode">
+          <div class="mode-heading"><strong>{{ mode }}</strong></div>
+          <BypassModeChecks :mode="mode" :config="config" :runtime-tun="runtimeTun" :runtime-error="runtimeError" :unavailable="configUnavailable" />
+        </section>
+      </details>
       <p v-if="hostError" class="warn-text" role="alert">{{ t(hostError) }}</p>
       <p v-else-if="host?.configError" class="muted">{{ t('启动配置不可读取或格式无效，配置项显示为待验证。') }}</p>
-      <p class="muted">{{ t('未显式配置的选项显示为待验证。规则数量不代表放行或拦截结果，也不表示必须额外添加 NAT。') }}</p>
+      <p class="muted">{{ t('未配置不等于异常；读取失败会单独标明。') }}</p>
       <a href="#settings">{{ t('前往设置检查入站与 DNS') }}</a>
       </div>
       <div v-show="detailTab === 'guide'" id="bypass-panel-guide" class="monitor-guide" role="tabpanel" aria-labelledby="bypass-tab-guide" tabindex="0">
@@ -192,9 +204,17 @@ summary { cursor:pointer;font-weight:600;padding:2px 0; }
 .monitor-details a:hover, .monitor-devices>a:hover { text-decoration:underline; }
 .monitor-devices { min-width:0;padding:12px 16px; }
 .monitor-summary span, .monitor-summary small { color:var(--muted); }
+.current-mode, .mode-heading { display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 12px; }
+.current-mode { margin:14px 0 10px;font-size:13px; }
+.mode-heading { margin:10px 0 4px;font-size:12px; }
+.mode-heading span { color:var(--muted);font-weight:400; }
+.common-check-heading { margin:16px 0 4px;font-size:12px; }
+.other-modes { margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:12px; }
+.other-modes p { margin:6px 0;color:var(--muted); }
 .check-list { margin:4px 0 10px; }
 .check-list > div { display:grid;grid-template-columns:minmax(140px,1fr) 2fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--line); }
 .check-list dd, .guide-address dd { margin:0;overflow-wrap:anywhere; }
+.check-list small.warn-text { color:var(--warn); }
 small { display:block;color:var(--muted);margin-top:5px; }
 .monitor-table { overflow-x:auto; }
 .monitor-table td { max-width:300px;padding-top:10px;padding-bottom:10px;overflow-wrap:anywhere;vertical-align:top; }

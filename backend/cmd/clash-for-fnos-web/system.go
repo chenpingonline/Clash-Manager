@@ -52,6 +52,9 @@ func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, reques
 		g.networkMu.Lock()
 		defer g.networkMu.Unlock()
 		g.forwardHelper(w, r, http.MethodPost, "/network/bypass/stop", map[string]any{}, 25*time.Second)
+	case requestPath == "/api/network/bypass/rules" && r.Method == http.MethodGet:
+		w.Header().Set("Cache-Control", "no-store")
+		g.forwardHelper(w, r, http.MethodGet, "/network/bypass/rules", nil, 6*time.Second)
 	case requestPath == "/api/network/bypass" && r.Method == http.MethodGet:
 		g.forwardHelper(w, r, http.MethodGet, "/network/bypass", nil, 5*time.Second)
 	case requestPath == "/api/app/icons" && r.Method == http.MethodGet:

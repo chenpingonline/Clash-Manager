@@ -7,7 +7,8 @@ import type { LanInterface, MonitorHost } from '@/services/bypass-monitor'
 import { isContainerInterface } from '@/services/bypass-monitor'
 import AppSelect from '@/components/AppSelect.vue'
 import SequenceFormDialog from '@/components/SequenceFormDialog.vue'
-const props = defineProps<{ host: MonitorHost | null }>()
+const props = defineProps<{ host: MonitorHost | null; runtimeTun: boolean | null }>()
+const tunEnabled = computed(() => props.runtimeTun === true || props.host?.config?.tun === true)
 const emit = defineEmits<{ changed: [] }>()
 const open = ref(false), mode = ref<'redir' | 'tproxy'>('tproxy'), selected = ref(''), busy = ref(false), error = ref(''), message = ref('')
 const plan = ref<{ mode: string; interface: LanInterface; port: number } | null>(null)
@@ -15,15 +16,20 @@ const interfaces = computed(() => (props.host?.interfaces || []).filter(item => 
 const iface = computed(() => interfaces.value.find(item => `${item.name}/${item.address}` === selected.value))
 watch(interfaces, items => { if (!items.some(item => `${item.name}/${item.address}` === selected.value)) selected.value = items[0] ? `${items[0].name}/${items[0].address}` : '' }, { immediate: true })
 watch([mode, selected], () => { plan.value = null; error.value = '' })
+watch(tunEnabled, enabled => { if (enabled) { open.value = false; plan.value = null } })
 function payload() { return { mode: mode.value, interface: iface.value?.name, address: iface.value?.address } }
 async function preview() {
+  if (tunEnabled.value || busy.value) return
   busy.value = true; error.value = ''; message.value = ''; plan.value = null
-  try { plan.value = await bypassRequest<{ mode: string; interface: LanInterface; port: number }>('preview', payload()) }
+  try {
+    const result = await bypassRequest<{ mode: string; interface: LanInterface; port: number }>('preview', payload())
+    if (!tunEnabled.value) plan.value = result
+  }
   catch (cause) { error.value = errorMessage(cause) }
   finally { busy.value = false }
 }
 async function apply() {
-  if (!plan.value || busy.value) return
+  if (tunEnabled.value || !plan.value || busy.value) return
   busy.value = true; error.value = ''
   try {
     await bypassRequest('configure', { ...payload(), confirmed: true })
@@ -41,7 +47,8 @@ async function stop() {
 </script>
 <template>
   <section class="card bypass-setup">
-    <div class="bypass-setup-row"><div><strong>{{ t('一键配置') }}</strong><p>{{ props.host?.managed?.active ? `${props.host.managed.mode === 'tproxy' ? 'TProxy' : 'Redir'} · ${props.host.managed.interface?.name} · ${props.host.managed.interface?.cidr}` : t('为所选局域网网卡配置 IPv4 透明代理接管') }}</p></div><button v-if="props.host?.managed?.active" class="ghost" :disabled="busy" @click="stop">{{ t('停用并恢复') }}</button><button v-else class="ghost" :disabled="busy || !props.host?.setupSupported" @click="open = true; error = ''; plan = null">{{ t('配置接管规则') }}</button></div>
+    <div class="bypass-setup-row"><div><strong>{{ t('一键配置') }}</strong><p>{{ props.host?.managed?.active ? `${props.host.managed.mode === 'tproxy' ? 'TProxy' : 'Redir'} · ${props.host.managed.interface?.name} · ${props.host.managed.interface?.cidr}` : t('为所选局域网网卡配置 IPv4 透明代理接管') }}</p></div><button v-if="props.host?.managed?.active" class="ghost" :disabled="busy" @click="stop">{{ t('停用并恢复') }}</button><button v-else class="ghost" :disabled="busy || tunEnabled || !props.host?.setupSupported" :aria-describedby="tunEnabled ? 'bypass-tun-notice' : undefined" @click="open = true; error = ''; plan = null">{{ t('配置接管规则') }}</button></div>
+    <p v-if="tunEnabled" id="bypass-tun-notice" role="status">{{ t('TUN 已开启，无需重复配置接管规则') }}</p>
     <p v-if="props.host && !props.host.setupSupported" class="muted">{{ t('一键配置需要 Linux、nftables、iproute2 和网络管理权限。') }}</p>
     <p v-if="props.host?.managed?.active && props.host.managed.rulesPresent !== true" class="warn-text">{{ t('接管规则状态待验证') }}</p>
     <p v-if="props.host?.managed?.error" class="warn-text">{{ props.host.managed.error }}</p>
@@ -59,7 +66,7 @@ async function stop() {
         <div v-if="plan" class="bypass-plan"><strong>{{ t('预检查通过') }}</strong><p>{{ plan.mode === 'tproxy' ? 'TProxy' : 'Redir' }} · {{ plan.interface.name }} · {{ plan.interface.cidr }} · {{ plan.port }}</p><p>{{ t('配置成功仅代表规则已安装，不代表设备全部流量已被接管。') }}</p></div>
 
       </div>
-      <template #footer><div class="bypass-setup-actions"><button class="ghost" :disabled="busy || !iface" @click="preview">{{ t('预检查') }}</button><button :disabled="busy || !plan" @click="apply">{{ t(busy ? '处理中…' : '确认配置') }}</button></div></template>
+      <template #footer><div class="bypass-setup-actions"><button class="ghost" :disabled="busy || tunEnabled || !iface" @click="preview">{{ t('预检查') }}</button><button :disabled="busy || tunEnabled || !plan" @click="apply">{{ t(busy ? '处理中…' : '确认配置') }}</button></div></template>
     </SequenceFormDialog>
   </section>
 </template>
