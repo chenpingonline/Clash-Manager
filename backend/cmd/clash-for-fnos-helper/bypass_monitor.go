@@ -42,7 +42,7 @@ func monitorInterfaces() []bypassInterface {
 // This endpoint never creates a config, binds a port, changes sysctls, or
 // modifies firewall rules. Missing evidence is returned as unknown.
 func (h *helper) bypassMonitor(ctx context.Context) map[string]any {
-	result := map[string]any{"interfaces": monitorInterfaces(), "config": nil, "forwarding": nil, "firewall": map[string]any{"readable": false}, "legacyJournal": fileExists(h.bypassStatePathForMonitor()), "neighbors": []bypassNeighbor{}, "neighborStatus": "unsupported", "managed": h.bypassManagedStatus(), "setupSupported": runtime.GOOS == "linux"}
+	result := map[string]any{"interfaces": monitorInterfaces(), "config": nil, "forwarding": nil, "firewall": map[string]any{"readable": false}, "legacyJournal": fileExists(h.bypassStatePathForMonitor()), "neighbors": []bypassNeighbor{}, "neighborStatus": "unsupported", "managed": h.bypassManagedStatus(ctx), "setupSupported": runtime.GOOS == "linux"}
 	path := h.config.managedConfig
 	if proc := h.primary(); proc != nil && proc.ConfigPath != "" {
 		path = proc.ConfigPath
@@ -77,7 +77,7 @@ func (h *helper) bypassMonitor(ctx context.Context) map[string]any {
 	defer cancel()
 	output, e := exec.CommandContext(readCtx, "nft", "--json", "list", "ruleset").Output()
 	if e == nil {
-		result["managed"] = h.bypassManagedStatus(output)
+		result["managed"] = h.bypassManagedStatus(ctx, output)
 		if firewall, err := summarizeFirewall(output); err == nil {
 			result["firewall"] = firewall
 		}

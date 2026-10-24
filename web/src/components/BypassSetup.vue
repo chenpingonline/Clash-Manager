@@ -12,6 +12,7 @@ const tunEnabled = computed(() => props.runtimeTun === true || props.host?.confi
 const emit = defineEmits<{ changed: [] }>()
 const open = ref(false), mode = ref<'redir' | 'tproxy'>('tproxy'), selected = ref(''), busy = ref(false), error = ref(''), message = ref('')
 const plan = ref<{ mode: string; interface: LanInterface; port: number } | null>(null)
+const setupNotice = computed(() => error.value && !open.value ? error.value : props.host?.managed?.error || (props.host?.managed?.active && props.host.managed.rulesPresent !== true ? '暂未核验接管规则，可刷新后重试' : ''))
 const interfaces = computed(() => (props.host?.interfaces || []).filter(item => !isContainerInterface(item.name)))
 const iface = computed(() => interfaces.value.find(item => `${item.name}/${item.address}` === selected.value))
 watch(interfaces, items => { if (!items.some(item => `${item.name}/${item.address}` === selected.value)) selected.value = items[0] ? `${items[0].name}/${items[0].address}` : '' }, { immediate: true })
@@ -50,9 +51,8 @@ async function stop() {
     <div class="bypass-setup-row"><div><strong>{{ t('一键配置') }}</strong><p>{{ props.host?.managed?.active ? `${props.host.managed.mode === 'tproxy' ? 'TProxy' : 'Redir'} · ${props.host.managed.interface?.name} · ${props.host.managed.interface?.cidr}` : t('为所选局域网网卡配置 IPv4 透明代理接管') }}</p></div><button v-if="props.host?.managed?.active" class="ghost" :disabled="busy" @click="stop">{{ t('停用并恢复') }}</button><button v-else class="ghost" :disabled="busy || tunEnabled || !props.host?.setupSupported" :aria-describedby="tunEnabled ? 'bypass-tun-notice' : undefined" @click="open = true; error = ''; plan = null">{{ t('配置接管规则') }}</button></div>
     <p v-if="tunEnabled" id="bypass-tun-notice" role="status">{{ t('TUN 已开启，无需重复配置接管规则') }}</p>
     <p v-if="props.host && !props.host.setupSupported" class="muted">{{ t('一键配置需要 Linux、nftables、iproute2 和网络管理权限。') }}</p>
-    <p v-if="props.host?.managed?.active && props.host.managed.rulesPresent !== true" class="warn-text">{{ t('接管规则状态待验证') }}</p>
-    <p v-if="props.host?.managed?.error" class="warn-text">{{ props.host.managed.error }}</p>
-    <p v-if="message" role="status">{{ t(message) }}</p><p v-if="error && !open" class="warn-text" role="alert">{{ error }}</p>
+    <p v-if="setupNotice" :class="{ 'warn-text': !!error || !!props.host?.managed?.error || props.host?.managed?.rulesPresent === false }" role="status">{{ t(setupNotice) }}</p>
+    <p v-if="message" role="status">{{ t(message) }}</p>
     <SequenceFormDialog :open="open" :title="t('配置接管规则')" @close="!busy && (open = false)">
       <div class="bypass-setup-form">
         <label>{{ t('接管模式') }}<AppSelect v-model="mode" :label="t('接管模式')" :disabled="busy" :options="[{ value: 'tproxy', label: 'TProxy · TCP / UDP' }, { value: 'redir', label: 'Redir · TCP' }]" /></label>

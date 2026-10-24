@@ -147,11 +147,22 @@ func TestBypassKernelRules(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		exists, owner, err := bypassTableOwner(raw)
+		exists, owner, err := h.bypassOwner(ctx, raw)
 		if err != nil || !exists || owner != "clash-manager:"+s.Token {
 			t.Fatalf("ownership list: %s, %v", raw, err)
 		}
-		if _, err := ops.run(ctx, "", "nft", "delete", "table", "ip", bypassTable); err != nil {
+		forward, err := ops.readForward()
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.PreviousForward = forward
+		if err = h.saveBypassState(s); err != nil {
+			t.Fatal(err)
+		}
+		if status := h.bypassManagedStatus(ctx, raw); status["rulesPresent"] != true {
+			t.Fatal(status)
+		}
+		if err = h.cleanupBypass(ctx, 0); err != nil {
 			t.Fatal(err)
 		}
 	}

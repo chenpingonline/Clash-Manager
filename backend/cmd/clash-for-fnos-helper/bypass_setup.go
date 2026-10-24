@@ -330,7 +330,7 @@ func (h *helper) cleanupBypassLocked(ctx context.Context, pid int) error {
 	if err != nil {
 		return err
 	}
-	exists, owner, err := bypassTableOwner(raw)
+	exists, owner, err := h.bypassOwner(ctx, raw)
 	if err != nil {
 		return err
 	}
@@ -398,7 +398,7 @@ func (h *helper) cleanupBypass(ctx context.Context, pid int) error {
 	defer h.bypassMu.Unlock()
 	return h.cleanupBypassLocked(ctx, pid)
 }
-func (h *helper) bypassManagedStatus(rules ...[]byte) map[string]any {
+func (h *helper) bypassManagedStatus(ctx context.Context, rules ...[]byte) map[string]any {
 	h.bypassMu.Lock()
 	defer h.bypassMu.Unlock()
 	s, e := h.readBypassState()
@@ -410,10 +410,18 @@ func (h *helper) bypassManagedStatus(rules ...[]byte) map[string]any {
 	}
 	status := map[string]any{"active": true, "mode": s.Mode, "interface": s.Interface, "port": s.Port, "rulesPresent": nil}
 	if len(rules) > 0 {
-		exists, owner, err := bypassTableOwner(rules[0])
-		status["rulesPresent"] = err == nil && exists && owner == "clash-manager:"+s.Token
-		if status["rulesPresent"] != true {
-			status["error"] = "接管规则缺失或归属已变化，请停用恢复后重新检查"
+		exists, owner, err := h.bypassOwner(ctx, rules[0])
+		switch {
+		case err != nil:
+			status["error"] = "暂时无法核验接管规则归属，请刷新或查看规则明细"
+		case !exists:
+			status["rulesPresent"] = false
+			status["error"] = "接管规则已不存在，请停用恢复后重新配置"
+		case owner != "clash-manager:"+s.Token:
+			status["rulesPresent"] = false
+			status["error"] = "接管规则归属与恢复记录不一致，为避免误删已保留规则"
+		default:
+			status["rulesPresent"] = true
 		}
 	}
 	return status

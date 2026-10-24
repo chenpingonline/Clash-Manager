@@ -2034,5 +2034,10 @@
   "当前 nftables 规则集为空。": "The current nftables ruleset is empty.",
   "未配置不等于异常；读取失败会单独标明。": "Unconfigured options do not imply an error; read failures are shown separately.",
   "nftables 工具不可用，无法读取规则": "nftables is unavailable; rules cannot be read",
-  "无法读取防火墙规则，请检查系统支持与读取权限": "Unable to read firewall rules; check system support and read permissions"
+  "无法读取防火墙规则，请检查系统支持与读取权限": "Unable to read firewall rules; check system support and read permissions",
+  "TUN 已运行，暂未观察到局域网设备流量": "TUN is running; no LAN device traffic has been observed yet",
+  "暂未核验接管规则，可刷新后重试": "Interception rules have not been verified yet; refresh to retry",
+  "暂时无法核验接管规则归属，请刷新或查看规则明细": "Unable to verify interception rule ownership right now; refresh or view rule details",
+  "接管规则已不存在，请停用恢复后重新配置": "Interception rules are missing; stop and restore before configuring again",
+  "接管规则归属与恢复记录不一致，为避免误删已保留规则": "Rule ownership differs from the recovery record; rules were preserved to avoid deleting unrelated rules"
 }

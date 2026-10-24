@@ -44,7 +44,6 @@ const activeDevice = computed(() => devices.value.find(device => device.ip === s
 const lanInterfaces = computed(() => (host.value?.interfaces || []).filter(i => !isContainerInterface(i.name)))
 const diagnosticHints = computed(() => {
   const hints: string[] = []
-  if (!observed.value) hints.push('未观察到透明代理连接，请检查设备网关、接管规则与实际访问流量。')
   if (host.value?.forwarding === false) hints.push('IPv4 转发已关闭，可能影响设备的 UDP 与 DNS；TCP 可用也不代表旁路接入完整。')
   if (runtimeTun.value === true && !observedTypes.value.some(type => type !== 'TUN') && config.value?.autoRoute === false) hints.push('自动路由未开启，需要核对是否存在其他流量接管规则。')
   if (runtimeTun.value === true && !observedTypes.value.some(type => type !== 'TUN') && config.value?.autoRedirect === false) hints.push('Auto Redirect 未开启，发往 NAS 的 DNS 和部分路由路径需要另行验证。')
@@ -98,7 +97,7 @@ defineExpose({ refreshPage: load })
 <template>
   <div class="bypass-monitor">
     <div class="monitor-overview">
-      <div class="monitor-summary" role="status"><strong>{{ t(connectionError || hostError ? '流量状态待验证' : observed ? '已观察到局域网透明代理连接' : '尚未观察到局域网透明代理连接') }}</strong><span v-if="observedTypes.length" class="observed-inbounds">{{ observedTypes.join(' / ') }}</span><span>{{ t(refreshing ? '检查中…' : '诊断状态') }}<template v-if="updatedAt"> · {{ updatedAt }}</template></span></div>
+      <div class="monitor-summary" role="status"><strong>{{ t(connectionError || hostError ? '流量状态待验证' : observed ? '已观察到局域网透明代理连接' : runtimeTun === true ? 'TUN 已运行，暂未观察到局域网设备流量' : '尚未观察到局域网透明代理连接') }}</strong><span v-if="observedTypes.length" class="observed-inbounds">{{ observedTypes.join(' / ') }}</span><span>{{ t(refreshing ? '检查中…' : '诊断状态') }}<template v-if="updatedAt"> · {{ updatedAt }}</template></span></div>
       <details v-if="diagnosticHints.length" class="diagnostic-hints"><summary>{{ t('需要关注') }} · {{ diagnosticHints.length }}<span>{{ t(diagnosticHints[0] || '') }}</span></summary><p v-for="hint in diagnosticHints" :key="hint">{{ t(hint) }}</p><small>{{ t('以上为配置提示，不是设备失败日志；具体结果需要结合连接与日志验证。') }}</small></details>
       <p v-if="host?.legacyJournal" class="warn-text" role="alert">{{ t('检测到旧开发版的旁路由恢复记录，请先使用旧版本停止并恢复；本页不会自动修改网络。') }}</p>
     </div>
