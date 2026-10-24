@@ -37,6 +37,10 @@ type bypassState struct {
 	TableAdded      bool            `json:"tableAdded"`
 }
 type bypassSystem struct {
+	process      func() *processInfo
+	interfaces   func() []bypassInterface
+	liveConfig   func(context.Context, []byte) (map[string]any, error)
+	probe        func(context.Context, string) error
 	run          func(context.Context, string, string, ...string) ([]byte, error)
 	readForward  func() (string, error)
 	writeForward func(string) error
@@ -166,7 +170,7 @@ func (h *helper) bypassPreflight(ctx context.Context, body map[string]any) (*byp
 		return nil, fail(400, "接管模式必须为 Redir 或 TProxy")
 	}
 	var iface *bypassInterface
-	for _, i := range monitorInterfaces() {
+	for _, i := range h.bypassInterfaces() {
 		if i.Name == stringField(body, "interface") && i.Address == stringField(body, "address") && validBypassInterface(i) {
 			copy := i
 			iface = &copy
@@ -176,7 +180,7 @@ func (h *helper) bypassPreflight(ctx context.Context, body map[string]any) (*byp
 	if iface == nil {
 		return nil, fail(400, "请选择实际存在的局域网 IPv4 网卡")
 	}
-	proc := h.managedProcess()
+	proc := h.bypassProcess()
 	if h.readMode() != "managed" || proc == nil {
 		return nil, fail(409, "请先启动 Manager 托管内核")
 	}
@@ -270,7 +274,18 @@ func (h *helper) configureBypass(ctx context.Context, body map[string]any) (map[
 		return nil, fail(409, "透明代理端口尚未运行")
 	}
 	conn.Close()
-	return h.installBypassPlan(ctx, s)
+	result, err := h.installBypassPlan(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	preferences := &bypassPreferences{Schema: 1, Mode: s.Mode, Interface: s.Interface, Enabled: true, KeepEnabled: boolField(body, "keepEnabled")}
+	if err = h.saveBypassPreferences(preferences); err != nil {
+		recovery, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		return nil, errors.Join(err, h.cleanupBypassLocked(recovery, 0))
+	}
+	h.bypassRestoreError = ""
+	return result, nil
 }
 
 func (h *helper) installBypassPlan(ctx context.Context, s *bypassState) (map[string]any, error) {
@@ -305,8 +320,10 @@ func (h *helper) installBypassPlan(ctx context.Context, s *bypassState) (map[str
 			return rollback(err)
 		}
 	}
-	if err = ops.writeForward("1"); err != nil {
-		return rollback(err)
+	if s.PreviousForward != "1" {
+		if err = ops.writeForward("1"); err != nil {
+			return rollback(err)
+		}
 	}
 	s.TableAdded = true
 	if err = h.saveBypassState(s); err != nil {
@@ -403,10 +420,10 @@ func (h *helper) bypassManagedStatus(ctx context.Context, rules ...[]byte) map[s
 	defer h.bypassMu.Unlock()
 	s, e := h.readBypassState()
 	if e != nil {
-		return map[string]any{"active": false, "error": e.Error()}
+		return h.attachBypassPreferences(map[string]any{"active": false, "error": e.Error()})
 	}
 	if s == nil {
-		return map[string]any{"active": false}
+		return h.attachBypassPreferences(map[string]any{"active": false})
 	}
 	status := map[string]any{"active": true, "mode": s.Mode, "interface": s.Interface, "port": s.Port, "rulesPresent": nil}
 	if len(rules) > 0 {
@@ -424,5 +441,5 @@ func (h *helper) bypassManagedStatus(ctx context.Context, rules ...[]byte) map[s
 			status["rulesPresent"] = true
 		}
 	}
-	return status
+	return h.attachBypassPreferences(status)
 }

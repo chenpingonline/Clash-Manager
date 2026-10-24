@@ -29,3 +29,12 @@ describe('bypass request CSRF handshake', () => {
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 })
+it('uses the same CSRF guard for keep preferences and forwards abort signals', async () => {
+  const fetch = vi.fn().mockResolvedValueOnce(json({ csrfToken: 'nonce' })).mockResolvedValueOnce(json({ ok: true }))
+  vi.stubGlobal('fetch', fetch)
+  const controller = new AbortController()
+  await bypassRequest('preferences', { keepEnabled: true }, controller.signal)
+  expect(fetch.mock.calls[0]![1]).toMatchObject({ cache: 'no-store', signal: controller.signal })
+  expect(fetch.mock.calls[1]![0]).toBe('/api/network/bypass/preferences')
+  expect(fetch.mock.calls[1]![1]).toMatchObject({ signal: controller.signal, body: '{"keepEnabled":true}', headers: { 'X-Clash-Bypass-Token': 'nonce' } })
+})

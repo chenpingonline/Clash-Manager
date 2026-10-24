@@ -65,6 +65,7 @@ type transaction struct {
 
 type helper struct {
 	bypassMu           sync.Mutex
+	bypassRestoreError string
 	bypassSystem       *bypassSystem
 	appUpdateMu        sync.Mutex
 	coreLogs           *coreLogWriter
@@ -210,8 +211,10 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result, err = h.prepareBypass(r.Context(), body)
 	case "/network/bypass/apply":
 		result, err = h.configureBypass(r.Context(), body)
+	case "/network/bypass/preferences":
+		result, err = h.updateBypassKeep(body)
 	case "/network/bypass/stop":
-		err = h.cleanupBypass(r.Context(), 0)
+		err = h.stopBypass(r.Context())
 		result = map[string]any{"ok": err == nil}
 	case "/network/update":
 		result, err = h.updateNetwork(r.Context(), body)

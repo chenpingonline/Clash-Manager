@@ -372,6 +372,7 @@ func (h *helper) startManaged() (*processInfo, error) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	h.scheduleBypassRestore(cmd.Process.Pid)
 	return &processInfo{PID: cmd.Process.Pid, Exe: h.config.managedCore, ConfigPath: h.config.managedConfig, ConfigDir: h.config.managedConfigDir, Managed: true}, nil
 }
 
@@ -677,6 +678,7 @@ func (h *helper) ensureBootstrapLocked(ctx context.Context, force bool, requeste
 		}
 		managed = proc
 	}
+	h.scheduleBypassRestore(managed.PID)
 	return h.setBootstrap(map[string]any{"state": "ready", "mode": "managed", "message": "Manager 托管 Mihomo Core 已运行", "progress": 100, "pid": managed.PID, "binaryPath": h.config.managedCore, "configPath": h.config.managedConfig, "delivery": delivery}), nil
 }
 func nullableInt(value int) any {
@@ -1012,6 +1014,7 @@ func (h *helper) rollbackConfig(ctx context.Context, id string) (map[string]any,
 	}
 	_ = os.Remove(tx.Candidate)
 	delete(h.transactions, id)
+	h.scheduleBypassRestore(0)
 	return map[string]any{"ok": true, "target": tx.Target, "backup": nullable(tx.Backup)}, nil
 }
 func (h *helper) commitConfig(id string) (map[string]any, error) {
@@ -1021,6 +1024,7 @@ func (h *helper) commitConfig(id string) (map[string]any, error) {
 	if tx != nil {
 		_ = os.Remove(tx.Candidate)
 		delete(h.transactions, id)
+		h.scheduleBypassRestore(0)
 	}
 	return map[string]any{"ok": true}, nil
 }

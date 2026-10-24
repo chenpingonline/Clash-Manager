@@ -32,6 +32,16 @@ func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, reques
 	switch {
 	case requestPath == "/api/network/bypass/csrf" && r.Method == http.MethodGet:
 		g.writeBypassCSRFToken(w, r)
+	case requestPath == "/api/network/bypass/preferences" && r.Method == http.MethodPost:
+		if !g.nativeMutationRequestAllowed(r, bypassTokenHeader) {
+			writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})
+			return true
+		}
+		var body map[string]any
+		if !decodeJSONBody(w, r, &body) {
+			return true
+		}
+		g.forwardHelper(w, r, http.MethodPost, "/network/bypass/preferences", body, 25*time.Second)
 	case requestPath == "/api/network/bypass/preview" && r.Method == http.MethodPost:
 		if !g.nativeMutationRequestAllowed(r, bypassTokenHeader) {
 			writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})

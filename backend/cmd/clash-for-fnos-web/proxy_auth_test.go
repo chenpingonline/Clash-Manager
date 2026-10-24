@@ -1,73 +1,12 @@
 package main
 
 import (
-	"encoding/base64"
-	"net"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 )
-
-func TestExitLocationUsesManualProxyCredentials(t *testing.T) {
-	for _, test := range []struct {
-		name        string
-		proxyStatus int
-		wantStatus  int
-	}{
-		{"authenticated", http.StatusOK, http.StatusOK},
-		{"rejected", http.StatusProxyAuthRequired, http.StatusBadGateway},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			gotAuth := make(chan string, 1)
-			proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				gotAuth <- r.Header.Get("Proxy-Authorization")
-				w.WriteHeader(test.proxyStatus)
-				_, _ = w.Write([]byte(`{"success":true,"ip":"203.0.113.42","country_code":"hk"}`))
-			}))
-			defer proxy.Close()
-			_, portText, _ := net.SplitHostPort(strings.TrimPrefix(proxy.URL, "http://"))
-			port, _ := strconv.Atoi(portText)
-			controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/configs" {
-					writeJSON(w, 200, map[string]any{"mixed-port": port})
-					return
-				}
-				http.NotFound(w, r)
-			}))
-			defer controller.Close()
-			socket := startTunHelper(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/config/active-raw" {
-					http.NotFound(w, r)
-					return
-				}
-				writeJSON(w, 200, map[string]any{"content": "authentication: ['test-user:test-p:a@ss']\nskip-auth-prefixes: []\n"})
-			}))
-			g := newGateway(config{gateway: "/app/clash-for-fnos", settingsFile: writeGatewaySettings(t, controller.URL), privilegedSocket: socket, exitLocationURL: "http://exit.invalid/json"})
-			recorder := httptest.NewRecorder()
-			g.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/app/clash-for-fnos/api/exit-location", nil))
-			if recorder.Code != test.wantStatus {
-				t.Fatalf("status = %d", recorder.Code)
-			}
-			wantAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte("test-user:test-p:a@ss"))
-			if <-gotAuth != wantAuth {
-				t.Fatal("manual credentials were not sent to the proxy")
-			}
-			body := recorder.Body.String()
-			if strings.Contains(body, "test-user") || strings.Contains(body, "test-p:") || strings.Contains(body, wantAuth) {
-				t.Fatal("response leaked proxy credentials")
-			}
-			if test.proxyStatus == http.StatusOK && !strings.Contains(body, `"via":"mixed"`) {
-				t.Fatal("exit location did not use the proxy")
-			}
-			if test.proxyStatus == http.StatusProxyAuthRequired && !strings.Contains(body, "代理认证失败") {
-				t.Fatal("missing useful authentication error")
-			}
-		})
-	}
-}
 
 func TestProxyAuthNetworkAPIPreservesCredentialFields(t *testing.T) {
 	var forwarded atomic.Bool

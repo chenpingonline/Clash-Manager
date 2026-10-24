@@ -81,7 +81,7 @@ type gateway struct {
 	configMu           sync.Mutex
 	networkMu          sync.Mutex
 	profileMu          sync.Mutex
-	ruleImportPreviews  map[string]*ruleImportPreview
+	ruleImportPreviews map[string]*ruleImportPreview
 	jobMu              sync.Mutex
 	localScanMu        sync.Mutex
 	delayMu            sync.RWMutex
@@ -144,7 +144,7 @@ func loadConfig() config {
 		trafficHistoryFile: filepath.Join(runtimeenv.VarDir(), "traffic-history.json"),
 		rulesSnapshotFile:  filepath.Join(runtimeenv.VarDir(), "rules-snapshot.json"),
 		ruleStateFile:      filepath.Join(runtimeenv.EtcDir(), "rule-state.json"),
-		exitLocationURL:    env("CLASH_EXIT_LOCATION_URL", "https://ipwho.is/?lang=zh-CN&fields=success,message,ip,country,country_code,region,city,timezone"),
+		exitLocationURL:    env("CLASH_EXIT_LOCATION_URL", ""),
 		releaseRepo:        releaseRepo,
 	}
 }
@@ -907,7 +907,7 @@ func (g *gateway) handleMihomoAPI(w http.ResponseWriter, r *http.Request, reques
 	case requestPath == "/api/traffic-history" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, map[string]any{"samples": g.trafficHistory.Snapshot()})
 	case requestPath == "/api/exit-location" && r.Method == http.MethodGet:
-		g.writeExitLocation(w, r, client)
+		g.writeExitLocation(w, r)
 	case requestPath == "/api/settings/test" && r.Method == http.MethodPost:
 		g.testController(w, r, client)
 	case requestPath == "/api/proxies" && r.Method == http.MethodGet:

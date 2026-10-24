@@ -29,7 +29,7 @@ export interface MonitorHost {
   interfaces: LanInterface[]; config: MonitorConfig | null; configError?: string
   forwarding: boolean | null; firewall: { readable: boolean; forwardChains?: number; natRules?: number; dropRules?: number }
   setupSupported?: boolean
-  managed?: { active: boolean; rulesPresent?: boolean | null; mode?: 'redir' | 'tproxy'; interface?: LanInterface; port?: number; error?: string }
+  managed?: { active: boolean; keepEnabled?: boolean; enabled?: boolean; selection?: { mode: 'redir' | 'tproxy'; interface: LanInterface }; rulesPresent?: boolean | null; mode?: 'redir' | 'tproxy'; interface?: LanInterface; port?: number; error?: string }
   legacyJournal: boolean
   neighbors?: NeighborObservation[]; neighborStatus?: 'available' | 'unavailable' | 'unsupported'
 }

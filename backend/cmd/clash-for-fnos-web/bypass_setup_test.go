@@ -79,7 +79,7 @@ func TestBypassSetupTransaction(t *testing.T) {
 }
 func TestBypassSetupRequiresConfirmationAndSameOrigin(t *testing.T) {
 	g := newGateway(config{publicDir: t.TempDir(), gateway: "/app/clash-for-fnos"})
-	for _, path := range []string{"configure", "preview", "stop"} {
+	for _, path := range []string{"configure", "preview", "stop", "preferences"} {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/app/clash-for-fnos/api/network/bypass/"+path, strings.NewReader(`{}`))
 		req.Header.Set("Sec-Fetch-Site", "cross-site")

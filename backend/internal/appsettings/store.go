@@ -18,6 +18,7 @@ type Store struct {
 }
 
 type Update struct {
+	BypassPageEnabled    *bool   `json:"bypassPageEnabled"`
 	Controller           *string `json:"controller"`
 	Secret               *string `json:"secret"`
 	ClearSecret          bool    `json:"clearSecret"`
@@ -135,10 +136,13 @@ func Public(document map[string]any) map[string]any {
 	if timeout < 1000 || timeout > 30000 {
 		timeout = 5000
 	}
-	return map[string]any{"controller": stringValue(document, "controller", "http://127.0.0.1:9090"), "hasSecret": secret != "", "controllerAutoDetect": boolValue(document, "controllerAutoDetect", true), "persistSelections": boolValue(document, "persistSelections", true), "notifyAppUpdates": boolValue(document, "notifyAppUpdates", true), "healthcheckUrl": stringValue(document, "healthcheckUrl", "http://cp.cloudflare.com/generate_204"), "healthcheckTimeout": timeout}
+	return map[string]any{"bypassPageEnabled": boolValue(document, "bypassPageEnabled", true), "controller": stringValue(document, "controller", "http://127.0.0.1:9090"), "hasSecret": secret != "", "controllerAutoDetect": boolValue(document, "controllerAutoDetect", true), "persistSelections": boolValue(document, "persistSelections", true), "notifyAppUpdates": boolValue(document, "notifyAppUpdates", true), "healthcheckUrl": stringValue(document, "healthcheckUrl", "http://cp.cloudflare.com/generate_204"), "healthcheckTimeout": timeout}
 }
 
 func Apply(document map[string]any, update Update) error {
+	if update.BypassPageEnabled != nil {
+		document["bypassPageEnabled"] = *update.BypassPageEnabled
+	}
 	// This legacy preference was exposed without any runtime behavior. Remove it
 	// the next time settings are saved instead of carrying misleading state.
 	delete(document, "applyManagedConfigOnStart")

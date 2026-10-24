@@ -14,6 +14,7 @@ import PortRow from '@/components/settings/PortRow.vue'
 import SettingToggle from '@/components/settings/SettingToggle.vue'
 import ProxyBindAddress from '@/components/settings/ProxyBindAddress.vue'
 import ProxyAuthenticationSettings from '@/components/settings/ProxyAuthentication.vue'
+import { useBypassPagePreference } from '@/composables/useBypassPagePreference'
 import { refreshCoreHealth } from '@/composables/useCoreHealth'
 import { useAutosave } from '@/composables/useAutosave'
 import { useAppUpdateNotice } from '@/composables/useAppUpdateNotice'
@@ -27,7 +28,7 @@ import type { AppIconsResponse, AppUpdateInfo, CoreMode, DnsMapping, DnsSetting,
 
 import { runtime } from '@/services/runtime'
 
-type Section = 'core' | 'network' | 'dns' | 'tun' | 'advanced' | 'behavior' | 'update'
+type Section = 'core' | 'network' | 'dns' | 'tun' | 'advanced' | 'behavior' | 'bypass' | 'update'
 type NetworkForm = {
   controller: PortSetting; mixed: PortSetting; socks: PortSetting; http: PortSetting; redir: PortSetting; tproxy: PortSetting
   allowLan: boolean; bindAddress: string; core: { ipv6: boolean; unifiedDelay: boolean }; tun: Required<TunSetting>; dnsOverrideEnabled: boolean; dnsEnabled: boolean; dns: Required<DnsSetting>
@@ -45,7 +46,7 @@ const defaultNetwork = (): NetworkForm => ({
 })
 
 const requestedSectionValue = new URLSearchParams(location.hash.split('?')[1] || '').get('section')
-const requestedSection = (['core', 'network', 'dns', 'tun', 'advanced', 'behavior', 'update'] as Section[]).find(section => section === requestedSectionValue) || null
+const requestedSection = (['core', 'network', 'dns', 'tun', 'advanced', 'behavior', 'bypass', 'update'] as Section[]).find(section => section === requestedSectionValue) || null
 const loading = ref(true), error = ref(''), open = ref<Section>(requestedSection || 'core'), busy = ref(''), tunSwitching = ref(false)
 const tunProgress = ref('')
 const tunFeatures = ref<TunFeatures>({})
@@ -85,7 +86,19 @@ const clearExternalSecret = ref(false)
 const revealedSecret = ref('')
 const secretVisible = ref(false)
 const secretLoading = ref(false)
-const system = ref<SystemStatus>({}), manager = reactive<ManagerSettings>({ notifyAppUpdates: true, healthcheckUrl: 'http://cp.cloudflare.com/generate_204', healthcheckTimeout: 5000 }), network = reactive<NetworkForm>(defaultNetwork())
+const { enabled: bypassPageEnabled, sync: syncBypassPreference } = useBypassPagePreference()
+const bypassPreferenceSaving = ref(false)
+async function saveBypassPreference() {
+  if (bypassPreferenceSaving.value) return
+  bypassPreferenceSaving.value = true
+  try {
+    const saved = await api<ManagerSettings>('/api/settings', jsonRequest('PUT', { bypassPageEnabled: manager.bypassPageEnabled !== false }))
+    syncBypassPreference(saved); manager.bypassPageEnabled = bypassPageEnabled.value
+    notify(bypassPageEnabled.value ? '已显示旁路由菜单' : '已隐藏旁路由菜单')
+  } catch (cause) { manager.bypassPageEnabled = bypassPageEnabled.value; notify(errorMessage(cause), true) }
+  finally { bypassPreferenceSaving.value = false }
+}
+const system = ref<SystemStatus>({}), manager = reactive<ManagerSettings>({ bypassPageEnabled: true, notifyAppUpdates: true, healthcheckUrl: 'http://cp.cloudflare.com/generate_204', healthcheckTimeout: 5000 }), network = reactive<NetworkForm>(defaultNetwork())
 const tunRouteExcludeText = ref('')
 const proxyAuthentication = ref<ProxyAuthentication>({ accounts: [], skipAuthPrefixes: [] })
 const authSaving = ref(false)
@@ -134,6 +147,7 @@ const allCategories: Array<{ key: Section; title: string; description: string }>
   { key: 'tun', title: '虚拟网卡(TUN)设置', description: 'TUN 详细参数与系统流量接管' },
   { key: 'advanced', title: '环境变量设置', description: '管理系统登录与 Shell 的代理环境变量' },
   { key: 'behavior', title: '其他设置', description: '软件图标与应用外观' },
+  { key: 'bypass', title: '旁路由', description: '控制旁路由菜单与页面检查' },
   { key: 'update', title: '更新设置', description: '应用版本、检查更新与更新提示' },
 ]
 const categories = computed(() => allCategories.filter(item => (item.key !== 'advanced' || runtime.value.capabilities.hostProxyEnvironment) && (item.key !== 'behavior' || runtime.value.capabilities.appIcons)).map(item => {
@@ -206,6 +220,7 @@ const settingSearchCatalog: Array<SettingsSearchEntry & { section: Section; tab:
   {"section": "advanced", "tab": "", "label": "Bash 交互环境", "selector": "[data-setting=\"setting-proxyForm-targets-bashrc\"]", "keywords": "bashrc"},
   {"section": "advanced", "tab": "", "label": "代理绕过设置", "selector": "#proxy-bypass-input", "keywords": "NO_PROXY"},
   {"section": "behavior", "tab": "", "label": "软件图标", "selector": ".app-icon-settings", "keywords": "icon 外观"},
+  {"section": "bypass", "tab": "", "label": "显示旁路由菜单", "selector": "#bypass-page-preference", "keywords": "旁路由 菜单 检查 显示 隐藏 bypassPageEnabled"},
   {"section": "update", "tab": "", "label": "更新设置", "selector": ".update-panel", "keywords": "版本 应用 更新 通知"},
 ]
 const settingSearchEntries = computed<SettingsSearchEntry[]>(() => [...settingSearchCatalog.filter(item => categories.value.some(category => category.key === item.section)).map(item => ({
@@ -258,7 +273,7 @@ function mappings(value: string, kind: 'dns' | 'hosts'): DnsMapping[] | HostMapp
 function syncDnsText() {
   dnsText.defaultNameserver = list(network.dns.defaultNameserver); dnsText.nameserver = list(network.dns.nameserver); dnsText.fallback = list(network.dns.fallback); dnsText.proxyServerNameserver = list(network.dns.proxyServerNameserver); dnsText.directNameserver = list(network.dns.directNameserver); dnsText.fakeIpFilter = list(network.dns.fakeIpFilter); dnsText.nameserverPolicy = network.dns.nameserverPolicy.map(item => `${item.matcher} = ${item.servers.join('; ')}`).join('\n'); dnsText.fallbackIpCidr = list(network.dns.fallbackIpCidr); dnsText.fallbackDomain = list(network.dns.fallbackDomain); dnsText.hosts = network.dns.hosts.map(item => `${item.host} = ${item.values.join('; ')}`).join('\n')
 }
-const categoryLabels: Record<Section, string> = { core: '内核管理', network: '网络与端口', dns: 'DNS 与解析', tun: '虚拟网卡(TUN)设置', advanced: '环境变量设置', behavior: '其他设置', update: '更新设置' }
+const categoryLabels: Record<Section, string> = { core: '内核管理', network: '网络与端口', dns: 'DNS 与解析', tun: '虚拟网卡(TUN)设置', advanced: '环境变量设置', behavior: '其他设置', bypass: '旁路由', update: '更新设置' }
 function selectSection(section: Section) {
   open.value = section
   document.querySelector<HTMLElement>('.content')?.scrollTo({ top: 0 })
@@ -416,7 +431,8 @@ async function load() {
     ])
     tunFeatures.value = net.tunFeatures || {}
     networkOffline.value = net.offline === true
-    system.value = sys; selectedCoreMode.value = sys.coreMode === 'external' ? 'external' : 'managed'; Object.assign(manager, settings, { healthcheckUrl: settings.healthcheckUrl || healthcheckPresets[0].url }); setAppUpdateNoticeEnabled(settings.notifyAppUpdates !== false); applyNetwork(net.settings || {}, Number(sys.managedMixedPort || 7890)); environment.value = proxy; applyAppUpdateResult(update); icons.value = iconData; selectedIcon.value = iconData.selected || iconData.defaultId || 'cat-orbit'; geo.value = geoData; Object.assign(geoForm, { autoUpdate: geoData.settings?.autoUpdate === true, updateInterval: Number(geoData.settings?.updateInterval || 24) })
+    syncBypassPreference(settings)
+    system.value = sys; selectedCoreMode.value = sys.coreMode === 'external' ? 'external' : 'managed'; Object.assign(manager, settings, { bypassPageEnabled: settings.bypassPageEnabled !== false, healthcheckUrl: settings.healthcheckUrl || healthcheckPresets[0].url }); setAppUpdateNoticeEnabled(settings.notifyAppUpdates !== false); applyNetwork(net.settings || {}, Number(sys.managedMixedPort || 7890)); environment.value = proxy; applyAppUpdateResult(update); icons.value = iconData; selectedIcon.value = iconData.selected || iconData.defaultId || 'cat-orbit'; geo.value = geoData; Object.assign(geoForm, { autoUpdate: geoData.settings?.autoUpdate === true, updateInterval: Number(geoData.settings?.updateInterval || 24) })
     if (runtime.value.capabilities.appUpdates) void refreshAppInstall()
     const setting = proxy.management?.settings
     Object.assign(proxyForm, { enabled: setting?.enabled !== false, followMixedPort: setting?.followMixedPort !== false, port: Number(setting?.port || network.mixed.port || 7890), noProxy: setting?.noProxy || 'localhost,127.0.0.1,::1', targets: { environment: setting?.targets?.environment !== false, profile: setting?.targets?.profile !== false, bashrc: setting?.targets?.bashrc !== false } })
@@ -844,6 +860,10 @@ onMounted(initialize)
 <div v-if="runtime.capabilities.appIcons" class="app-icon-settings"><div class="section-head"><div><h2>{{ t("软件图标") }}</h2></div></div><div v-if="icons.error" class="local-warning">{{ t("读取图标设置失败：") }}{{ t(icons.error) }}</div><div class="app-icon-picker"><button v-for="icon in icons.options || []" :key="icon.id" type="button" class="app-icon-choice" :class="{ active: icon.id === selectedIcon }" :disabled="icons.ok === false || Boolean(busy)" :title="t(icon.name || icon.id)" @click="chooseIcon(icon.id)"><img :src="icon.preview || `${APP_PREFIX}/icons/${icon.id}_256.png`" alt=""><span class="app-icon-choice-state">{{ icon.id === selectedIcon ? '✓' : '' }}</span></button></div></div>
           </div>
 
+          <div v-else-if="category.key === 'bypass'" class="settings-accordion-panel">
+            <SettingToggle id="bypass-page-preference" :model-value="manager.bypassPageEnabled !== false" :title="t('显示旁路由菜单')" :description="t('关闭后隐藏菜单并停止旁路由页面检查，不影响 TUN 或已有接管规则。')" :disabled="bypassPreferenceSaving" @update:model-value="manager.bypassPageEnabled = $event" @change="saveBypassPreference" />
+            <p v-if="bypassPreferenceSaving" class="hint" role="status">{{ t('保存中…') }}</p>
+          </div>
           <div v-else class="settings-accordion-panel update-panel">
  <div v-if="runtime.platform === 'linux'" class="section"><h2>{{ t("Linux 安装包更新") }}</h2><p>{{ t("当前版本 v") }}{{ t(runtime.version) }}{{ t("。使用 apt 安装新版 DEB，保留现有配置即可升级。") }}</p></div>
  <div v-if="runtime.platform === 'docker'" class="section"><h2>{{ t("Docker 镜像更新") }}</h2><p>{{ t("当前版本 v") }}{{ t(runtime.version) }}{{ t("。拉取新镜像并重新创建容器，保留数据卷即可升级。") }}</p></div>

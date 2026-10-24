@@ -117,3 +117,43 @@ func TestHealthcheckRejectsInvalidURL(t *testing.T) {
 		}
 	}
 }
+
+func TestBypassPagePreferencePersistsWithoutChangingNetworkSettings(t *testing.T) {
+	store := &Store{File: filepath.Join(t.TempDir(), "settings.json")}
+	initial, err := store.ReadPublic()
+	if err != nil || initial["bypassPageEnabled"] != true {
+		t.Fatal(initial, err)
+	}
+	if err = store.WithDocument(func(document map[string]any) error {
+		document["tun"] = map[string]any{"enable": true}
+		document["custom"] = "preserve"
+		disabled := false
+		return Apply(document, Update{BypassPageEnabled: &disabled})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reopened := &Store{File: store.File}
+	saved, err := reopened.ReadPublic()
+	if err != nil || saved["bypassPageEnabled"] != false {
+		t.Fatal(saved, err)
+	}
+	document, err := reopened.ReadDocument()
+	if err != nil || document["custom"] != "preserve" || document["tun"].(map[string]any)["enable"] != true {
+		t.Fatal(document, err)
+	}
+	if err = reopened.WithDocument(func(document map[string]any) error { return Apply(document, Update{}) }); err != nil {
+		t.Fatal(err)
+	}
+	saved, _ = reopened.ReadPublic()
+	if saved["bypassPageEnabled"] != false {
+		t.Fatal("unrelated save reset preference")
+	}
+	enabled := true
+	if err = reopened.WithDocument(func(document map[string]any) error { return Apply(document, Update{BypassPageEnabled: &enabled}) }); err != nil {
+		t.Fatal(err)
+	}
+	saved, _ = reopened.ReadPublic()
+	if saved["bypassPageEnabled"] != true {
+		t.Fatal(saved)
+	}
+}

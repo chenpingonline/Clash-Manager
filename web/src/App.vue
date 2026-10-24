@@ -15,6 +15,7 @@ import ConnectionsPage from '@/pages/ConnectionsPage.vue'
 import LogsPage from '@/pages/LogsPage.vue'
 import SettingsPage from '@/pages/SettingsPage.vue'
 import BypassPage from '@/pages/BypassPage.vue'
+import { useBypassPagePreference } from '@/composables/useBypassPagePreference'
 import { useCoreHealth } from '@/composables/useCoreHealth'
 import { useAppUpdateNotice } from '@/composables/useAppUpdateNotice'
 import { useFnosTheme } from '@/composables/useFnosTheme'
@@ -37,8 +38,15 @@ const pages: Array<{ name: PageName; label: string; component: Component }> = [
   { name: 'settings', label: '设置', component: SettingsPage },
 ]
 
+const { enabled: bypassPageEnabled, ready: bypassPreferenceReady, initialize: initializeBypassPreference } = useBypassPagePreference()
+const bypassPreferenceError = ref('')
+const visiblePages = computed(() => pages.filter(page => page.name !== 'bypass' || (bypassPreferenceReady.value && bypassPageEnabled.value)))
 const readPage = (): PageName => {
   const value = location.hash.slice(1).split('?')[0] as PageName
+  if (value === 'bypass' && bypassPreferenceReady.value && !bypassPageEnabled.value) {
+    history.replaceState(history.state, '', '#settings?section=bypass')
+    return 'settings'
+  }
   return pages.some(item => item.name === value) ? value : 'dashboard'
 }
 const current = ref<PageName>(readPage())
@@ -87,8 +95,17 @@ function onHashChange() {
   current.value = readPage()
 }
 
+watch([bypassPageEnabled, bypassPreferenceReady], () => {
+  if (bypassPreferenceReady.value && !bypassPageEnabled.value && current.value === 'bypass') onHashChange()
+})
+async function loadBypassPreference() {
+  bypassPreferenceError.value = ''
+  try { await initializeBypassPreference(appUpdateController.signal) }
+  catch { bypassPreferenceError.value = '无法读取旁路由显示设置，请刷新重试。' }
+}
 function navigate(page: PageName, event: MouseEvent) {
   event.preventDefault()
+  if (page === 'bypass' && (!bypassPreferenceReady.value || !bypassPageEnabled.value)) return
   if (page === current.value) return
   history.replaceState(history.state, '', `#${page}`)
   current.value = page
@@ -110,6 +127,7 @@ async function refreshActivePage() {
   if (pageRefreshing.value) return
   pageRefreshing.value = true
   try {
+    if (current.value === 'bypass' && !bypassPreferenceReady.value) { await loadBypassPreference(); return }
     if (activePageRef.value?.refreshPage) {
       await activePageRef.value.refreshPage()
       return
@@ -153,6 +171,7 @@ onMounted(() => {
   window.addEventListener('auxclick', blockBrowserMouseNavigation, true)
   document.addEventListener('scroll', markScrollActivity, true)
   refresh().catch(() => undefined)
+  void loadBypassPreference()
   void checkAppUpdateSilently()
   timer = window.setInterval(() => refresh().catch(() => undefined), 30_000)
   if (runtime.value.capabilities.appIcons) api<AppIconsResponse>('/api/app/icons').then(value => syncIcon(value.selected || value.defaultId || 'cat-orbit')).catch(() => syncIcon('cat-orbit'))
@@ -178,7 +197,7 @@ onBeforeUnmount(() => {
 <template>
   <aside class="sidebar">
     <nav>
-      <a v-for="page in pages" :key="page.name" :href="`#${page.name}`" class="nav-item" :class="{ active: current === page.name }" :title="t(page.label)" :aria-label="t(page.label)" :aria-current="current === page.name ? 'page' : undefined" @click="navigate(page.name, $event)">
+      <a v-for="page in visiblePages" :key="page.name" :href="`#${page.name}`" class="nav-item" :class="{ active: current === page.name }" :title="t(page.label)" :aria-label="t(page.label)" :aria-current="current === page.name ? 'page' : undefined" @click="navigate(page.name, $event)">
         <span class="nav-icon" aria-hidden="true"><NavIcon :name="page.name" /></span><span class="nav-label">{{ t(page.label) }}</span>
       </a>
     </nav>
@@ -200,7 +219,8 @@ onBeforeUnmount(() => {
     </header>
     <div id="page-navigation" class="page-navigation" />
     <section ref="contentRef" class="content" :class="{ 'config-content': current === 'config', 'logs-content': current === 'logs', 'rules-content': current === 'rules' }" @scroll.passive="markScrollActivity">
-      <component :is="activePage.component" :key="`${current}-${refreshKey}`" ref="activePageRef" />
+      <component v-if="current !== 'bypass' || (bypassPreferenceReady && bypassPageEnabled)" :is="activePage.component" :key="`${current}-${refreshKey}`" ref="activePageRef" />
+      <p v-else role="status">{{ t(bypassPreferenceError || '正在读取旁路由显示设置…') }}</p>
     </section>
     <div id="page-footer" class="page-footer" />
   </main>

@@ -361,6 +361,7 @@ export interface NetworkSettingsResponse {
   proxyEnvironment?: ProxyEnvironmentResponse
 }
 export interface ManagerSettings {
+  bypassPageEnabled?: boolean
   controllerAutoDetect?: boolean
   controller?: string
   hasSecret?: boolean
