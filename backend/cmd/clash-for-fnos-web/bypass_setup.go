@@ -8,9 +8,21 @@ import (
 	"time"
 )
 
+const bypassTokenHeader = "X-Clash-Bypass-Token"
+
+func (g *gateway) writeBypassCSRFToken(w http.ResponseWriter, r *http.Request) {
+	token, err := g.appUpdateCSRFToken()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "生成接管请求令牌失败"})
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]string{"csrfToken": token})
+}
+
 // Apply the validated Core config before installing interception rules.
 func (g *gateway) configureBypass(w http.ResponseWriter, r *http.Request) {
-	if !sameOrigin(r) {
+	if !g.nativeMutationRequestAllowed(r, bypassTokenHeader) {
 		writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})
 		return
 	}

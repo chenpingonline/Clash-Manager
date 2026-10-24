@@ -1985,5 +1985,6 @@
   "在设备上访问网站，然后观察此页是否出现该设备源 IP 的 TUN、Redir 或 TProxy 连接、命中规则和出口链。": "Visit a website on the device, then check for its source IP, TUN, Redir or TProxy connections, matched rules and outbound chains.",
   "IPv6、同网段直连和被排除的目标可能绕过接管规则；本页不证明这些流量已接管。": "IPv6, direct traffic within the subnet and excluded destinations may bypass interception. This page does not confirm their interception.",
   "已观察到 {arg0} 流量": "{arg0} traffic observed",
-  "接管规则状态待验证": "Interception rule status needs verification"
+  "接管规则状态待验证": "Interception rule status needs verification",
+  "获取接管请求令牌失败，请重新打开页面": "Unable to obtain the interception request token. Please reopen the page."
 }

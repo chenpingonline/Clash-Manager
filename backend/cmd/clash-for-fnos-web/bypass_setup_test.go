@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -57,7 +58,12 @@ func TestBypassSetupTransaction(t *testing.T) {
 			}))
 			g := newGateway(config{publicDir: t.TempDir(), gateway: "/app/clash-for-fnos", settingsFile: writeGatewaySettings(t, controller.URL), privilegedSocket: socket})
 			rec := httptest.NewRecorder()
-			g.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/app/clash-for-fnos/api/network/bypass/configure", strings.NewReader(`{"mode":"tproxy","interface":"eth0","address":"192.168.1.2","confirmed":true}`)))
+			req := httptest.NewRequest(http.MethodPost, "http://internal/app/clash-for-fnos/api/network/bypass/configure", strings.NewReader(`{"mode":"tproxy","interface":"eth0","address":"192.168.1.2","confirmed":true}`))
+			req = req.WithContext(context.WithValue(req.Context(), nativeConnectionKey{}, true))
+			token, _ := g.appUpdateCSRFToken()
+			req.Header.Set("Origin", "https://nas.example:5667")
+			req.Header.Set(bypassTokenHeader, token)
+			g.ServeHTTP(rec, req)
 			mu.Lock()
 			got := strings.Join(events, "|")
 			mu.Unlock()

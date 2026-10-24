@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { api, errorMessage, jsonRequest } from '@/services/api'
+import { errorMessage } from '@/services/api'
+import { bypassRequest } from '@/services/bypass-setup'
 import { t } from '@/services/i18n'
 import type { LanInterface, MonitorHost } from '@/services/bypass-monitor'
 import { isContainerInterface } from '@/services/bypass-monitor'
@@ -17,7 +18,7 @@ watch([mode, selected], () => { plan.value = null; error.value = '' })
 function payload() { return { mode: mode.value, interface: iface.value?.name, address: iface.value?.address } }
 async function preview() {
   busy.value = true; error.value = ''; message.value = ''; plan.value = null
-  try { plan.value = await api('/api/network/bypass/preview', jsonRequest('POST', payload())) }
+  try { plan.value = await bypassRequest<{ mode: string; interface: LanInterface; port: number }>('preview', payload()) }
   catch (cause) { error.value = errorMessage(cause) }
   finally { busy.value = false }
 }
@@ -25,7 +26,7 @@ async function apply() {
   if (!plan.value || busy.value) return
   busy.value = true; error.value = ''
   try {
-    await api('/api/network/bypass/configure', jsonRequest('POST', { ...payload(), confirmed: true }))
+    await bypassRequest('configure', { ...payload(), confirmed: true })
     message.value = 'IPv4 接管规则已配置，请在设备上发起访问验证。'; open.value = false; plan.value = null; emit('changed')
   } catch (cause) { error.value = errorMessage(cause); emit('changed') }
   finally { busy.value = false }
@@ -33,7 +34,7 @@ async function apply() {
 async function stop() {
   if (busy.value) return
   busy.value = true; error.value = ''; message.value = ''
-  try { await api('/api/network/bypass/stop', jsonRequest('POST', {})); message.value = '接管规则已停用，透明代理端口配置保留。'; emit('changed') }
+  try { await bypassRequest('stop', {}); message.value = '接管规则已停用，透明代理端口配置保留。'; emit('changed') }
   catch (cause) { error.value = errorMessage(cause) }
   finally { busy.value = false }
 }

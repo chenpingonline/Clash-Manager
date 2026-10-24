@@ -30,8 +30,10 @@ func (g *gateway) helperJSON(ctx context.Context, method, apiPath string, payloa
 
 func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, requestPath string) bool {
 	switch {
+	case requestPath == "/api/network/bypass/csrf" && r.Method == http.MethodGet:
+		g.writeBypassCSRFToken(w, r)
 	case requestPath == "/api/network/bypass/preview" && r.Method == http.MethodPost:
-		if !sameOrigin(r) {
+		if !g.nativeMutationRequestAllowed(r, bypassTokenHeader) {
 			writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})
 			return true
 		}
@@ -43,7 +45,7 @@ func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, reques
 	case requestPath == "/api/network/bypass/configure" && r.Method == http.MethodPost:
 		g.configureBypass(w, r)
 	case requestPath == "/api/network/bypass/stop" && r.Method == http.MethodPost:
-		if !sameOrigin(r) {
+		if !g.nativeMutationRequestAllowed(r, bypassTokenHeader) {
 			writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})
 			return true
 		}

@@ -33,6 +33,12 @@ func (g *gateway) appUpdateCSRFToken() (string, error) {
 }
 
 func (g *gateway) appUpdateRequestAllowed(r *http.Request) bool {
+	return g.nativeMutationRequestAllowed(r, appUpdateTokenHeader)
+}
+
+// Only the native Unix-socket ingress may use a nonce when fnOS rewrites Host.
+// Do not trust client-supplied forwarded headers on a TCP listener.
+func (g *gateway) nativeMutationRequestAllowed(r *http.Request, tokenHeader string) bool {
 	if sameOrigin(r) {
 		return true
 	}
@@ -47,7 +53,7 @@ func (g *gateway) appUpdateRequestAllowed(r *http.Request) bool {
 		return false
 	}
 	token, err := g.appUpdateCSRFToken()
-	return err == nil && subtle.ConstantTimeCompare([]byte(token), []byte(r.Header.Get(appUpdateTokenHeader))) == 1
+	return err == nil && subtle.ConstantTimeCompare([]byte(token), []byte(r.Header.Get(tokenHeader))) == 1
 }
 
 func (g *gateway) writeAppInstallStatus(w http.ResponseWriter, r *http.Request) {
