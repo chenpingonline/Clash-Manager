@@ -6,11 +6,13 @@ export function isContainerInterface(name: string): boolean {
 export interface LanInterface { name: string; address: string; cidr: string }
 export interface MonitorConfig {
   tun: boolean | null; autoRoute: boolean | null; autoRedirect: boolean | null
-  dnsEnabled: boolean | null; dnsListen: string; dnsHijack: string[]; routeExclude: string[]
+  redirPort?: number; tproxyPort?: number; dnsEnabled: boolean | null; dnsListen: string; dnsHijack: string[]; routeExclude: string[]
 }
 export interface MonitorHost {
   interfaces: LanInterface[]; config: MonitorConfig | null; configError?: string
   forwarding: boolean | null; firewall: { readable: boolean; forwardChains?: number; natRules?: number; dropRules?: number }
+  setupSupported?: boolean
+  managed?: { active: boolean; rulesPresent?: boolean | null; mode?: 'redir' | 'tproxy'; interface?: LanInterface; port?: number; error?: string }
   legacyJournal: boolean
   neighbors?: NeighborObservation[]; neighborStatus?: 'available' | 'unavailable' | 'unsupported'
 }
@@ -121,7 +123,8 @@ export class DeviceInventory {
 }
 export function deviceEvidence(device: InventoryDevice, trafficAvailable: boolean): string {
   if (!trafficAvailable) return device.discovered ? '已发现，流量待验证' : '历史记录，流量待验证'
-  if (device.tunCount > 0) return '已观察到 TUN 流量'
+  const transparent = transparentTypes([...device.types, ...(device.tunCount > 0 ? ['TUN'] : [])])
+  if (transparent.length) return `已观察到 ${transparent.join(' / ')} 流量`
   if (device.types.some(type => /^(http|https|socks|socks4|socks5)$/i.test(type))) return '仅观察到显式代理'
   if (device.count > 0) return '有连接，入站类型待确认'
   return device.discovered ? '已发现，暂无流量证据' : '本页历史记录'
@@ -145,4 +148,17 @@ export function logFromDevice(message: string, ip: string): boolean {
   const escaped = ip.replace(/\./g, '\\.')
   return new RegExp(`(?:^|\\s|\\])${escaped}:\\d+(?=\\s+-->|\\s+->)`).test(message)
     || new RegExp(`\\bfrom ${escaped}:\\d+(?=\\s|$)`).test(message)
+}
+
+/** Evidence comes from the actual inbound type, not a configured TUN flag. */
+export function transparentType(type: string): 'TUN' | 'Redir' | 'TProxy' | null {
+  switch (type.toLowerCase()) {
+    case 'tun': return 'TUN'
+    case 'redir': case 'redirect': return 'Redir'
+    case 'tproxy': return 'TProxy'
+    default: return null
+  }
+}
+export function transparentTypes(types: string[]): string[] {
+  return [...new Set(types.map(transparentType).filter((type): type is NonNullable<typeof type> => type !== null))]
 }

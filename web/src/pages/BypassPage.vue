@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, errorMessage } from '@/services/api'
 import { t } from '@/services/i18n'
 import { formatBytes } from '@/services/format'
-import { bypassInventory, isContainerInterface, type InventoryDevice, type MonitorHost, type ObservedConnection } from '@/services/bypass-monitor'
+import BypassSetup from '@/components/BypassSetup.vue'
+import { transparentTypes, bypassInventory, isContainerInterface, type InventoryDevice, type MonitorHost, type ObservedConnection } from '@/services/bypass-monitor'
 import BypassDeviceDetails from '@/components/BypassDeviceDetails.vue'
 import SequenceFormDialog from '@/components/SequenceFormDialog.vue'
 import AppSelect from '@/components/AppSelect.vue'
@@ -41,14 +42,15 @@ const activeDevice = computed(() => devices.value.find(device => device.ip === s
 const lanInterfaces = computed(() => (host.value?.interfaces || []).filter(i => !isContainerInterface(i.name)))
 const diagnosticHints = computed(() => {
   const hints: string[] = []
-  if (runtimeTun.value === false) hints.push('TUN 当前未运行，网关流量的透明接管待验证。')
+  if (!observed.value) hints.push('未观察到透明代理连接，请检查设备网关、接管规则与实际访问流量。')
   if (host.value?.forwarding === false) hints.push('IPv4 转发已关闭，可能影响设备的 UDP 与 DNS；TCP 可用也不代表旁路接入完整。')
-  if (config.value?.autoRoute === false) hints.push('自动路由未开启，需要核对是否存在其他流量接管规则。')
-  if (config.value?.autoRedirect === false) hints.push('Auto Redirect 未开启，发往 NAS 的 DNS 和部分路由路径需要另行验证。')
+  if (runtimeTun.value === true && !observedTypes.value.some(type => type !== 'TUN') && config.value?.autoRoute === false) hints.push('自动路由未开启，需要核对是否存在其他流量接管规则。')
+  if (runtimeTun.value === true && !observedTypes.value.some(type => type !== 'TUN') && config.value?.autoRedirect === false) hints.push('Auto Redirect 未开启，发往 NAS 的 DNS 和部分路由路径需要另行验证。')
   if (config.value?.dnsEnabled === false) hints.push('Mihomo DNS 未开启，请确认设备使用的 DNS 服务可达。')
   return hints
 })
-const observed = computed(() => lanDevices.value.some(device => device.tunCount > 0))
+const observedTypes = computed(() => transparentTypes(lanDevices.value.flatMap(device => device.types)))
+const observed = computed(() => observedTypes.value.length > 0)
 const selectedInterface = computed(() => host.value?.interfaces.find(i => `${i.name}/${i.address}` === selected.value))
 const config = computed(() => host.value?.config)
 function boolLabel(value: boolean | null | undefined): string { return value === true ? '已开启' : value === false ? '未开启' : '待验证' }
@@ -91,10 +93,11 @@ defineExpose({ refreshPage: load })
 <template>
   <div class="bypass-monitor">
     <div class="monitor-overview">
-      <div class="monitor-summary" role="status"><strong>{{ t(connectionError || hostError ? '流量状态待验证' : observed ? '已观察到局域网 TUN 连接' : '尚未观察到局域网 TUN 连接') }}</strong><span>{{ t(refreshing ? '检查中…' : '只读检查') }}<template v-if="updatedAt"> · {{ updatedAt }}</template></span></div>
+      <div class="monitor-summary" role="status"><strong>{{ t(connectionError || hostError ? '流量状态待验证' : observed ? '已观察到局域网透明代理连接' : '尚未观察到局域网透明代理连接') }}</strong><span v-if="observedTypes.length" class="observed-inbounds">{{ observedTypes.join(' / ') }}</span><span>{{ t(refreshing ? '检查中…' : '诊断状态') }}<template v-if="updatedAt"> · {{ updatedAt }}</template></span></div>
       <details v-if="diagnosticHints.length" class="diagnostic-hints"><summary>{{ t('需要关注') }} · {{ diagnosticHints.length }}<span>{{ t(diagnosticHints[0] || '') }}</span></summary><p v-for="hint in diagnosticHints" :key="hint">{{ t(hint) }}</p><small>{{ t('以上为配置提示，不是设备失败日志；具体结果需要结合连接与日志验证。') }}</small></details>
       <p v-if="host?.legacyJournal" class="warn-text" role="alert">{{ t('检测到旧开发版的旁路由恢复记录，请先使用旧版本停止并恢复；本页不会自动修改网络。') }}</p>
     </div>
+    <BypassSetup :host="host" @changed="load" />
     <div class="card monitor-devices">
       <div class="device-toolbar">
         <div class="device-heading"><h3>{{ t('局域网设备') }}</h3><span class="tag">{{ visibleDevices.length }}</span></div>
@@ -108,7 +111,7 @@ defineExpose({ refreshPage: load })
       <div class="monitor-table"><table><thead><tr><th>{{ t('设备 IP') }}</th><th>{{ t('连接状态') }}</th><th>{{ t('当前连接') }}</th><th>{{ t('当前连接累计流量') }}</th><th>{{ t('操作') }}</th></tr></thead><tbody><tr v-for="device in visibleDevices" :key="device.ip"><td><strong>{{ device.ip }}</strong><small v-if="isContainerInterface(device.interface)">{{ t('容器网络') }}</small></td><td><span class="tag connection-state" :class="{ connected: !connectionError && device.recentTraffic }">{{ connectionError ? '—' : t(device.recentTraffic ? '已连接' : '未连接') }}</span></td><td>{{ connectionError ? '—' : device.count }}</td><td><span v-if="connectionError">—</span><span v-else class="device-traffic"><span>↑ {{ formatBytes(device.upload) }}</span><span class="device-download">↓ {{ formatBytes(device.download) }}</span></span></td><td><button type="button" class="ghost device-details-button" aria-haspopup="dialog" @click="selectedDevice = device.ip">{{ t('查看详情') }}</button></td></tr><tr v-if="!visibleDevices.length"><td colspan="5" class="device-empty" role="status">{{ t(connectionError ? '连接数据不可用，当前接管状态待验证。' : onlyConnected ? '暂无已连接设备，可取消筛选查看全部设备。' : '尚未发现其他局域网设备。请让设备发起访问后刷新；空列表不代表不支持旁路由。') }}</td></tr></tbody></table></div>
       <details class="device-help"><summary>{{ t('设备列表说明') }}</summary>
       <p class="muted">{{ t('每 10 秒刷新，仅代表当前可见连接；不会修改网络设置。') }}</p>
-      <p class="muted">{{ t('最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或已由 TUN 接管。') }}</p>
+      <p class="muted">{{ t('最近 60 秒观察到上传或下载增长显示已连接，否则显示未连接；首次采样仅建立基线，状态不代表设备在线或全部流量已被接管。') }}</p>
       <p class="muted">{{ t('邻居表可能不完整。最近观察表示看到邻居记录或连接的时间，不是设备最后在线时间。本页会话最多保留 256 个设备、24 小时；刷新浏览器后清除。') }}</p>
       </details>
       <a href="#connections">{{ t('查看全部连接') }}</a>
@@ -123,6 +126,8 @@ defineExpose({ refreshPage: load })
       <div v-show="detailTab === 'checks'" id="bypass-panel-checks" class="monitor-checks" role="tabpanel" aria-labelledby="bypass-tab-checks" tabindex="0">
 
       <dl class="check-list">
+        <div><dt>{{ t('Redir 监听端口') }}</dt><dd>{{ config?.redirPort || t('未启用或未读到配置') }}</dd></div>
+        <div><dt>{{ t('TProxy 监听端口') }}</dt><dd>{{ config?.tproxyPort || t('未启用或未读到配置') }}</dd></div>
         <div><dt>{{ t('TUN 配置') }}</dt><dd>{{ t(boolLabel(config?.tun)) }}</dd></div>
         <div><dt>{{ t('TUN 运行态') }}</dt><dd>{{ t(boolLabel(runtimeTun)) }}<small v-if="runtimeError">{{ t('Controller 不可用，无法读取实际运行态。') }}</small></dd></div>
         <div><dt>Auto Route</dt><dd>{{ t(boolLabel(config?.autoRoute)) }}</dd></div>
@@ -136,7 +141,7 @@ defineExpose({ refreshPage: load })
       <p v-if="hostError" class="warn-text" role="alert">{{ t(hostError) }}</p>
       <p v-else-if="host?.configError" class="muted">{{ t('启动配置不可读取或格式无效，配置项显示为待验证。') }}</p>
       <p class="muted">{{ t('未显式配置的选项显示为待验证。规则数量不代表放行或拦截结果，也不表示必须额外添加 NAT。') }}</p>
-      <a href="#settings">{{ t('前往设置检查 TUN 与 DNS') }}</a>
+      <a href="#settings">{{ t('前往设置检查入站与 DNS') }}</a>
       </div>
       <div v-show="detailTab === 'guide'" id="bypass-panel-guide" class="monitor-guide" role="tabpanel" aria-labelledby="bypass-tab-guide" tabindex="0">
       <div v-if="lanInterfaces.length" class="guide-interface"><span>{{ t('接入网卡') }}</span><AppSelect v-model="selected" :label="t('接入网卡')" :options="lanInterfaces.map(i => ({ value: `${i.name}/${i.address}`, label: `${i.name} · ${i.address}` }))" /></div>
@@ -145,7 +150,7 @@ defineExpose({ refreshPage: load })
         <div><dt>{{ t('局域网网段') }}</dt><dd>{{ selectedInterface?.cidr || '—' }}</dd></div>
         <div><dt>DNS <HelpPopover label="DNS"><span>{{ t('设备默认网关可填写所选 NAS IPv4；DNS 仅在 NAS 已提供可达的 DNS 服务时指向该地址。') }}</span></HelpPopover></dt><dd>{{ t('确认 NAS DNS 可用后再填写') }}</dd></div>
       </dl>
-      <div class="guide-verify"><span>{{ t('访问网站后，在设备详情中查看 TUN 连接。') }}</span><HelpPopover :label="t('设备接入')"><span>{{ t('在设备上访问网站，然后观察此页是否出现该设备源 IP 的 TUN 连接、命中规则和出口链。') }}</span><span>{{ t('IPv6、同网段直连和被排除的目标可能绕过 TUN；本页不证明这些流量已接管。') }}</span></HelpPopover></div>
+      <div class="guide-verify"><span>{{ t('访问网站后，在设备详情中查看实际入站方式。') }}</span><HelpPopover :label="t('设备接入')"><span>{{ t('在设备上访问网站，然后观察此页是否出现该设备源 IP 的 TUN、Redir 或 TProxy 连接、命中规则和出口链。') }}</span><span>{{ t('IPv6、同网段直连和被排除的目标可能绕过接管规则；本页不证明这些流量已接管。') }}</span></HelpPopover></div>
       </div>
     </section>
   </div>

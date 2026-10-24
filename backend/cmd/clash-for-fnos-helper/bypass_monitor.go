@@ -42,7 +42,7 @@ func monitorInterfaces() []bypassInterface {
 // This endpoint never creates a config, binds a port, changes sysctls, or
 // modifies firewall rules. Missing evidence is returned as unknown.
 func (h *helper) bypassMonitor(ctx context.Context) map[string]any {
-	result := map[string]any{"interfaces": monitorInterfaces(), "config": nil, "forwarding": nil, "firewall": map[string]any{"readable": false}, "legacyJournal": fileExists(h.bypassStatePathForMonitor()), "neighbors": []bypassNeighbor{}, "neighborStatus": "unsupported"}
+	result := map[string]any{"interfaces": monitorInterfaces(), "config": nil, "forwarding": nil, "firewall": map[string]any{"readable": false}, "legacyJournal": fileExists(h.bypassStatePathForMonitor()), "neighbors": []bypassNeighbor{}, "neighborStatus": "unsupported", "managed": h.bypassManagedStatus(), "setupSupported": runtime.GOOS == "linux"}
 	path := h.config.managedConfig
 	if proc := h.primary(); proc != nil && proc.ConfigPath != "" {
 		path = proc.ConfigPath
@@ -77,6 +77,7 @@ func (h *helper) bypassMonitor(ctx context.Context) map[string]any {
 	defer cancel()
 	output, e := exec.CommandContext(readCtx, "nft", "--json", "list", "ruleset").Output()
 	if e == nil {
+		result["managed"] = h.bypassManagedStatus(output)
 		if firewall, err := summarizeFirewall(output); err == nil {
 			result["firewall"] = firewall
 		}
@@ -120,7 +121,7 @@ func monitorConfig(raw []byte) (map[string]any, error) {
 			}
 		}
 	}
-	return map[string]any{"tun": pick(tun, "enable"), "autoRoute": pick(tun, "auto-route"), "autoRedirect": pick(tun, "auto-redirect"), "dnsEnabled": pick(dns, "enable"), "dnsListen": listen, "dnsHijack": hijack, "routeExclude": excluded}, nil
+	return map[string]any{"tun": pick(tun, "enable"), "autoRoute": pick(tun, "auto-route"), "autoRedirect": pick(tun, "auto-redirect"), "redirPort": yamlInteger(string(raw), "redir-port", 0), "tproxyPort": yamlInteger(string(raw), "tproxy-port", 0), "dnsEnabled": pick(dns, "enable"), "dnsListen": listen, "dnsHijack": hijack, "routeExclude": excluded}, nil
 }
 func summarizeFirewall(raw []byte) (map[string]any, error) {
 	var document struct {

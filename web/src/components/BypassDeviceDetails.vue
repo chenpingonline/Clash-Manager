@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { api, errorMessage, isAbortError } from '@/services/api'
 import { t } from '@/services/i18n'
 import { formatBytes } from '@/services/format'
-import { connectionExit, logFromDevice, type InventoryDevice, type ObservedConnection } from '@/services/bypass-monitor'
+import { connectionExit, logFromDevice, transparentType, type InventoryDevice, type ObservedConnection } from '@/services/bypass-monitor'
 import { normalizeLog, type NormalizedLog } from '@/services/logs'
 import type { LogItem } from '@/types/api'
 import { notify } from '@/services/toast'
@@ -25,6 +25,11 @@ async function navigateTab(event: KeyboardEvent, index: number) {
   document.getElementById(`${tabId}-tab-${activeTab.value}`)?.focus()
 }
 const current = computed(() => props.connections.filter(c => c.metadata?.sourceIP === props.ip))
+const inboundCounts = computed(() => {
+  const counts = new Map<string, number>()
+  for (const connection of current.value) { const type = transparentType(connection.metadata?.type || ''); if (type) counts.set(type, (counts.get(type) || 0) + 1) }
+  return [...counts].map(([type, count]) => ({ type, count }))
+})
 const rows = ref<NormalizedLog[]>([]), error = ref(''), loading = ref(false), running = ref(true)
 const globalLogs = ref(false), errorsOnly = ref(false), readAt = ref('')
 const visible = computed(() => rows.value.filter(row => !errorsOnly.value || /^(warn|error|fatal)$/.test(row.level)))
@@ -81,7 +86,7 @@ onBeforeUnmount(() => { disposed = true; stopLogs() })
       <div><dt>{{ t('接入网卡') }}</dt><dd>{{ device.interface || '—' }}</dd></div>
       <div><dt>{{ t('最近观察') }}</dt><dd>{{ new Date(device.lastObserved).toLocaleString() }}</dd></div>
     </dl>
-    <div class="connection-heading"><h3>{{ t('当前连接') }}</h3><span class="muted">{{ trafficAvailable ? current.length : '—' }}<template v-if="trafficAvailable"> · TUN {{ device.tunCount }}</template></span></div>
+    <div class="connection-heading"><h3>{{ t('当前连接') }}</h3><span class="muted">{{ trafficAvailable ? current.length : '—' }}<template v-if="trafficAvailable"><span v-for="item in inboundCounts" :key="item.type"> · {{ item.type }} {{ item.count }}</span></template></span></div>
     <p v-if="!trafficAvailable" class="warn-text" role="alert">{{ t('连接数据不可用，当前接管状态待验证。') }}</p>
     <div v-else-if="current.length" class="detail-table"><table><thead><tr><th>{{ t('目标 / 协议') }}</th><th>{{ t('入站') }}</th><th>{{ t('命中规则') }}</th><th>{{ t('最终出口') }}</th><th>{{ t('累计流量') }}</th></tr></thead><tbody><tr v-for="(connection, index) in current" :key="connection.id || index"><td>{{ connection.metadata?.host || connection.metadata?.destinationIP || '—' }}<small>{{ connection.metadata?.destinationPort || '—' }} · {{ connection.metadata?.network || '—' }}</small></td><td>{{ connection.metadata?.type || t('待确认') }}</td><td>{{ [connection.rule, connection.rulePayload].filter(Boolean).join(': ') || '—' }}</td><td><span class="tag">{{ t(connectionExit(connection)) }}</span><small v-if="connection.chains?.length && !/^(DIRECT|REJECT(?:-DROP)?)$/i.test(connection.chains.join(''))">{{ connection.chains.join(' ← ') }}</small></td><td>↑ {{ formatBytes(connection.upload || 0) }}<small>↓ {{ formatBytes(connection.download || 0) }}</small></td></tr></tbody></table></div>
     <p v-else class="muted">{{ t('当前没有该设备的可见连接。请在设备上发起访问后刷新；没有记录不能直接判定流量未经过 NAS。') }}</p>

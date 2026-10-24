@@ -328,6 +328,11 @@ func (h *helper) startManaged() (*processInfo, error) {
 	exited := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		if cleanupErr := h.cleanupBypass(cleanupCtx, cmd.Process.Pid); cleanupErr != nil {
+			log.Printf("Bypass cleanup: %v", cleanupErr)
+		}
+		cleanupCancel()
 		// An older process must not remove the PID file of its replacement.
 		if body, readErr := os.ReadFile(h.config.managedPID); readErr == nil && strings.TrimSpace(string(body)) == strconv.Itoa(cmd.Process.Pid) {
 			_ = os.Remove(h.config.managedPID)
@@ -399,6 +404,11 @@ func (h *helper) stopManaged() {
 }
 
 func (h *helper) stopManagedLocked() {
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	if err := h.cleanupBypass(cleanupCtx, 0); err != nil {
+		log.Printf("Bypass cleanup before stop: %v", err)
+	}
+	cleanupCancel()
 	// Never signal an unrelated process through a stale PID file.
 	if proc := h.managedProcess(); proc != nil {
 		terminateManagedPID(proc.PID, 3*time.Second)
@@ -945,6 +955,9 @@ func (h *helper) activateConfig(ctx context.Context, id string) (map[string]any,
 	}
 	if tx.Offline && (tx.Target != h.config.managedConfig || h.readMode() != "managed" || h.primary() != nil) {
 		return nil, fail(409, "Core 状态已变化，请刷新后重试保存")
+	}
+	if err := h.cleanupBypass(ctx, 0); err != nil {
+		return nil, err
 	}
 	if len(tx.UserSettings) > 0 {
 		settings, previous, err := h.readUserSettings()

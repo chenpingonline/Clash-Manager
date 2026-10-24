@@ -64,6 +64,8 @@ type transaction struct {
 }
 
 type helper struct {
+	bypassMu           sync.Mutex
+	bypassSystem       *bypassSystem
 	appUpdateMu        sync.Mutex
 	coreLogs           *coreLogWriter
 	config             helperConfig
@@ -192,6 +194,23 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result, err = h.inspectPath(stringField(body, "path"))
 	case "/config/read-path":
 		result, err = h.readPath(stringField(body, "path"))
+	case "/network/bypass/preview":
+		h.mu.Lock()
+		h.bypassMu.Lock()
+		var plan *bypassState
+		plan, err = h.bypassPreflight(r.Context(), body)
+		h.bypassMu.Unlock()
+		h.mu.Unlock()
+		if err == nil {
+			result = map[string]any{"mode": plan.Mode, "interface": plan.Interface, "port": plan.Port, "ipv4Only": true}
+		}
+	case "/network/bypass/prepare":
+		result, err = h.prepareBypass(r.Context(), body)
+	case "/network/bypass/apply":
+		result, err = h.configureBypass(r.Context(), body)
+	case "/network/bypass/stop":
+		err = h.cleanupBypass(r.Context(), 0)
+		result = map[string]any{"ok": err == nil}
 	case "/network/update":
 		result, err = h.updateNetwork(r.Context(), body)
 	case "/geo/settings":
@@ -319,6 +338,11 @@ func run() error {
 		}
 	}
 	h := newHelper(cfg)
+	recoveryCtx, recoveryCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	if err := h.cleanupBypass(recoveryCtx, 0); err != nil {
+		log.Printf("Bypass recovery needs attention: %v", err)
+	}
+	recoveryCancel()
 	if err := h.applyStandaloneStartupPorts(); err != nil {
 		return err
 	}

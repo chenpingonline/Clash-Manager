@@ -30,6 +30,26 @@ func (g *gateway) helperJSON(ctx context.Context, method, apiPath string, payloa
 
 func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, requestPath string) bool {
 	switch {
+	case requestPath == "/api/network/bypass/preview" && r.Method == http.MethodPost:
+		if !sameOrigin(r) {
+			writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})
+			return true
+		}
+		var body map[string]any
+		if !decodeJSONBody(w, r, &body) {
+			return true
+		}
+		g.forwardHelper(w, r, http.MethodPost, "/network/bypass/preview", body, 15*time.Second)
+	case requestPath == "/api/network/bypass/configure" && r.Method == http.MethodPost:
+		g.configureBypass(w, r)
+	case requestPath == "/api/network/bypass/stop" && r.Method == http.MethodPost:
+		if !sameOrigin(r) {
+			writeJSON(w, 403, map[string]string{"error": "拒绝跨站请求"})
+			return true
+		}
+		g.networkMu.Lock()
+		defer g.networkMu.Unlock()
+		g.forwardHelper(w, r, http.MethodPost, "/network/bypass/stop", map[string]any{}, 25*time.Second)
 	case requestPath == "/api/network/bypass" && r.Method == http.MethodGet:
 		g.forwardHelper(w, r, http.MethodGet, "/network/bypass", nil, 5*time.Second)
 	case requestPath == "/api/app/icons" && r.Method == http.MethodGet:

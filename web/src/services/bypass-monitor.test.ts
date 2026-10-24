@@ -129,3 +129,20 @@ describe('recent device traffic', () => {
     expect(inventory.update([], [], interfaces, 170_000)[0]?.recentTraffic).toBe(false)
   })
 })
+
+describe('transparent inbound evidence', () => {
+  it('recognizes TUN, Redir/Redirect and TProxy without treating explicit proxies as interception', async () => {
+    const { transparentType, transparentTypes } = await import('./bypass-monitor')
+    expect(transparentTypes(['TUN', 'Redir', 'redirect', 'TProxy', 'tproxy', 'HTTP', 'Socks5'])).toEqual(['TUN', 'Redir', 'TProxy'])
+    expect(transparentType('http')).toBeNull()
+  })
+  it('reports Redir and TProxy device evidence when no TUN connections exist', () => {
+    for (const type of ['Redir', 'TProxy']) {
+      const inventory = new DeviceInventory()
+      const device = inventory.update([{ metadata: { sourceIP: '192.168.1.100', type }, upload: 123 }], [], interfaces, 1000)[0]!
+      expect(device.tunCount).toBe(0)
+      expect(deviceEvidence(device, true)).toBe(`已观察到 ${type} 流量`)
+      expect(deviceEvidence(device, false)).toContain('待验证')
+    }
+  })
+})
