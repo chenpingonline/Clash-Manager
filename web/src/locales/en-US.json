@@ -717,7 +717,6 @@
   "GeoIP、GeoSite、Country MMDB 与 ASN MMDB 更新完成": "GeoIP, GeoSite, Country MMDB and ASN MMDB updated",
   "GEO 数据更新成功": "GEO data updated",
   "GEO 数据更新失败：{arg0}": "GEO data update failed: {arg0}",
-  "修改参数后，点击空白处会自动保存": "Click outside a field after editing to save automatically.",
   "Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。": "The Core is stopped. You are editing its managed startup configuration. Changes save automatically; start the Core when finished.",
   "Mihomo REST API · Manager 使用 127.0.0.1 连接": "Mihomo REST API · Manager connects through 127.0.0.1",
   "同时接受 HTTP 与 SOCKS5 代理": "Accept both HTTP and SOCKS5 proxy connections",

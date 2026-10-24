@@ -717,7 +717,6 @@
   "GeoIP、GeoSite、Country MMDB 与 ASN MMDB 更新完成": "GeoIP、GeoSite、Country MMDB 与 ASN MMDB 更新完成",
   "GEO 数据更新成功": "GEO 数据更新成功",
   "GEO 数据更新失败：{arg0}": "GEO 数据更新失败：{arg0}",
-  "修改参数后，点击空白处会自动保存": "修改参数后，点击空白处会自动保存",
   "Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。": "Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。",
   "Mihomo REST API · Manager 使用 127.0.0.1 连接": "Mihomo REST API · Manager 使用 127.0.0.1 连接",
   "同时接受 HTTP 与 SOCKS5 代理": "同时接受 HTTP 与 SOCKS5 代理",

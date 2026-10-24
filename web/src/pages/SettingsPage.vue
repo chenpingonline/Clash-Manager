@@ -680,7 +680,6 @@ onMounted(initialize)
         </button>
       </div>
       </Teleport>
-      <p class="settings-save-note">{{ t("修改参数后，点击空白处会自动保存") }}</p>
       <div class="settings-tab-content">
         <template v-for="category in categories" :key="category.key">
         <div v-if="open === category.key" :id="`settings-panel-${category.key}`" class="settings-category-panel" role="tabpanel" :aria-labelledby="`settings-tab-${category.key}`" tabindex="0">
@@ -926,7 +925,6 @@ onMounted(initialize)
 
 <style scoped>
 
-.settings-save-note { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .settings-home :deep(.setting-search-highlight) { background-color: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); border-radius: 6px; }
 /* A single focus border, without the additional outline and halo. */
 .settings-home :deep(input:not([type="checkbox"]):not([type="radio"]):focus),
