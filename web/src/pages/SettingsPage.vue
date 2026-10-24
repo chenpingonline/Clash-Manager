@@ -92,13 +92,13 @@ async function saveBypassPreference() {
   if (bypassPreferenceSaving.value) return
   bypassPreferenceSaving.value = true
   try {
-    const saved = await api<ManagerSettings>('/api/settings', jsonRequest('PUT', { bypassPageEnabled: manager.bypassPageEnabled !== false }))
+    const saved = await api<ManagerSettings>('/api/settings', jsonRequest('PUT', { bypassPageEnabled: manager.bypassPageEnabled === true }))
     syncBypassPreference(saved); manager.bypassPageEnabled = bypassPageEnabled.value
     notify(bypassPageEnabled.value ? '已显示旁路由菜单' : '已隐藏旁路由菜单')
   } catch (cause) { manager.bypassPageEnabled = bypassPageEnabled.value; notify(errorMessage(cause), true) }
   finally { bypassPreferenceSaving.value = false }
 }
-const system = ref<SystemStatus>({}), manager = reactive<ManagerSettings>({ bypassPageEnabled: true, notifyAppUpdates: true, healthcheckUrl: 'http://cp.cloudflare.com/generate_204', healthcheckTimeout: 5000 }), network = reactive<NetworkForm>(defaultNetwork())
+const system = ref<SystemStatus>({}), manager = reactive<ManagerSettings>({ bypassPageEnabled: false, notifyAppUpdates: true, healthcheckUrl: 'http://cp.cloudflare.com/generate_204', healthcheckTimeout: 5000 }), network = reactive<NetworkForm>(defaultNetwork())
 const tunRouteExcludeText = ref('')
 const proxyAuthentication = ref<ProxyAuthentication>({ accounts: [], skipAuthPrefixes: [] })
 const authSaving = ref(false)
@@ -432,7 +432,7 @@ async function load() {
     tunFeatures.value = net.tunFeatures || {}
     networkOffline.value = net.offline === true
     syncBypassPreference(settings)
-    system.value = sys; selectedCoreMode.value = sys.coreMode === 'external' ? 'external' : 'managed'; Object.assign(manager, settings, { bypassPageEnabled: settings.bypassPageEnabled !== false, healthcheckUrl: settings.healthcheckUrl || healthcheckPresets[0].url }); setAppUpdateNoticeEnabled(settings.notifyAppUpdates !== false); applyNetwork(net.settings || {}, Number(sys.managedMixedPort || 7890)); environment.value = proxy; applyAppUpdateResult(update); icons.value = iconData; selectedIcon.value = iconData.selected || iconData.defaultId || 'cat-orbit'; geo.value = geoData; Object.assign(geoForm, { autoUpdate: geoData.settings?.autoUpdate === true, updateInterval: Number(geoData.settings?.updateInterval || 24) })
+    system.value = sys; selectedCoreMode.value = sys.coreMode === 'external' ? 'external' : 'managed'; Object.assign(manager, settings, { bypassPageEnabled: settings.bypassPageEnabled === true, healthcheckUrl: settings.healthcheckUrl || healthcheckPresets[0].url }); setAppUpdateNoticeEnabled(settings.notifyAppUpdates !== false); applyNetwork(net.settings || {}, Number(sys.managedMixedPort || 7890)); environment.value = proxy; applyAppUpdateResult(update); icons.value = iconData; selectedIcon.value = iconData.selected || iconData.defaultId || 'cat-orbit'; geo.value = geoData; Object.assign(geoForm, { autoUpdate: geoData.settings?.autoUpdate === true, updateInterval: Number(geoData.settings?.updateInterval || 24) })
     if (runtime.value.capabilities.appUpdates) void refreshAppInstall()
     const setting = proxy.management?.settings
     Object.assign(proxyForm, { enabled: setting?.enabled !== false, followMixedPort: setting?.followMixedPort !== false, port: Number(setting?.port || network.mixed.port || 7890), noProxy: setting?.noProxy || 'localhost,127.0.0.1,::1', targets: { environment: setting?.targets?.environment !== false, profile: setting?.targets?.profile !== false, bashrc: setting?.targets?.bashrc !== false } })
@@ -860,7 +860,7 @@ onMounted(initialize)
           </div>
 
           <div v-else-if="category.key === 'bypass'" class="settings-accordion-panel">
-            <SettingToggle id="bypass-page-preference" :model-value="manager.bypassPageEnabled !== false" :title="t('显示旁路由菜单')" :description="t('关闭后隐藏菜单并停止旁路由页面检查，不影响 TUN 或已有接管规则。')" :disabled="bypassPreferenceSaving" @update:model-value="manager.bypassPageEnabled = $event" @change="saveBypassPreference" />
+            <SettingToggle id="bypass-page-preference" :model-value="manager.bypassPageEnabled === true" :title="t('显示旁路由菜单')" :description="t('关闭后隐藏菜单并停止旁路由页面检查，不影响 TUN 或已有接管规则。')" :disabled="bypassPreferenceSaving" @update:model-value="manager.bypassPageEnabled = $event" @change="saveBypassPreference" />
             <p v-if="bypassPreferenceSaving" class="hint" role="status">{{ t('保存中…') }}</p>
           </div>
           <div v-else class="settings-accordion-panel update-panel">

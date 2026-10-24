@@ -121,7 +121,7 @@ func TestHealthcheckRejectsInvalidURL(t *testing.T) {
 func TestBypassPagePreferencePersistsWithoutChangingNetworkSettings(t *testing.T) {
 	store := &Store{File: filepath.Join(t.TempDir(), "settings.json")}
 	initial, err := store.ReadPublic()
-	if err != nil || initial["bypassPageEnabled"] != true {
+	if err != nil || initial["bypassPageEnabled"] != false {
 		t.Fatal(initial, err)
 	}
 	if err = store.WithDocument(func(document map[string]any) error {

@@ -5,14 +5,21 @@ describe('bypass page preference', () => {
   it('loads disabled preferences before allowing page checks', async () => {
     const preference = (await import('./useBypassPagePreference')).useBypassPagePreference()
     expect(preference.ready.value).toBe(false)
+    expect(preference.enabled.value).toBe(false)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ bypassPageEnabled: false })))
     await preference.initialize()
     expect(preference.ready.value).toBe(true)
     expect(preference.enabled.value).toBe(false)
   })
-  it('preserves visibility for existing settings without the new field', async () => {
+  it('defaults to hidden for settings without the new field', async () => {
     const preference = (await import('./useBypassPagePreference')).useBypassPagePreference()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({})))
+    await preference.initialize()
+    expect(preference.enabled.value).toBe(false)
+  })
+  it('preserves an explicitly enabled preference', async () => {
+    const preference = (await import('./useBypassPagePreference')).useBypassPagePreference()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ bypassPageEnabled: true })))
     await preference.initialize()
     expect(preference.enabled.value).toBe(true)
   })

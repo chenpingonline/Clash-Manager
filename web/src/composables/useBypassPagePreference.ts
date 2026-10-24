@@ -2,11 +2,11 @@ import { ref } from 'vue'
 import { api } from '@/services/api'
 import type { ManagerSettings } from '@/types/api'
 
-const enabled = ref(true), ready = ref(false)
+const enabled = ref(false), ready = ref(false)
 let revision = 0
 function sync(settings: Pick<ManagerSettings, 'bypassPageEnabled'>) {
   revision++
-  enabled.value = settings.bypassPageEnabled !== false
+  enabled.value = settings.bypassPageEnabled === true
   ready.value = true
 }
 async function initialize(signal?: AbortSignal) {
