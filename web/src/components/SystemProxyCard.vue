@@ -216,7 +216,6 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-    <TunRuntimeStatus />
   </section>
   <div v-else class="runtime-control-grid">
     <div class="card section runtime-control-card system-proxy-card">

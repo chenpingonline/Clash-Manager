@@ -30,7 +30,8 @@ async function close() {
   await nextTick(); trigger.value?.focus()
 }
 function add() {
-  entries.value.push({ id: crypto.randomUUID(), name: '', type: 'mixed', listen: '127.0.0.1', port: 1080, proxy: '', enabled: true, users: [] })
+  const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  entries.value.push({ id, name: '', type: 'mixed', listen: '127.0.0.1', port: 1080, proxy: '', enabled: true, users: [] })
 }
 async function save() {
   if (blocked.value || props.busy || !loaded.value) return
