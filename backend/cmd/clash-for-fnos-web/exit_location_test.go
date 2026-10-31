@@ -2,9 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -74,7 +79,7 @@ func TestExitLocationFallbackAndFormats(t *testing.T) {
 				endpoints = append(endpoints, server.URL+path)
 			}
 			result, err := queryExitLocations(context.Background(), server.Client(), endpoints)
-			if err != nil || result["timezone"] != "Asia/Hong_Kong" || result["countryCode"] != "HK" || len(paths) != 5 {
+			if err != nil || result["timezone"] != "Asia/Hong_Kong" || result["countryCode"] != "HK" || !reflect.DeepEqual(paths, []string{"/limited", "/html", "/invalid", "/rejected", "/ok"}) {
 				t.Fatalf("result=%v err=%v paths=%v", result, err, paths)
 			}
 		})
@@ -168,5 +173,87 @@ func TestExitLocationSixProviderMappings(t *testing.T) {
 	// Each provider gets a full attempt even when all preceding providers time out.
 	if exitLocationBudget < time.Duration(len(defaultExitLocationURLs))*exitLocationTimeout {
 		t.Fatal("budget cannot reach all providers")
+	}
+}
+
+func TestExitLocationAndroidProviderPriority(t *testing.T) {
+	want := []string{"ipwho.is", "ip.api.skk.moe", "api.ipapi.is", "api.ip.sb", "get.geojs.io", "ipapi.co"}
+	var got []string
+	for _, endpoint := range defaultExitLocationURLs {
+		u, err := url.Parse(endpoint)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, u.Hostname())
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("priority=%v want %v", got, want)
+	}
+}
+func TestExitLocationHandlerPreservesPriority(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if !r.Close || r.Header.Get("Cache-Control") != "no-cache" {
+			t.Error("request may reuse stale routing/cache")
+		}
+		if r.URL.Path != "/second" {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ip":"203.0.113.7"}`))
+	}))
+	defer server.Close()
+	original := defaultExitLocationURLs
+	defaultExitLocationURLs = []string{server.URL + "/first", server.URL + "/second", server.URL + "/unused"}
+	t.Cleanup(func() { defaultExitLocationURLs = original })
+	g := newGateway(config{})
+	for range 6 {
+		paths = nil
+		w := httptest.NewRecorder()
+		g.writeExitLocation(w, httptest.NewRequest(http.MethodGet, "/api/exit-location", nil))
+		if w.Code != http.StatusOK || !reflect.DeepEqual(paths, []string{"/first", "/second"}) {
+			t.Fatalf("status=%d paths=%v body=%s", w.Code, paths, w.Body.String())
+		}
+	}
+}
+
+type exitLocationTestTransport func(*http.Request) (*http.Response, error)
+
+func (f exitLocationTestTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func TestExitLocationRetriesNetworkFailuresBeforeFallback(t *testing.T) {
+	for _, recoverAfter := range []int{2, 3} {
+		t.Run(fmt.Sprint(recoverAfter), func(t *testing.T) {
+			var hosts []string
+			client := &http.Client{Transport: exitLocationTestTransport(func(r *http.Request) (*http.Response, error) {
+				hosts = append(hosts, r.URL.Host)
+				if r.URL.Host == "first.test" && len(hosts) <= recoverAfter {
+					return nil, errors.New("temporary connection failure")
+				}
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"ip":"203.0.113.10"}`)), Header: make(http.Header)}, nil
+			})}
+			result, err := queryExitLocations(context.Background(), client, []string{"https://first.test/", "https://second.test/"})
+			want := []string{"first.test", "first.test", "first.test"}
+			if recoverAfter == 3 {
+				want = append(want, "second.test")
+			}
+			if err != nil || result["ip"] != "203.0.113.10" || !reflect.DeepEqual(hosts, want) {
+				t.Fatalf("result=%v err=%v hosts=%v", result, err, hosts)
+			}
+		})
+	}
+}
+func TestExitLocationCancellationInterruptsRetryBackoff(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var calls int
+	client := &http.Client{Transport: exitLocationTestTransport(func(*http.Request) (*http.Response, error) {
+		calls++
+		return nil, errors.New("temporary connection failure")
+	})}
+	time.AfterFunc(30*time.Millisecond, cancel)
+	_, err := queryExitLocations(ctx, client, []string{"https://first.test/", "https://second.test/"})
+	if err == nil || calls != 1 {
+		t.Fatalf("err=%v calls=%d", err, calls)
 	}
 }
