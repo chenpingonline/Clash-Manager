@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
+import AppSelect from '@/components/AppSelect.vue'
+import PolicySelect from '@/components/PolicySelect.vue'
 import { api, errorMessage, jsonRequest } from '@/services/api'
 import { notify } from '@/services/toast'
 import { t } from '@/services/i18n'
@@ -8,11 +10,13 @@ import type { IndependentListener, IndependentListenerStatus, NetworkSettingsRes
 const props = defineProps<{ busy: boolean }>()
 const open = ref(false), loading = ref(false), saving = ref(false), loaded = ref(false), error = ref('')
 const entries = ref<IndependentListener[]>([]), targets = ref<string[]>([]), missing = ref<string[]>([])
+const targetGroups = ref<string[]>([])
+const targetKinds = computed(() => Object.fromEntries(targets.value.map(name => [name, name === 'DIRECT' || name === 'REJECT' ? 'builtin' : targetGroups.value.includes(name) ? 'group' : 'node'])) as Record<string, 'builtin' | 'group' | 'node'>)
 const trigger = ref<HTMLButtonElement>()
 const blocked = computed(() => loading.value || saving.value)
 function apply(status?: IndependentListenerStatus) {
   entries.value = (status?.entries || []).map(item => ({ ...item, users: (item.users || []).map(user => ({ ...user })) }))
-  targets.value = status?.targets || []; missing.value = status?.missingTargets || []
+  targets.value = status?.targets || []; targetGroups.value = status?.targetGroups || []; missing.value = status?.missingTargets || []
 }
 async function show() {
   if (props.busy) return
@@ -66,10 +70,10 @@ async function save() {
           <p v-if="entry.enabled && (!targets.includes(entry.proxy) || missing.includes(entry.id))" class="warn-text" role="status">{{ t('目标失效或尚未选择，此入口不会监听端口') }}</p>
           <div class="listener-grid">
             <label>{{ t('入口名称') }}<input v-model="entry.name" required maxlength="128" autocomplete="off"></label>
-            <label>{{ t('协议') }}<select v-model="entry.type"><option value="mixed">Mixed (HTTP / SOCKS5)</option><option value="socks">SOCKS5</option><option value="http">HTTP</option></select></label>
+            <label>{{ t('协议') }}<AppSelect v-model="entry.type" :label="t('协议')" :disabled="blocked" :options="[{ value: 'mixed', label: 'Mixed (HTTP / SOCKS5)' }, { value: 'socks', label: 'SOCKS5' }, { value: 'http', label: 'HTTP' }]" /></label>
             <label>{{ t('监听地址') }}<input v-model="entry.listen" required placeholder="127.0.0.1" autocomplete="off"></label>
             <label>{{ t('监听端口') }}<input v-model.number="entry.port" required type="number" min="1" max="65535" step="1"></label>
-            <label class="listener-target">{{ t('目标节点或策略组') }}<select v-model="entry.proxy" required @change="missing = missing.filter(id => id !== entry.id)"><option disabled value="">{{ t('请选择') }}</option><option v-if="entry.proxy && !targets.includes(entry.proxy)" :value="entry.proxy">{{ entry.proxy }} ({{ t('目标失效') }})</option><option v-for="target in targets" :key="target" :value="target">{{ target }}</option></select></label>
+            <div class="listener-target"><PolicySelect v-model="entry.proxy" :options="targets" :option-kinds="targetKinds" :disabled="blocked" label="目标节点或策略组" placeholder="请选择" @update:model-value="missing = missing.filter(id => id !== entry.id)" /></div>
           </div>
           <div v-for="(user, userIndex) in entry.users" :key="userIndex" class="listener-users">
             <label>{{ t('用户名') }}<input v-model="user.username" required autocomplete="off" maxlength="128"></label>
@@ -98,7 +102,7 @@ async function save() {
 .listener-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
 .listener-grid label, .listener-users label { display: grid; gap: 5px; font-size: 12px; min-width: 0; }
 .listener-grid input, .listener-grid select, .listener-users input { width: 100%; min-width: 0; }
-.listener-grid select { min-height: 36px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-inset); color: var(--text); padding: 0 8px; font: inherit; }
+
 .listener-form { display: flex; flex-direction: column; min-height: 0; max-height: calc(85vh - 32px); }
 .listener-scroll { min-height: 0; overflow-y: auto; padding: 0 3px 3px; }
 .listener-target { grid-column: 1 / -1; }

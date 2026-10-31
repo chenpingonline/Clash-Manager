@@ -97,6 +97,27 @@ func IndependentListenerTargets(raw []byte) []string {
 	return names
 }
 
+// Group names come from the saved configuration, including when Core is offline.
+func IndependentListenerTargetGroups(raw []byte) []string {
+	var config struct {
+		Groups []struct {
+			Name string `yaml:"name"`
+		} `yaml:"proxy-groups"`
+	}
+	groups := []string{}
+	if yaml.Unmarshal(raw, &config) != nil {
+		return groups
+	}
+	seen := map[string]bool{"DIRECT": true, "REJECT": true}
+	for _, group := range config.Groups {
+		if group.Name != "" && !seen[group.Name] {
+			groups = append(groups, group.Name)
+			seen[group.Name] = true
+		}
+	}
+	return groups
+}
+
 // MergeIndependentListeners preserves unowned nodes and comments. A missing target
 // stops only that managed entry, retaining the preference for automatic recovery.
 func MergeIndependentListeners(raw []byte, entries, previous []IndependentListener) ([]byte, []string, error) {

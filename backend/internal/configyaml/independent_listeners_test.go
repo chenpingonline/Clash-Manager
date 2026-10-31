@@ -100,3 +100,14 @@ func TestIndependentListenersPreserveSubscriptionAnchors(t *testing.T) {
 		}
 	}
 }
+
+func TestIndependentListenerTargetGroups(t *testing.T) {
+	raw := []byte("proxies:\n  - {name: named-like-group}\nproxy-groups:\n  - {name: HK, type: select}\n  - {name: HK, type: select}\n  - {name: DIRECT, type: select}\n  - {name: REJECT, type: select}\n  - {name: '', type: select}\n  - {name: '日本', type: fallback}\n")
+	groups := IndependentListenerTargetGroups(raw)
+	if len(groups) != 2 || groups[0] != "HK" || groups[1] != "日本" {
+		t.Fatalf("incorrect saved-config groups: %v", groups)
+	}
+	if groups := IndependentListenerTargetGroups([]byte("invalid: [")); len(groups) != 0 {
+		t.Fatalf("malformed config returned groups: %v", groups)
+	}
+}

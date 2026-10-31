@@ -344,7 +344,7 @@ export interface DnsSetting {
 export interface IndependentListener {
   id: string; name: string; type: 'mixed' | 'socks' | 'http'; listen: string; port: number; proxy: string; enabled: boolean; users: ProxyAccount[]
 }
-export interface IndependentListenerStatus { entries: IndependentListener[]; targets: string[]; missingTargets: string[] }
+export interface IndependentListenerStatus { entries: IndependentListener[]; targets: string[]; targetGroups?: string[]; missingTargets: string[] }
 export interface NetworkSetting {
   independentListeners?: IndependentListenerStatus
   controller?: { host?: string; port?: number }

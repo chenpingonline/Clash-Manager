@@ -2156,5 +2156,7 @@
   "Mihomo 未返回 TUN 网卡名称，无法确认网卡": "Mihomo did not return a TUN device name. The interface cannot be verified.",
   "确认 TUN 运行状态失败: {arg0}": "Failed to verify TUN state: {arg0}",
   "TUN 配置运行状态未按预期生效": "The TUN runtime configuration did not take effect as expected.",
-  "TUN 网卡状态未按预期生效: {arg0}": "The TUN interface did not reach the expected state: {arg0}"
+  "TUN 网卡状态未按预期生效: {arg0}": "The TUN interface did not reach the expected state: {arg0}",
+  "目标类型筛选": "Filter target type",
+  "内置": "Built-in"
 }

@@ -48,5 +48,5 @@ func (h *helper) independentListenerStatus(raw string) (map[string]any, error) {
 			missing = append(missing, e.ID)
 		}
 	}
-	return map[string]any{"entries": entries, "targets": targets, "missingTargets": missing}, nil
+	return map[string]any{"entries": entries, "targets": targets, "targetGroups": configyaml.IndependentListenerTargetGroups([]byte(raw)), "missingTargets": missing}, nil
 }

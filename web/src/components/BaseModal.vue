@@ -12,7 +12,7 @@ let restoreFocus: HTMLElement | null = null
 function focusable(): HTMLElement[] {
   const selector = 'a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex]:not([tabindex="-1"])'
   return Array.from(card.value?.querySelectorAll<HTMLElement>(selector) || [])
-    .filter(element => element.getClientRects().length > 0)
+    .filter(element => element.tabIndex >= 0 && element.getClientRects().length > 0)
 }
 
 function onKeydown(event: KeyboardEvent) {

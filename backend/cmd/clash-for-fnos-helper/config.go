@@ -1551,7 +1551,7 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 			return nil, fail(400, err.Error())
 		}
 		raw = string(merged)
-		settings["independentListeners"] = map[string]any{"entries": entries, "targets": configyaml.IndependentListenerTargets(merged), "missingTargets": missing}
+		settings["independentListeners"] = map[string]any{"entries": entries, "targets": configyaml.IndependentListenerTargets(merged), "targetGroups": configyaml.IndependentListenerTargetGroups(merged), "missingTargets": missing}
 	}
 	if address, explicit := patch["bind-address"]; explicit {
 		preferences["bind-address"] = address

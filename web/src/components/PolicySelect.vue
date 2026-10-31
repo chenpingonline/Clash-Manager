@@ -1,35 +1,47 @@
 <script setup lang="ts">
 import { t } from '@/services/i18n'
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, useId, watch } from 'vue'
+import { filterPolicyOptions, type PolicyKind, type PolicyFilter } from '@/services/policy-options'
 
-const props = withDefaults(defineProps<{ modelValue: string; options: string[]; disabled: boolean; label?: string; placeholder?: string; searchPlaceholder?: string; hideLabel?: boolean; allowCustom?: boolean; panelClass?: string }>(), { label: '代理策略', placeholder: '选择代理策略', searchPlaceholder: '搜索代理组或节点', hideLabel: false, allowCustom: false, panelClass: '' })
+const props = withDefaults(defineProps<{ modelValue: string; options: string[]; optionKinds?: Record<string, PolicyKind>; disabled: boolean; label?: string; placeholder?: string; searchPlaceholder?: string; hideLabel?: boolean; allowCustom?: boolean; panelClass?: string }>(), { label: '代理策略', placeholder: '选择代理策略', searchPlaceholder: '搜索代理组或节点', hideLabel: false, allowCustom: false, panelClass: '' })
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const root = ref<HTMLElement | null>(null), trigger = ref<HTMLButtonElement | null>(null), searchInput = ref<HTMLInputElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
+const portalTarget = shallowRef<HTMLElement | null>(null)
+const filter = ref<PolicyFilter>('all')
+const filters: Array<{ value: PolicyFilter; label: string }> = [{ value: 'all', label: '全部' }, { value: 'group', label: '策略组' }, { value: 'node', label: '节点' }, { value: 'builtin', label: '内置' }]
 const panelStyle = ref<Record<string, string>>({})
 const open = ref(false), search = ref(''), activeIndex = ref(0)
 const id = `policy-select-${useId()}`
 const matches = computed(() => {
-  const term = search.value.trim().toLocaleLowerCase()
-  return props.options.filter(option => !term || option.toLocaleLowerCase().includes(term))
+  return filterPolicyOptions(props.options, props.optionKinds, filter.value, search.value)
 })
 // Keep large subscriptions cheap to open; search still covers every candidate.
 const customOption = computed(() => props.allowCustom && search.value.trim() && !props.options.includes(search.value.trim()) ? search.value.trim() : '')
 const visibleOptions = computed(() => customOption.value ? [customOption.value, ...matches.value.slice(0, 100)] : matches.value.slice(0, 100))
 watch(search, () => { activeIndex.value = 0 })
+watch(filter, () => { activeIndex.value = 0; searchInput.value?.focus() })
 watch(() => props.options, () => { activeIndex.value = Math.min(activeIndex.value, Math.max(0, visibleOptions.value.length - 1)) })
 watch(() => props.disabled, disabled => { if (disabled) open.value = false })
 async function show() {
   if (props.disabled) return
   const rect = trigger.value?.getBoundingClientRect()
   if (!rect) return
+  const parent = trigger.value?.closest<HTMLElement>('[role="dialog"], dialog') || document.body
+  if (portalTarget.value?.parentElement !== parent) {
+    portalTarget.value?.remove()
+    const host = document.createElement('div')
+    host.className = 'policy-select-portal'
+    parent.appendChild(host)
+    portalTarget.value = host
+  }
   const width = Math.min(Math.max(rect.width, 240), window.innerWidth - 16)
   const below = window.innerHeight - rect.bottom - 14
   const above = rect.top - 14
   const useBelow = below >= 200 || below >= above
   panelStyle.value = { position: 'fixed', left: `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`, width: `${width}px`, right: 'auto', maxHeight: `${Math.max(80, useBelow ? below : above)}px`, ...(useBelow ? { top: `${rect.bottom + 6}px` } : { top: 'auto', bottom: `${window.innerHeight - rect.top + 6}px` }) }
-  search.value = ''; open.value = true
+  search.value = ''; filter.value = 'all'; open.value = true
   await nextTick()
   activeIndex.value = Math.max(0, visibleOptions.value.indexOf(props.modelValue))
   searchInput.value?.focus()
@@ -69,6 +81,7 @@ function focusOut(event: FocusEvent) {
 }
 onMounted(() => { document.addEventListener('pointerdown', outside, true); document.addEventListener('scroll', scrolled, true); window.addEventListener('resize', scrolled) })
 onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside, true); document.removeEventListener('scroll', scrolled, true); window.removeEventListener('resize', scrolled) })
+onUnmounted(() => portalTarget.value?.remove())
 </script>
 
 <template>
@@ -77,8 +90,11 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside, tru
     <button ref="trigger" class="policy-select-trigger" type="button" :disabled="disabled" :aria-labelledby="hideLabel ? undefined : `${id}-label`" :aria-label="t(hideLabel ? label : undefined)" aria-haspopup="listbox" :aria-expanded="open" :aria-controls="`${id}-list`" @click="open ? close() : show()">
       <span :title="modelValue">{{ modelValue || t(placeholder) }}</span><span aria-hidden="true">⌄</span>
     </button>
-    <Teleport to="body"><div v-if="open" ref="panel" class="policy-select-panel" :class="panelClass" :style="panelStyle" @keydown="keyboard" @focusout="focusOut">
+    <Teleport v-if="portalTarget" :to="portalTarget"><div v-if="open" ref="panel" class="policy-select-panel" :class="panelClass" :style="panelStyle" @keydown="keyboard" @focusout="focusOut">
       <input ref="searchInput" v-model="search" role="combobox" :aria-label="t('搜索{arg0}', { arg0: t(label) })" :placeholder="t(searchPlaceholder)" autocomplete="off" :aria-expanded="open" :aria-controls="`${id}-list`" :aria-activedescendant="visibleOptions.length ? `${id}-option-${activeIndex}` : undefined" />
+      <div v-if="optionKinds" class="policy-kind-filters" role="group" :aria-label="t('目标类型筛选')">
+        <button v-for="item in filters" :key="item.value" type="button" :aria-pressed="filter === item.value" @keydown.enter.stop @keydown.space.stop @click="filter = item.value">{{ t(item.label) }}</button>
+      </div>
       <div :id="`${id}-list`" class="policy-select-options" role="listbox" :aria-label="t('{arg0}候选', { arg0: t(label) })">
         <button v-for="(option, index) in visibleOptions" :id="`${id}-option-${index}`" :key="option" type="button" role="option" :aria-selected="option === modelValue" :class="{ 'is-active': index === activeIndex, 'is-selected': option === modelValue }" tabindex="-1" @pointerdown.prevent @click="choose(option)">
           <span :title="option">{{ option === customOption ? t('使用“{arg0}”', { arg0: option }) : option }}</span><span v-if="option === modelValue" aria-hidden="true">✓</span>
@@ -89,3 +105,9 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside, tru
     </div></Teleport>
   </div>
 </template>
+
+<style scoped>
+.policy-kind-filters { display: flex; flex: none; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; }
+.policy-kind-filters button { flex: 1; padding: 5px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.policy-kind-filters button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+</style>
