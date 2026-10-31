@@ -2158,5 +2158,8 @@
   "TUN 配置运行状态未按预期生效": "The TUN runtime configuration did not take effect as expected.",
   "TUN 网卡状态未按预期生效: {arg0}": "The TUN interface did not reach the expected state: {arg0}",
   "目标类型筛选": "Filter target type",
-  "内置": "Built-in"
+  "内置": "Built-in",
+  "：仅监听本机，其他设备无法访问。": ": Listen on this host only; other devices cannot connect.",
+  "：监听所有 IPv4 网卡，允许其他设备连接。": ": Listen on all IPv4 interfaces so other devices can connect.",
+  "指定网卡 IP：填写该网卡的实际 IP 地址，仅监听该地址。": "Specific interface IP: enter its actual IP address to listen only on that address."
 }

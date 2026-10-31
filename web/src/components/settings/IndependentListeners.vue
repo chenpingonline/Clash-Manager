@@ -3,6 +3,7 @@ import { computed, nextTick, ref } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
 import AppSelect from '@/components/AppSelect.vue'
 import PolicySelect from '@/components/PolicySelect.vue'
+import HelpPopover from '@/components/HelpPopover.vue'
 import { api, errorMessage, jsonRequest } from '@/services/api'
 import { notify } from '@/services/toast'
 import { t } from '@/services/i18n'
@@ -71,7 +72,7 @@ async function save() {
           <div class="listener-grid">
             <label>{{ t('入口名称') }}<input v-model="entry.name" required maxlength="128" autocomplete="off"></label>
             <label>{{ t('协议') }}<AppSelect v-model="entry.type" :label="t('协议')" :disabled="blocked" :options="[{ value: 'mixed', label: 'Mixed (HTTP / SOCKS5)' }, { value: 'socks', label: 'SOCKS5' }, { value: 'http', label: 'HTTP' }]" /></label>
-            <label>{{ t('监听地址') }}<input v-model="entry.listen" required placeholder="127.0.0.1" autocomplete="off"></label>
+            <div class="listener-address"><span class="listener-field-label"><label :for="`listener-address-${entry.id}`">{{ t('监听地址') }}</label><HelpPopover label="监听地址" :teleport="false" @keydown.esc.stop><span><b>127.0.0.1</b>{{ t('：仅监听本机，其他设备无法访问。') }}</span><span><b>0.0.0.0</b>{{ t('：监听所有 IPv4 网卡，允许其他设备连接。') }}</span><span>{{ t('指定网卡 IP：填写该网卡的实际 IP 地址，仅监听该地址。') }}</span></HelpPopover></span><input :id="`listener-address-${entry.id}`" v-model="entry.listen" required placeholder="127.0.0.1" autocomplete="off"></div>
             <label>{{ t('监听端口') }}<input v-model.number="entry.port" required type="number" min="1" max="65535" step="1"></label>
             <div class="listener-target"><PolicySelect v-model="entry.proxy" :options="targets" :option-kinds="targetKinds" :disabled="blocked" label="目标节点或策略组" placeholder="请选择" @update:model-value="missing = missing.filter(id => id !== entry.id)" /></div>
           </div>
@@ -101,6 +102,8 @@ async function save() {
 .listener-heading { justify-content: space-between; margin-bottom: 8px; }
 .listener-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
 .listener-grid label, .listener-users label { display: grid; gap: 5px; font-size: 12px; min-width: 0; }
+.listener-address { display: grid; gap: 5px; font-size: 12px; min-width: 0; }
+.listener-field-label { display: flex; align-items: center; gap: 6px; }
 .listener-grid input, .listener-grid select, .listener-users input { width: 100%; min-width: 0; }
 
 .listener-form { display: flex; flex-direction: column; min-height: 0; max-height: calc(85vh - 32px); }
