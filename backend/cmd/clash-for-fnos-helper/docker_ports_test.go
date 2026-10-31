@@ -109,3 +109,35 @@ func TestInvalidDockerStartupPortsDoNotWrite(t *testing.T) {
 		})
 	}
 }
+
+func TestStandaloneStartupWithoutOverridesPreparesControllerCredentials(t *testing.T) {
+	for _, platform := range []string{"docker", "linux"} {
+		t.Run(platform, func(t *testing.T) {
+			t.Setenv("APP_PLATFORM", platform)
+			t.Setenv("APP_CONTROLLER_PORT", "")
+			t.Setenv("APP_MIXED_PORT", "")
+			h := testHelper(t)
+			if err := h.applyStandaloneStartupPorts(); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(h.config.managedConfig)
+			if err != nil {
+				t.Fatal(err)
+			}
+			controller, secret, _ := parseController(string(before))
+			if controller != "127.0.0.1:9090" || secret == "" {
+				t.Fatal("Controller credentials unavailable before Core bootstrap")
+			}
+			if err = h.applyStandaloneStartupPorts(); err != nil {
+				t.Fatal(err)
+			}
+			after, _ := os.ReadFile(h.config.managedConfig)
+			if string(before) != string(after) {
+				t.Fatal("startup replaced existing config or rotated its secret")
+			}
+			if _, err = os.Stat(h.userSettingsPath()); !os.IsNotExist(err) {
+				t.Fatal("empty overrides saved user preferences")
+			}
+		})
+	}
+}

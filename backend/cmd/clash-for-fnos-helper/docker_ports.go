@@ -38,7 +38,10 @@ func (h *helper) applyStandaloneStartupPorts() error {
 		}
 	}
 	if len(patch) == 0 {
-		return nil
+		// Web synchronizes Controller credentials shortly after Helper becomes
+		// reachable. Prepare the secret before asynchronous Core installation,
+		// including fresh deployments without explicit port overrides.
+		return h.ensureManagedConfig()
 	}
 	settings, previous, err := h.readUserSettings()
 	if err != nil {
