@@ -153,12 +153,9 @@ watch(() => props.open, open => {
       <div v-else class="tun-settings-modal-scroll">
         <div v-if="error" class="local-warning">{{ t(error) }}</div>
 
-        <div class="tun-capability" :class="supported ? 'ok' : 'warn'">
-          <strong>{{ t(supported ? '可用' : '不可用') }}</strong>
-          <span>{{ t(capabilityText) }}</span>
-        </div>
-        <TunRuntimeStatus v-if="open" />
-        <TunDiagnosticsPanel v-if="open" :busy="loading || saving" @capability="value => { capability = value; emit('diagnosed', value) }" />
+        <TunDiagnosticsPanel v-if="open" :busy="loading || saving" :supported="supported" :capability-text="capabilityText" @capability="value => { capability = value; emit('diagnosed', value) }">
+          <TunRuntimeStatus />
+        </TunDiagnosticsPanel>
         <p v-if="offline" class="tun-settings-disabled-hint">{{ t("Core 已停止；保存后将在下次启动时生效。") }}</p>
 
         <div class="tun-settings-main-grid">

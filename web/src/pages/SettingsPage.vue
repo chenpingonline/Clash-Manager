@@ -710,9 +710,9 @@ onMounted(initialize)
               </div>
               <div class="tun-master"><span :class="network.tun.enabled ? 'good-text' : 'muted-text'">{{ t(tunSwitching ? (network.tun.enabled ? '正在开启' : '正在关闭') : network.tun.enabled ? '已开启' : '已关闭') }}</span><label class="switch large"><input v-model="network.tun.enabled" type="checkbox" :disabled="tunSwitching || coordinatedTunBusy || netState === 'pending' || netState === 'saving' || (!tunSupported && !network.tun.enabled)" @change="toggleTunSetting"><span /></label></div>
             </div>
-            <div class="tun-capability" :class="tunSupported ? 'ok' : 'warn'"><strong>{{ t(tunSupported ? '可用' : '不可用') }}</strong><span>{{ t(tunSupportText) }}</span></div>
-            <TunRuntimeStatus />
-            <TunDiagnosticsPanel :busy="tunSwitching || coordinatedTunBusy || netState === 'pending' || netState === 'saving'" @capability="value => { tunSupported = value.supported === true; tunSupportText = value.message || '' }" />
+            <TunDiagnosticsPanel :busy="tunSwitching || coordinatedTunBusy || netState === 'pending' || netState === 'saving'" :supported="tunSupported" :capability-text="tunSupportText" @capability="value => { tunSupported = value.supported === true; tunSupportText = value.message || '' }">
+              <TunRuntimeStatus />
+            </TunDiagnosticsPanel>
             <div class="tun-main-grid">
               <TunStackFields v-model:stack="network.tun.stack" v-model:congestion-controller="network.tun.congestionController" :features="tunFeatures" :disabled="tunSwitching || coordinatedTunBusy || (!tunSupported && !networkOffline)" @change="saveTunSettings" />
               <div class="field">
