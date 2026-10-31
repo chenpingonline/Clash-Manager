@@ -341,7 +341,12 @@ export interface DnsSetting {
   nameserverPolicy?: DnsMapping[]; fallbackGeoip?: boolean; fallbackGeoipCode?: string; fallbackIpCidr?: string[]
   fallbackDomain?: string[]; hosts?: HostMapping[]
 }
+export interface IndependentListener {
+  id: string; name: string; type: 'mixed' | 'socks' | 'http'; listen: string; port: number; proxy: string; enabled: boolean; users: ProxyAccount[]
+}
+export interface IndependentListenerStatus { entries: IndependentListener[]; targets: string[]; missingTargets: string[] }
 export interface NetworkSetting {
+  independentListeners?: IndependentListenerStatus
   controller?: { host?: string; port?: number }
   mixed?: PortSetting; socks?: PortSetting; http?: PortSetting; redir?: PortSetting; tproxy?: PortSetting
   allowLan?: boolean; bindAddress?: string; dnsEnabled?: boolean; dnsOverrideEnabled?: boolean; dns?: DnsSetting
@@ -414,4 +419,11 @@ export interface GeoStatus {
   settings?: { autoUpdate?: boolean; updateInterval?: number }
   assets?: GeoAsset[]
   error?: string
+}
+
+export interface TunDiagnostics {
+  capability: NonNullable<NetworkSettingsResponse['tunCapability']>
+  probe: { device: boolean; driver: boolean; usable: boolean; error?: string }
+  platform: string; os: string; arch: string; kernel: string
+  repairable: boolean; ok?: boolean; error?: string; steps?: string[]
 }

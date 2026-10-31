@@ -71,6 +71,12 @@ func normalizeUserPatch(input map[string]any) (map[string]any, error) {
 			} else {
 				patch[target] = 0
 			}
+		} else if key == "independentListeners" {
+			entries, err := decodeIndependentListeners(value)
+			if err != nil {
+				return nil, err
+			}
+			patch[configyaml.IndependentListenersKey] = entries
 		} else if key == "allowLan" {
 			enabled, ok := value.(bool)
 			if !ok {
@@ -146,9 +152,20 @@ func (h *helper) composeUserSettings(input map[string]any) (map[string]any, erro
 			settings["hosts"] = hostMap(hosts)
 		}
 	}
+	entries, err := independentPreferences(settings)
+	if err != nil {
+		return nil, err
+	}
+	delete(settings, configyaml.IndependentListenersKey)
 	content, err := configyaml.MergeOverrides([]byte(stringField(input, "content")), settings)
 	if err != nil {
 		return nil, fmt.Errorf("合并用户设置失败: %w", err)
+	}
+	if len(entries) > 0 {
+		content, _, err = configyaml.MergeIndependentListeners(content, entries, entries)
+		if err != nil {
+			return nil, err
+		}
 	}
 	content, err = ensureLANBindWithPreferences(content, settings)
 	if err != nil {

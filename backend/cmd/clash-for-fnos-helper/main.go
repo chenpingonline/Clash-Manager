@@ -145,6 +145,8 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			result, err = h.firewallRules(r.Context())
 		case "/network/bypass":
 			result = h.bypassMonitor(r.Context())
+		case "/network/tun/diagnostics":
+			result = h.tunDiagnostics()
 		case "/network/status":
 			result, err = h.networkStatus(r.Context())
 		case "/geo/status":
@@ -188,6 +190,8 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result, err = h.cancelCoreDownload()
 	case "/config/mode":
 		result, err = h.prepareRuntimeMode(r.Context(), stringField(body, "mode"))
+	case "/network/tun/repair":
+		result = h.repairTun(r.Context())
 	case "/config/compose":
 		result, err = h.composeUserSettings(body)
 	case "/config/rule-asset":

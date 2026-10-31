@@ -5,6 +5,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type networkListener struct{ network, address, label string }
@@ -24,7 +26,7 @@ func networkListenersOverlap(left, right networkListener) bool {
 	}
 	leftIPv4, rightIPv4 := leftIP.To4() != nil, rightIP.To4() != nil
 	if leftIPv4 != rightIPv4 {
-		return false
+		return (!leftIPv4 && leftIP.IsUnspecified()) || (!rightIPv4 && rightIP.IsUnspecified())
 	}
 	return leftIP.Equal(rightIP) || leftIP.IsUnspecified() || rightIP.IsUnspecified()
 }
@@ -60,22 +62,30 @@ func networkListeners(raw string) []networkListener {
 }
 func validateNetworkPorts(raw, previous string, offline bool) error {
 	next := networkListeners(raw)
+	extra, err := customNetworkListeners(raw)
+	if err != nil {
+		return err
+	}
+	next = append(next, extra...)
 	// Reject duplicate TCP/UDP ports before probing, including currently owned ports.
-	used := map[string]string{}
-	for _, item := range next {
-		_, port, err := net.SplitHostPort(item.address)
-		if err != nil {
+	for i, item := range next {
+		if _, _, err := net.SplitHostPort(item.address); err != nil {
 			return fmt.Errorf("%s 监听地址无效: %w", item.label, err)
 		}
-		key := item.network + ":" + port
-		if label, ok := used[key]; ok {
-			return fmt.Errorf("端口冲突：%s 已用于 %s，%s 请更换端口", port, label, item.label)
+		for _, prior := range next[:i] {
+			if networkListenersOverlap(prior, item) {
+				return fmt.Errorf("端口冲突：%s 已用于 %s，%s 请更换端口", item.address, prior.label, item.label)
+			}
 		}
-		used[key] = item.label
 	}
 	old := []networkListener{}
 	if !offline {
 		old = networkListeners(previous)
+		previousExtra, err := customNetworkListeners(previous)
+		if err != nil {
+			return err
+		}
+		old = append(old, previousExtra...)
 	}
 	for _, item := range next {
 		// The running Core releases its listeners while applying the candidate.
@@ -110,4 +120,65 @@ func validateNetworkPorts(raw, previous string, offline bool) error {
 		}
 	}
 	return nil
+}
+
+// Parse actual listeners as YAML, including inline sequences and port ranges.
+func customNetworkListeners(raw string) ([]networkListener, error) {
+	var config struct {
+		Listeners []struct {
+			Name   string `yaml:"name"`
+			Type   string `yaml:"type"`
+			Listen string `yaml:"listen"`
+			Port   any    `yaml:"port"`
+			UDP    bool   `yaml:"udp"`
+		} `yaml:"listeners"`
+	}
+	if err := yaml.Unmarshal([]byte(raw), &config); err != nil {
+		return nil, err
+	}
+	result := []networkListener{}
+	for _, e := range config.Listeners {
+		if e.Port == nil {
+			continue
+		}
+		host := e.Listen
+		if host == "" {
+			host = "0.0.0.0"
+		}
+		host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+		if net.ParseIP(host) == nil {
+			return nil, fmt.Errorf("listener %s 监听地址必须为 IP 地址", e.Name)
+		}
+		for _, part := range strings.Split(fmt.Sprint(e.Port), ",") {
+			bounds := strings.Split(strings.TrimSpace(part), "-")
+			first, err := strconv.Atoi(bounds[0])
+			if err != nil || first < 1 || first > 65535 {
+				return nil, fmt.Errorf("listener %s 端口无效", e.Name)
+			}
+			last := first
+			if len(bounds) > 2 {
+				return nil, fmt.Errorf("listener %s 端口范围无效", e.Name)
+			}
+			if len(bounds) == 2 {
+				last, err = strconv.Atoi(bounds[1])
+				if err != nil || last < first || last > 65535 {
+					return nil, fmt.Errorf("listener %s 端口范围无效", e.Name)
+				}
+			}
+			if len(result)+(last-first+1)*2 > 4096 {
+				return nil, fmt.Errorf("listeners 端口范围过大，无法预检")
+			}
+			for port := first; port <= last; port++ {
+				address := net.JoinHostPort(host, strconv.Itoa(port))
+				udpOnly := e.Type == "tuic" || e.Type == "hysteria" || e.Type == "hysteria2"
+				if !udpOnly {
+					result = append(result, networkListener{"tcp", address, e.Name})
+				}
+				if udpOnly || e.UDP || e.Type == "tproxy" || e.Type == "shadowsocks" {
+					result = append(result, networkListener{"udp", address, e.Name})
+				}
+			}
+		}
+	}
+	return result, nil
 }

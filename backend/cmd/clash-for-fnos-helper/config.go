@@ -861,6 +861,12 @@ func (h *helper) prepareConfigCandidate(ctx context.Context, content string, val
 	if !filepath.IsAbs(target) {
 		return nil, fail(409, "Mihomo 配置路径不安全")
 	}
+	if strings.Contains(content, "clash-manager-independent:") {
+		previous, _ := os.ReadFile(target)
+		if err := validateNetworkPorts(content, string(previous), proc == nil); err != nil {
+			return nil, err
+		}
+	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 		return nil, err
 	}
@@ -1314,7 +1320,7 @@ func (h *helper) prepareTunToggle(ctx context.Context, enabled bool) (map[string
 		return nil, fail(409, "当前未检测到运行中的 Mihomo Core")
 	}
 	if enabled {
-		capability := resolveTunCapability(proc, fileExists("/dev/net/tun"), os.Geteuid())
+		capability := h.tunDiagnostics()["capability"].(map[string]any)
 		if supported, _ := capability["supported"].(bool); !supported {
 			return nil, fail(409, fmt.Sprint(capability["message"]))
 		}
@@ -1516,6 +1522,22 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 	if err != nil {
 		return nil, err
 	}
+	if value, exists := input["independentListeners"]; exists {
+		entries, err := decodeIndependentListeners(value)
+		if err != nil {
+			return nil, err
+		}
+		previous, err := independentPreferences(preferences)
+		if err != nil {
+			return nil, err
+		}
+		merged, missing, err := configyaml.MergeIndependentListeners([]byte(raw), entries, previous)
+		if err != nil {
+			return nil, fail(400, err.Error())
+		}
+		raw = string(merged)
+		settings["independentListeners"] = map[string]any{"entries": entries, "targets": configyaml.IndependentListenerTargets(merged), "missingTargets": missing}
+	}
 	if address, explicit := patch["bind-address"]; explicit {
 		preferences["bind-address"] = address
 	}
@@ -1560,7 +1582,7 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 	controller, _, _ := parseController(raw)
 	prepared["controller"] = map[string]any{"clientUrl": "http://" + controller}
 	prepared["controllerChanged"] = controller != previousController
-	prepared["tunCapability"] = resolveTunCapability(h.primary(), fileExists("/dev/net/tun"), os.Geteuid())
+	prepared["tunCapability"] = h.tunDiagnostics()["capability"]
 	return prepared, nil
 }
 
@@ -1618,9 +1640,13 @@ func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 		return nil, err
 	}
 	settings["proxyAuthentication"] = auth
+	independent, err := h.independentListenerStatus(raw)
+	if err != nil {
+		return nil, err
+	}
+	settings["independentListeners"] = independent
 	proc := h.primary()
-	tunDevice := fileExists("/dev/net/tun")
-	capability := resolveTunCapability(proc, tunDevice, os.Geteuid())
+	capability := h.tunDiagnostics()["capability"]
 	binary := h.config.managedCore
 	if proc != nil {
 		binary = proc.Exe

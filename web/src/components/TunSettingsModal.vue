@@ -3,6 +3,7 @@ import { t } from '@/services/i18n'
 import { runtime } from '@/services/runtime'
 
 import { computed, reactive, ref, watch } from 'vue'
+import TunDiagnosticsPanel from '@/components/settings/TunDiagnostics.vue'
 import TunStackFields from '@/components/settings/TunStackFields.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import HelpPopover from '@/components/HelpPopover.vue'
@@ -28,7 +29,7 @@ const defaultTun = (): TunForm => ({
 })
 
 const props = defineProps<{ open: boolean; initialSettings?: NetworkSettingsResponse | null }>()
-const emit = defineEmits<{ close: []; saved: [response: NetworkSettingsResponse] }>()
+const emit = defineEmits<{ close: []; saved: [response: NetworkSettingsResponse]; diagnosed: [capability: NonNullable<NetworkSettingsResponse['tunCapability']>] }>()
 const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
@@ -147,6 +148,7 @@ watch(() => props.open, open => {
           <strong>{{ t(supported ? (form.enabled ? '已开启' : '已关闭') : '不可用') }}</strong>
           <span>{{ t(capabilityText) }}</span>
         </div>
+        <TunDiagnosticsPanel v-if="open" :busy="loading || saving" @capability="value => { capability = value; emit('diagnosed', value) }" />
         <p v-if="offline" class="tun-settings-disabled-hint">{{ t("Core 已停止；保存后将在下次启动时生效。") }}</p>
 
         <div class="tun-settings-main-grid">

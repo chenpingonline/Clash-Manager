@@ -226,5 +226,5 @@ onUnmounted(() => {
     </div>
   </div>
   <SystemProxySettingsModal v-if="variant === 'dashboard' && runtime.capabilities.hostProxyEnvironment" :open="proxySettingsOpen" :initial-management="management" @close="proxySettingsOpen = false" @saved="proxySettingsSaved" />
-  <TunSettingsModal v-if="variant === 'dashboard'" :open="tunSettingsOpen" :initial-settings="tunSettings" @close="tunSettingsOpen = false" @saved="tunSettingsSaved" />
+  <TunSettingsModal v-if="variant === 'dashboard'" :open="tunSettingsOpen" :initial-settings="tunSettings" @close="tunSettingsOpen = false" @saved="tunSettingsSaved" @diagnosed="value => tunCapability = value" />
 </template>

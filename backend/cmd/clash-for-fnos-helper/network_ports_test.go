@@ -73,3 +73,38 @@ func TestNetworkPortsCheckUDP(t *testing.T) {
 		t.Fatalf("expected UDP conflict: %v", err)
 	}
 }
+
+func TestCustomListenerUDPAndCurrentCoreOwnership(t *testing.T) {
+	udp, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer udp.Close()
+	_, port, _ := net.SplitHostPort(udp.LocalAddr().String())
+	base := "external-controller: 127.0.0.1:9191\n"
+	raw := base + "listeners: [{name: own, type: socks, listen: 127.0.0.1, udp: true, port: " + port + "}]\n"
+	if err := validateNetworkPorts(raw, base, false); err == nil || !strings.Contains(err.Error(), "udp") {
+		t.Fatal("missed custom UDP occupancy", err)
+	}
+	if err := validateNetworkPorts(raw, raw, false); err != nil {
+		t.Fatal("probed current Core against itself", err)
+	}
+}
+func TestCustomListenerRangesAndAddressConflicts(t *testing.T) {
+	raw := "listeners: [{name: range, type: mixed, listen: 127.0.0.1, udp: true, port: '41000-41001,41003'}]"
+	listeners, err := customNetworkListeners(raw)
+	if err != nil || len(listeners) != 6 {
+		t.Fatal(listeners, err)
+	}
+	for _, value := range []string{"0", "65536", "10-1", "1-65535", "invalid"} {
+		if _, err := customNetworkListeners("listeners: [{port: '" + value + "'}]"); err == nil {
+			t.Fatal("accepted invalid/unbounded ports", value)
+		}
+	}
+	if !networkListenersOverlap(networkListener{"tcp", "[::]:41000", ""}, networkListener{"tcp", "127.0.0.1:41000", ""}) {
+		t.Fatal("missed dual-stack wildcard conflict")
+	}
+	if networkListenersOverlap(networkListener{"tcp", "127.0.0.1:41000", ""}, networkListener{"tcp", "127.0.0.2:41000", ""}) {
+		t.Fatal("different specific addresses conflict")
+	}
+}

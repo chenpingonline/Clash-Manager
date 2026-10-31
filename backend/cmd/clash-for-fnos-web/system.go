@@ -98,6 +98,11 @@ func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, reques
 			return true
 		}
 		g.forwardHelper(w, r, http.MethodPost, "/app/update/start", body, 15*time.Second)
+	case requestPath == "/api/network/tun/diagnostics" && r.Method == http.MethodGet:
+		w.Header().Set("Cache-Control", "no-store")
+		g.forwardHelper(w, r, http.MethodGet, "/network/tun/diagnostics", nil, 10*time.Second)
+	case requestPath == "/api/network/tun/repair" && r.Method == http.MethodPost:
+		g.forwardHelper(w, r, http.MethodPost, "/network/tun/repair", map[string]any{}, 15*time.Second)
 	case requestPath == "/api/network/settings" && r.Method == http.MethodGet:
 		g.networkSettings(w, r)
 	case requestPath == "/api/network/settings/status" && r.Method == http.MethodGet:
