@@ -88,7 +88,7 @@ describe('backend API compatibility', () => {
     expect(dashboardControl).toContain('<TunSettingsModal')
     expect(dashboardControl).not.toContain("href=\"#settings?section=tun\">{{ t(\"详细设置\") }}</a>")
     expect(dashboardControl).toContain("openStatusStream<TunOperationStatus>('/api/network/tun/status'")
-    expect(settings).toContain(':disabled="tunSwitching || netState')
+    expect(settings).toContain(':disabled="tunSwitching || coordinatedTunBusy || netState')
     expect(settings).toContain("openStatusStream<TunOperationStatus>('/api/network/tun/status'")
     expect(settings).toContain('class="dashboard-tun-progress settings-tun-progress"')
   })

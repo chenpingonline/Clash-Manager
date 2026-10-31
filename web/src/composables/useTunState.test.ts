@@ -1,0 +1,43 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TunState } from '@/types/api'
+const hooks = vi.hoisted(() => ({ mounted: [] as Array<() => void>, unmounted: [] as Array<() => void>, event: null as null | ((state: TunState) => void), disconnect: null as null | (() => void), stop: vi.fn(), read: vi.fn(), stream: vi.fn() }))
+vi.mock('vue', async () => ({ ...await vi.importActual<typeof import('vue')>('vue'), onMounted: (fn: () => void) => hooks.mounted.push(fn), onUnmounted: (fn: () => void) => hooks.unmounted.push(fn) }))
+vi.mock('@/services/api', () => ({ api: hooks.read }))
+vi.mock('@/services/status-stream', () => ({ openStatusStream: (...args: [string, (state: TunState) => void, () => void]) => { hooks.stream(...args); hooks.event = args[1]; hooks.disconnect = args[2]; return hooks.stop } }))
+beforeEach(() => { vi.resetModules(); hooks.mounted = []; hooks.unmounted = []; hooks.event = null; hooks.stop.mockReset(); hooks.stream.mockReset(); hooks.read.mockReset() })
+describe('shared TUN state', () => {
+  it('shares one subscription and releases it only after the last consumer leaves', async () => {
+    hooks.read.mockResolvedValue({ phase: 'disabled', message: 'closed', desiredEnabled: false })
+    const { useTunState } = await import('./useTunState')
+    useTunState(); useTunState(); hooks.mounted.forEach(fn => fn())
+    expect(hooks.stream).toHaveBeenCalledTimes(1)
+    hooks.unmounted[0]!(); expect(hooks.stop).not.toHaveBeenCalled()
+    hooks.unmounted[1]!(); expect(hooks.stop).toHaveBeenCalledTimes(1)
+  })
+  it('does not let a slow initial response overwrite a newer restart event', async () => {
+    let resolve!: (value: TunState) => void
+    hooks.read.mockReturnValue(new Promise<TunState>(done => { resolve = done }))
+    const { useTunState } = await import('./useTunState')
+    const { tunState } = useTunState(); hooks.mounted[0]!()
+    hooks.event!({ phase: 'switching', message: 'restart', operation: { active: true, enabled: true, stage: 'restart-managed', message: 'restart' } })
+    resolve({ phase: 'disabled', message: 'old response', desiredEnabled: false })
+    await Promise.resolve(); await Promise.resolve()
+    expect(tunState.value.phase).toBe('switching')
+  })
+  it('retains enable intent during a temporary read failure', async () => {
+    hooks.read.mockResolvedValue({ phase: 'enabled', message: 'ready', desiredEnabled: true, runtimeEnabled: true })
+    const { useTunState } = await import('./useTunState')
+    const { tunState, refreshTunState } = useTunState(); hooks.mounted[0]!()
+    await Promise.resolve(); await Promise.resolve()
+    hooks.read.mockRejectedValue(new Error('disconnected'))
+    await refreshTunState()
+    expect(tunState.value.phase).toBe('unknown')
+    expect(tunState.value.desiredEnabled).toBe(true)
+    expect(tunState.value.runtimeEnabled).toBeUndefined()
+    hooks.event!({ phase: 'enabled', message: 'ready', desiredEnabled: true, runtimeEnabled: true })
+    hooks.disconnect!()
+    expect(tunState.value.phase).toBe('unknown')
+    expect(tunState.value.desiredEnabled).toBe(true)
+    expect(tunState.value.runtimeEnabled).toBeUndefined()
+  })
+})

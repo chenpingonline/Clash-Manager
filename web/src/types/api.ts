@@ -427,3 +427,14 @@ export interface TunDiagnostics {
   platform: string; os: string; arch: string; kernel: string
   repairable: boolean; ok?: boolean; error?: string; steps?: string[]
 }
+
+export interface TunState {
+  phase: 'checking' | 'switching' | 'enabled' | 'disabled' | 'stopped' | 'unknown' | 'mismatch'
+  message: string
+  desiredEnabled?: boolean
+  runtimeEnabled?: boolean
+  interface?: { name: string; checked: boolean; exists: boolean; up: boolean; tun: boolean; reason?: string }
+  capability?: NonNullable<NetworkSettingsResponse['tunCapability']>
+  operation?: { active: boolean; enabled: boolean; stage: string; message: string }
+  requirements?: { dnsEnabled: boolean; hijackEnabled: boolean; fakeIP: boolean; issues: string[]; warnings: string[] }
+}

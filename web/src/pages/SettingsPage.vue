@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import TunRuntimeStatus from '@/components/settings/TunRuntimeStatus.vue'
+import { useTunState } from '@/composables/useTunState'
 import AppSelect from '@/components/AppSelect.vue'
 import SettingsSearch from '@/components/settings/SettingsSearch.vue'
 import type { SettingsSearchEntry } from '@/services/settings-search'
 import { t } from '@/services/i18n'
 
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import ChangelogModal from '@/components/ChangelogModal.vue'
 import PortConflictHelp from '@/components/PortConflictHelp.vue'
 import AsyncState from '@/components/AsyncState.vue'
@@ -120,6 +122,17 @@ async function saveProxyAuthentication(value: ProxyAuthentication) {
 }
 const environment = ref<ProxyEnvironmentResponse>({}), proxyForm = reactive<ProxyEnvForm>({ enabled: true, followMixedPort: true, port: 7890, noProxy: 'localhost,127.0.0.1,::1', targets: { environment: true, profile: true, bashrc: true } })
 const proxyBypassInput = ref('')
+const { tunState: liveTunState, refreshTunState } = useTunState()
+const coordinatedTunBusy = computed(() => liveTunState.value.phase === 'switching')
+watch(liveTunState, state => {
+  if (state.phase === 'stopped') networkOffline.value = true
+  else if (state.phase === 'enabled' || state.phase === 'disabled') networkOffline.value = false
+  if (state.capability) { tunSupported.value = state.capability.supported === true; tunSupportText.value = state.capability.message || '' }
+  if (!tunSwitching.value && netSave.state.value !== 'pending' && netSave.state.value !== 'saving' && state.phase !== 'switching') {
+    const enabled = state.runtimeEnabled ?? state.desiredEnabled
+    if (typeof enabled === 'boolean') network.tun.enabled = enabled
+  }
+})
 const icons = ref<AppIconsResponse>({}), selectedIcon = ref('cat-orbit'), tunSupported = ref(true), tunSupportText = ref('当前 Mihomo 具备 TUN 所需权限，可直接启用')
 const geo = ref<GeoStatus>({}), geoForm = reactive({ autoUpdate: false, updateInterval: 24 }), geoBusy = ref(''), geoState = ref<'idle' | 'saving' | 'updating' | 'success' | 'error'>('idle'), geoMessage = ref('')
 const dnsText = reactive({ defaultNameserver: '', nameserver: '', fallback: '', proxyServerNameserver: '', directNameserver: '', fakeIpFilter: '', nameserverPolicy: '', fallbackIpCidr: '', fallbackDomain: '', hosts: '' })
@@ -354,6 +367,7 @@ async function toggleTunSetting() {
     closeTunProgressStream?.()
     closeTunProgressStream = null
     tunProgress.value = ''
+    void refreshTunState()
   }
 }
 function dnsPayload() {
@@ -694,21 +708,22 @@ onMounted(initialize)
                 <div class="tun-section-title-row"><h2>{{ t("TUN 详细设置") }}</h2><span v-if="tunSwitching" class="dashboard-tun-progress settings-tun-progress" role="status" aria-live="polite"><i aria-hidden="true" /><span>{{ t(tunProgress) }}</span></span></div>
                 <p>{{ t(runtime.platform === 'linux' ? '接管 Linux 主机流量；首页可以快速开关' : runtime.platform === 'docker' ? '接管当前部署网络范围内的流量；首页可以快速开关' : '接管 NAS 系统流量；首页可以快速开关，这里配置完整参数') }}</p>
               </div>
-              <div class="tun-master"><span :class="network.tun.enabled ? 'good-text' : 'muted-text'">{{ t(tunSwitching ? (network.tun.enabled ? '正在开启' : '正在关闭') : network.tun.enabled ? '已开启' : '已关闭') }}</span><label class="switch large"><input v-model="network.tun.enabled" type="checkbox" :disabled="tunSwitching || netState === 'pending' || netState === 'saving' || (!tunSupported && !network.tun.enabled)" @change="toggleTunSetting"><span /></label></div>
+              <div class="tun-master"><span :class="network.tun.enabled ? 'good-text' : 'muted-text'">{{ t(tunSwitching ? (network.tun.enabled ? '正在开启' : '正在关闭') : network.tun.enabled ? '已开启' : '已关闭') }}</span><label class="switch large"><input v-model="network.tun.enabled" type="checkbox" :disabled="tunSwitching || coordinatedTunBusy || netState === 'pending' || netState === 'saving' || (!tunSupported && !network.tun.enabled)" @change="toggleTunSetting"><span /></label></div>
             </div>
             <div class="tun-capability" :class="tunSupported ? 'ok' : 'warn'"><strong>{{ t(tunSupported ? '可用' : '不可用') }}</strong><span>{{ t(tunSupportText) }}</span></div>
-            <TunDiagnosticsPanel :busy="tunSwitching || netState === 'pending' || netState === 'saving'" @capability="value => { tunSupported = value.supported === true; tunSupportText = value.message || '' }" />
+            <TunRuntimeStatus />
+            <TunDiagnosticsPanel :busy="tunSwitching || coordinatedTunBusy || netState === 'pending' || netState === 'saving'" @capability="value => { tunSupported = value.supported === true; tunSupportText = value.message || '' }" />
             <div class="tun-main-grid">
-              <TunStackFields v-model:stack="network.tun.stack" v-model:congestion-controller="network.tun.congestionController" :features="tunFeatures" :disabled="tunSwitching || !tunSupported" @change="saveTunSettings" />
+              <TunStackFields v-model:stack="network.tun.stack" v-model:congestion-controller="network.tun.congestionController" :features="tunFeatures" :disabled="tunSwitching || coordinatedTunBusy || (!tunSupported && !networkOffline)" @change="saveTunSettings" />
               <div class="field">
                 <div class="field-label-row"><label for="settings-tun-mtu">MTU</label><HelpPopover label="MTU"><strong>{{ t("单个网络数据包的最大传输尺寸") }}</strong><span>{{ t("默认值为") }} <b>1500</b>{{ t("，与常见以太网环境一致，优先保证兼容性。") }}</span><span>{{ t("如果 VPN、PPPoE 或多层隧道下仍出现部分网站打不开或连接卡顿，可尝试调整为") }} <b>1400</b>。</span></HelpPopover></div>
-                <input id="settings-tun-mtu" v-model.number="network.tun.mtu" type="number" min="1280" max="65535" :disabled="tunSwitching || !tunSupported" @change="saveTunSettings('mtu')">
+                <input id="settings-tun-mtu" v-model.number="network.tun.mtu" type="number" min="1280" max="65535" :disabled="tunSwitching || coordinatedTunBusy || (!tunSupported && !networkOffline)" @change="saveTunSettings('mtu')">
               </div>
             </div>
-            <div class="tun-option-grid"><SettingToggle data-setting="setting-network-tun-autoRoute" v-model="network.tun.autoRoute" :title="t('自动路由')" :description="t('自动把系统流量路由到 TUN')" :disabled="tunSwitching || !tunSupported" @change="saveTunSettings('autoRoute')" /><SettingToggle data-setting="setting-network-tun-autoRedirect" v-model="network.tun.autoRedirect" title="Auto Redirect" :description="t('Linux 自动配置 nftables/iptables TCP 重定向')" :disabled="tunSwitching || !tunSupported || !network.tun.autoRoute" @change="saveTunSettings('autoRedirect')" /><SettingToggle data-setting="setting-network-tun-autoDetectInterface" v-model="network.tun.autoDetectInterface" :title="t('自动检测出口网卡')" :description="t('自动选择实际的外网出口接口')" :disabled="tunSwitching || !tunSupported" @change="saveTunSettings('autoDetectInterface')" /><SettingToggle data-setting="setting-network-tun-dnsHijack" v-model="network.tun.dnsHijack" :title="t('DNS 劫持')" :description="t('劫持 UDP/TCP 53 到 Mihomo DNS 模块')" :disabled="tunSwitching || !tunSupported" @change="saveTunSettings('dnsHijack')" /><SettingToggle data-setting="setting-network-tun-strictRoute" v-model="network.tun.strictRoute" :title="t('严格路由')" :description="t('减少流量/DNS 泄漏；复杂网络可能影响其他虚拟网卡')" :disabled="tunSwitching || !tunSupported" @change="saveTunSettings('strictRoute')" /></div>
+            <div class="tun-option-grid"><SettingToggle data-setting="setting-network-tun-autoRoute" v-model="network.tun.autoRoute" :title="t('自动路由')" :description="t('自动把系统流量路由到 TUN')" :disabled="tunSwitching || coordinatedTunBusy || (!tunSupported && !networkOffline)" @change="saveTunSettings('autoRoute')" /><SettingToggle data-setting="setting-network-tun-autoRedirect" v-model="network.tun.autoRedirect" title="Auto Redirect" :description="t('Linux 自动配置 nftables/iptables TCP 重定向')" :disabled="tunSwitching || coordinatedTunBusy || (!tunSupported && !networkOffline) || !network.tun.autoRoute" @change="saveTunSettings('autoRedirect')" /><SettingToggle data-setting="setting-network-tun-autoDetectInterface" v-model="network.tun.autoDetectInterface" :title="t('自动检测出口网卡')" :description="t('自动选择实际的外网出口接口')" :disabled="tunSwitching || coordinatedTunBusy || (!tunSupported && !networkOffline)" @change="saveTunSettings('autoDetectInterface')" /><SettingToggle data-setting="setting-network-tun-dnsHijack" v-model="network.tun.dnsHijack" :title="t('DNS 劫持')" :description="t('劫持 UDP/TCP 53 到 Mihomo DNS 模块')" :disabled="tunSwitching || coordinatedTunBusy || (!tunSupported && !networkOffline)" @change="saveTunSettings('dnsHijack')" /><SettingToggle data-setting="setting-network-tun-strictRoute" v-model="network.tun.strictRoute" :title="t('严格路由')" :description="t('减少流量/DNS 泄漏；复杂网络可能影响其他虚拟网卡')" :disabled="tunSwitching || coordinatedTunBusy || (!tunSupported && !networkOffline)" @change="saveTunSettings('strictRoute')" /></div>
             <div class="field tun-route-exclude">
               <div class="field-label-row"><label for="settings-tun-route-exclude">{{ t("排除自定义网段") }}</label><HelpPopover :label="t('排除自定义网段')"><strong>{{ t("让指定目标网段绕过 TUN 自动路由") }}</strong><span>{{ t("仅在开启“自动路由”时生效，适合局域网、VPN 和其他虚拟网络。") }}</span><span>{{ t("仅支持 IPv4/IPv6 CIDR，每行填写一个。") }}</span></HelpPopover></div>
-              <textarea id="settings-tun-route-exclude" v-model="tunRouteExcludeText" placeholder="192.168.0.0/16&#10;10.0.0.0/8&#10;fc00::/7" :disabled="tunSwitching || !tunSupported || !network.tun.autoRoute" @change="saveTunSettings('routeExcludeAddress', 80)" @input="saveTunSettings('routeExcludeAddress', 1000)" />
+              <textarea id="settings-tun-route-exclude" v-model="tunRouteExcludeText" placeholder="192.168.0.0/16&#10;10.0.0.0/8&#10;fc00::/7" :disabled="tunSwitching || coordinatedTunBusy || (!tunSupported && !networkOffline) || !network.tun.autoRoute" @change="saveTunSettings('routeExcludeAddress', 80)" @input="saveTunSettings('routeExcludeAddress', 1000)" />
               <span class="field-note">{{ t("每行一个 IPv4/IPv6 CIDR；留空表示不额外排除。") }}</span>
             </div>
             <div v-if="network.tun.enabled && network.tun.dnsHijack && !network.dnsEnabled" class="tun-capability warn"><strong>DNS</strong><span>{{ t("DNS 劫持需要先启用 Mihomo DNS，请在 DNS 设置中启用并应用。") }}</span></div>

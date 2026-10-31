@@ -43,7 +43,7 @@ func TestApplyConfigNormalizesDNSHijackBeforeMihomo(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := &mihomo.Client{SettingsFile: settings}
-	if err := applyConfigWithClient(context.Background(), client, []byte("tun: {enable: true, dns-hijack: [114.114.114.114, '2001:db8::1', tcp://any:5353]}\n")); err != nil {
+	if err := applyConfigWithClient(context.Background(), client, []byte("dns: {enable: true}\ntun: {enable: true, dns-hijack: [114.114.114.114, '2001:db8::1', tcp://any:5353]}\n")); err != nil {
 		t.Fatal(err)
 	}
 	if err := applyConfigWithClient(context.Background(), client, []byte("tun: {dns-hijack: [any:53, bad-address]}\n")); err == nil || !strings.Contains(err.Error(), "第 2 项格式无效") {

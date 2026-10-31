@@ -90,6 +90,8 @@ type gateway struct {
 	coreOperation      networkSaveStatus
 	networkOperation   networkSaveStatus
 	tunOperationMu     sync.RWMutex
+	tunStateEventsMu   sync.Mutex
+	tunStateListeners  map[chan struct{}]struct{}
 	profileJobs        map[string]*profileJob
 	profileJobWatchers map[string]map[chan profileJob]struct{}
 	activeJobs         map[string]string
@@ -293,6 +295,8 @@ func (g *gateway) handleConfigAPI(w http.ResponseWriter, r *http.Request, reques
 		if !ok {
 			return true
 		}
+		g.networkMu.Lock()
+		defer g.networkMu.Unlock()
 		g.configMu.Lock()
 		err := g.saveAndApplyConfig(r.Context(), raw)
 		g.configMu.Unlock()
@@ -302,6 +306,8 @@ func (g *gateway) handleConfigAPI(w http.ResponseWriter, r *http.Request, reques
 			writeJSON(w, 200, map[string]bool{"ok": true})
 		}
 	case requestPath == "/api/config/apply" && r.Method == http.MethodPost:
+		g.networkMu.Lock()
+		defer g.networkMu.Unlock()
 		raw, err := os.ReadFile(g.config.managedConfigFile)
 		if err == nil {
 			err = g.applyConfig(r.Context(), raw)
@@ -316,6 +322,8 @@ func (g *gateway) handleConfigAPI(w http.ResponseWriter, r *http.Request, reques
 			writeJSON(w, 200, map[string]bool{"ok": true})
 		}
 	case requestPath == "/api/config/sync-startup" && r.Method == http.MethodPost:
+		g.networkMu.Lock()
+		defer g.networkMu.Unlock()
 		raw, err := os.ReadFile(g.config.managedConfigFile)
 		if err == nil {
 			g.configMu.Lock()
@@ -337,6 +345,8 @@ func (g *gateway) handleConfigAPI(w http.ResponseWriter, r *http.Request, reques
 		}
 		raw, err := os.ReadFile(filepath.Join(g.config.backupDir, name))
 		if err == nil {
+			g.networkMu.Lock()
+			defer g.networkMu.Unlock()
 			g.configMu.Lock()
 			err = g.saveAndApplyConfig(r.Context(), raw)
 			g.configMu.Unlock()
@@ -434,6 +444,9 @@ func applyConfigWithClient(ctx context.Context, client *mihomo.Client, raw []byt
 		return err
 	}
 	raw = normalized
+	if _, err := configyaml.TunDNSRequirements(raw); err != nil {
+		return err
+	}
 	body, _ := json.Marshal(map[string]any{"path": "", "payload": string(raw)})
 	return mihomoRequest(ctx, client, http.MethodPut, "/configs?force=true", bytes.NewReader(body), 120*time.Second)
 }
@@ -560,6 +573,11 @@ func (g *gateway) saveAndApplyConfig(ctx context.Context, raw []byte) error {
 		return err
 	}
 	applyDuration := time.Since(applyStarted).Milliseconds()
+	if configyaml.TunEnabled(raw) {
+		if err := g.waitVerifiedTun(ctx, true, 3*time.Second); err != nil {
+			return errors.Join(err, restoreRuntimeConfigWithClient(client, previous))
+		}
+	}
 	if err := g.backupConfig(); err != nil {
 		return errors.Join(err, restoreRuntimeConfigWithClient(client, previous))
 	}
@@ -623,6 +641,26 @@ func (g *gateway) syncStartupConfigWithStage(ctx context.Context, raw []byte, st
 	}
 	stages["validate"] = time.Since(prepareStarted).Milliseconds()
 	txID, _ := syncResult["txId"].(string)
+	previousDevice := ""
+	if _, declared := syncResult["tunEnabled"].(bool); declared {
+		if rt, err := readRuntimeTun(ctx, client); err == nil {
+			previousDevice = rt.Device
+		}
+	}
+	coordinatedTun := syncResult["tunEnabled"] == true || syncResult["previousTunEnabled"] == true
+	tunApplied := false
+	if coordinatedTun {
+		target, _ := syncResult["tunEnabled"].(bool)
+		g.setTunOperation(true, target, "runtime")
+		defer func() {
+			if tunApplied {
+				g.setTunOperation(false, target, "done")
+			} else {
+				g.setTunOperation(false, target, "failed")
+			}
+		}()
+	}
+	restartedForTun := false
 	rollback := func(cause error, runtime bool) error {
 		rollbackCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
@@ -630,7 +668,16 @@ func (g *gateway) syncStartupConfigWithStage(ctx context.Context, raw []byte, st
 			cause = errors.Join(cause, fmt.Errorf("启动配置回滚失败: %w", err))
 		}
 		if runtime {
-			cause = errors.Join(cause, restoreRuntimeConfigWithClient(client, previous))
+			if restartedForTun {
+				restartErr := g.helperJSON(rollbackCtx, http.MethodPost, "/core/restart-managed", map[string]any{}, nil, 20*time.Second)
+				cause = errors.Join(cause, restartErr)
+				if restartErr == nil {
+					g.syncControllerSettings(rollbackCtx)
+					cause = errors.Join(cause, g.waitController(rollbackCtx, 12*time.Second))
+				}
+			} else {
+				cause = errors.Join(cause, restoreRuntimeConfigWithClient(client, previous))
+			}
 		}
 		return cause
 	}
@@ -646,7 +693,16 @@ func (g *gateway) syncStartupConfigWithStage(ctx context.Context, raw []byte, st
 	if value, ok := syncResult["effectiveContent"].(string); ok {
 		effective = []byte(value)
 	}
-	if activation["method"] == "hot-reload" {
+	restartTun := syncResult["managed"] == true && syncResult["tunEnabled"] == true && syncResult["previousTunEnabled"] == false
+	if activation["method"] == "hot-reload" && restartTun {
+		progress("restart-managed", "正在释放虚拟网卡并重启 Core…")
+		restartedForTun = true
+		if err := g.helperJSON(ctx, http.MethodPost, "/core/restart-managed", map[string]any{}, nil, 20*time.Second); err != nil {
+			return nil, rollback(err, true)
+		}
+		g.syncControllerSettings(ctx)
+		activation["method"] = "managed-restart"
+	} else if activation["method"] == "hot-reload" {
 		progress("apply", "正在应用运行配置…")
 		applyStarted := time.Now()
 		if err := applyConfigWithClient(ctx, client, effective); err != nil {
@@ -658,6 +714,12 @@ func (g *gateway) syncStartupConfigWithStage(ctx context.Context, raw []byte, st
 	readyStarted := time.Now()
 	if err := waitControllerWithClient(ctx, client, 30*time.Second); err != nil {
 		return nil, rollback(fmt.Errorf("确认 Controller 状态失败: %w", err), true)
+	}
+	if _, declared := syncResult["tunEnabled"].(bool); declared && (syncResult["tunEnabled"] == true || syncResult["previousTunEnabled"] == true) {
+		expected, _ := syncResult["tunEnabled"].(bool)
+		if err := g.waitVerifiedTun(ctx, expected, 3*time.Second, previousDevice); err != nil {
+			return nil, rollback(err, true)
+		}
 	}
 	stages["controllerReady"] = time.Since(readyStarted).Milliseconds()
 	progress("persist", "Controller 已恢复，正在保存配置与元数据…")
@@ -699,6 +761,7 @@ func (g *gateway) syncStartupConfigWithStage(ctx context.Context, raw []byte, st
 	stages["commit"] = time.Since(commitStarted).Milliseconds()
 	go func() { time.Sleep(1200 * time.Millisecond); g.restoreSelections(context.Background()) }()
 	duration := time.Since(started).Milliseconds()
+	tunApplied = true
 	log.Printf("启动配置同步完成 result=applied duration=%dms stages=%v", duration, stages)
 	g.rulesChanged()
 	return map[string]any{"target": syncResult["target"], "backup": syncResult["backup"], "validation": syncResult["validation"], "activation": activation, "unchanged": false, "durationMs": duration, "stages": stages}, nil

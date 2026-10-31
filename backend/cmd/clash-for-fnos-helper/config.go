@@ -706,6 +706,9 @@ func (h *helper) systemStatus(ctx context.Context) (map[string]any, error) {
 	proc := h.primary()
 	mode := h.readMode()
 	result := map[string]any{"privileged": true, "available": true, "mode": mode, "coreMode": h.readMode(), "bootstrap": h.bootstrapSnapshot(), "canRestartService": proc != nil && proc.Managed, "managedMixedPort": 7890}
+	if run, err := h.loadRunIntent(); err == nil {
+		result["coreRunIntent"] = run
+	}
 	if proc != nil {
 		result["pid"], result["binaryPath"], result["configPath"], result["binaryVersion"] = proc.PID, proc.Exe, proc.ConfigPath, readVersion(proc.Exe)
 	}
@@ -853,6 +856,9 @@ func (h *helper) prepareConfigCandidate(ctx context.Context, content string, val
 		return nil, fail(400, err.Error())
 	}
 	content = string(normalized)
+	if _, err := configyaml.TunDNSRequirements(normalized); err != nil {
+		return nil, fail(409, err.Error())
+	}
 	proc := h.primary()
 	target := h.config.managedConfig
 	if proc != nil && proc.ConfigPath != "" {
@@ -910,7 +916,9 @@ func (h *helper) prepareConfigCandidate(ctx context.Context, content string, val
 	h.mu.Lock()
 	h.transactions[id] = &transaction{Target: target, Backup: backup, Candidate: candidate, CreatedAt: time.Now(), Validated: validate, ValidationRequired: validationRequired, Mode: mode, UID: uid, GID: gid}
 	h.mu.Unlock()
-	return map[string]any{"ok": true, "txId": id, "target": target, "backup": nullable(backup), "validation": validation, "effectiveContent": content}, nil
+	previous, _ := os.ReadFile(target)
+	return map[string]any{"ok": true, "txId": id, "target": target, "backup": nullable(backup), "validation": validation, "effectiveContent": content,
+		"managed": proc != nil && proc.Managed, "tunEnabled": yamlNestedBoolean(content, "tun", "enable", false), "previousTunEnabled": yamlNestedBoolean(string(previous), "tun", "enable", false)}, nil
 }
 
 func (h *helper) validateConfigTransaction(ctx context.Context, id string) (map[string]any, error) {
@@ -1316,7 +1324,7 @@ func replaceNestedBoolean(raw, section, key string, value bool) (string, error) 
 
 func (h *helper) prepareTunToggle(ctx context.Context, enabled bool) (map[string]any, error) {
 	proc := h.primary()
-	if proc == nil {
+	if proc == nil && (enabled || h.readMode() != "managed") {
 		return nil, fail(409, "当前未检测到运行中的 Mihomo Core")
 	}
 	if enabled {
@@ -1325,7 +1333,7 @@ func (h *helper) prepareTunToggle(ctx context.Context, enabled bool) (map[string
 			return nil, fail(409, fmt.Sprint(capability["message"]))
 		}
 	}
-	active, err := h.activeRaw()
+	active, err := h.networkConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -1346,6 +1354,13 @@ func (h *helper) prepareTunToggle(ctx context.Context, enabled bool) (map[string
 	prepared, err := h.prepareConfigCandidate(ctx, effective, false, true)
 	if err != nil {
 		return nil, err
+	}
+	prepared["managed"] = proc != nil && proc.Managed
+	prepared["offline"] = proc == nil
+	if proc == nil {
+		h.mu.Lock()
+		h.transactions[prepared["txId"].(string)].Offline = true
+		h.mu.Unlock()
 	}
 	prepared["enabled"] = enabled
 	prepared["previousEnabled"] = previous
@@ -1577,6 +1592,9 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 		prepared["saveOnlyReason"] = "tun-disabled"
 	}
 	h.attachUserSettings(prepared, patch)
+	prepared["previousTunEnabled"] = previousTunEnabled
+	prepared["tunEnabled"] = yamlNestedBoolean(raw, "tun", "enable", false)
+	prepared["managed"] = h.readMode() == "managed" && active["offline"] != true
 	prepared["previousContent"] = active["content"]
 	prepared["settings"] = settings
 	controller, _, _ := parseController(raw)
@@ -1635,6 +1653,7 @@ func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 	}
 	settings := map[string]any{"controller": map[string]any{"enabled": true, "port": controllerPort}, "mixed": port("mixed-port", mixed), "socks": port("socks-port", 7898), "http": port("port", 7899), "redir": port("redir-port", 7895), "tproxy": port("tproxy-port", 7896), "allowLan": yamlBoolean(raw, "allow-lan", false), "bindAddress": proxyBindAddressFromConfig(raw), "core": map[string]any{"ipv6": yamlBoolean(raw, "ipv6", true), "unifiedDelay": yamlBoolean(raw, "unified-delay", false)}, "tun": map[string]any{"enabled": nestedBoolean("tun", "enable", false), "stack": yamlNestedString(raw, "tun", "stack", ""), "congestionController": yamlNestedString(raw, "tun", "congestion-controller", ""), "mtu": yamlNestedInteger(raw, "tun", "mtu", 1500), "routeExcludeAddress": yamlNestedStringList(raw, "tun", "route-exclude-address"), "autoRoute": nestedBoolean("tun", "auto-route", true), "autoRedirect": nestedBoolean("tun", "auto-redirect", true), "autoDetectInterface": nestedBoolean("tun", "auto-detect-interface", true), "dnsHijack": len(hijack) > 0, "strictRoute": nestedBoolean("tun", "strict-route", false)}}
 	settings["dnsEnabled"] = nestedBoolean("dns", "enable", false)
+	requirements, _ := configyaml.TunDNSRequirements([]byte(raw))
 	auth, err := configyaml.ProxyAuthenticationFromDocument(document)
 	if err != nil {
 		return nil, err
@@ -1652,7 +1671,7 @@ func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 		binary = proc.Exe
 	}
 	features := tunVersionFeatures(readVersion(binary))
-	return map[string]any{"ok": true, "configPath": active["path"], "settings": settings, "offline": active["offline"] == true, "tunCapability": capability, "tunFeatures": features}, nil
+	return map[string]any{"ok": true, "configPath": active["path"], "settings": settings, "offline": active["offline"] == true, "tunCapability": capability, "tunFeatures": features, "tunRequirements": requirements}, nil
 }
 
 func resolveTunCapability(proc *processInfo, tunDevice bool, effectiveUID int) map[string]any {

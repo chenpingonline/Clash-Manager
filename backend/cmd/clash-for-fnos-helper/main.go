@@ -145,6 +145,8 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			result, err = h.firewallRules(r.Context())
 		case "/network/bypass":
 			result = h.bypassMonitor(r.Context())
+		case "/network/tun/interface":
+			result = h.tunInterface(r.URL.Query().Get("device"))
 		case "/network/tun/diagnostics":
 			result = h.tunDiagnostics()
 		case "/network/status":

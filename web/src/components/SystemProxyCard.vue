@@ -4,6 +4,8 @@ import { t, modeLabel } from '@/services/i18n'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import DashboardSettingsButton from '@/components/DashboardSettingsButton.vue'
 import SystemProxySettingsModal from '@/components/SystemProxySettingsModal.vue'
+import TunRuntimeStatus from '@/components/settings/TunRuntimeStatus.vue'
+import { useTunState } from '@/composables/useTunState'
 import TunSettingsModal from '@/components/TunSettingsModal.vue'
 import { api, errorMessage, jsonRequest } from '@/services/api'
 import { openStatusStream } from '@/services/status-stream'
@@ -31,6 +33,8 @@ const props = withDefaults(defineProps<{ config: RuntimeConfig; environment: Pro
   variant: 'cards',
 })
 const emit = defineEmits<{ updated: [] }>()
+const { tunState: liveTunState, refreshTunState } = useTunState()
+const remoteTunBusy = computed(() => liveTunState.value.phase === 'switching')
 const management = ref<ProxyEnvironmentManagement | null>(props.environment.management || null)
 const saving = ref(false)
 const runtimeMode = ref<RuntimeMode>(props.config.mode || 'rule')
@@ -56,6 +60,7 @@ const tunEnabled = computed(() => tun.value.enabled)
 const tunDisplayedEnabled = computed(() => tunTarget.value ?? tunEnabled.value)
 const tunSupported = computed(() => tunCapability.value.supported === true)
 const tunStatus = computed(() => {
+  if (liveTunState.value.phase !== 'checking') return liveTunState.value.message
   if (tunLoading.value) return '正在检测'
   if (tunSaving.value) return tunTarget.value ? '正在开启' : '正在关闭'
   if (tunError.value) return '状态读取失败'
@@ -112,6 +117,13 @@ async function changeMode(mode: RuntimeMode) {
   }
 }
 
+watch(liveTunState, state => {
+  if (state.capability) tunCapability.value = { ...state.capability }
+  if (!tunSaving.value && state.phase !== 'switching') {
+    const value = state.runtimeEnabled ?? state.desiredEnabled
+    if (typeof value === 'boolean') tun.value = { ...tun.value, enabled: value }
+  }
+})
 async function loadTun() {
   const request = ++tunLoadRequest
   tunLoading.value = true
@@ -166,6 +178,7 @@ async function toggleTun(event: Event) {
     closeTunProgressStream?.()
     closeTunProgressStream = null
     tunProgress.value = ''
+    void refreshTunState()
   }
 }
 
@@ -193,7 +206,7 @@ onUnmounted(() => {
       <div class="dashboard-runtime-segment dashboard-runtime-tun">
         <div class="dashboard-runtime-toggle">
           <span class="dashboard-runtime-label"><span>{{ t("虚拟网卡(TUN)模式") }}</span><DashboardSettingsButton :label="t('虚拟网卡(TUN)设置')" @click="tunSettingsOpen = true" /></span>
-          <label class="switch" :class="{ switching: tunSaving }"><input type="checkbox" :checked="tunDisplayedEnabled" :disabled="tunLoading || tunSaving || Boolean(tunError) || (!tunSupported && !tunEnabled)" :aria-busy="tunSaving" :aria-label="t('虚拟网卡(TUN)模式')" @change="toggleTun"><span /></label>
+          <label class="switch" :class="{ switching: tunSaving }"><input type="checkbox" :checked="tunDisplayedEnabled" :disabled="tunLoading || tunSaving || remoteTunBusy || Boolean(tunError) || (!tunSupported && !tunEnabled)" :aria-busy="tunSaving" :aria-label="t('虚拟网卡(TUN)模式')" @change="toggleTun"><span /></label>
         </div>
       </div>
       <div class="dashboard-runtime-segment dashboard-runtime-mode">
@@ -203,6 +216,7 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+    <TunRuntimeStatus />
   </section>
   <div v-else class="runtime-control-grid">
     <div class="card section runtime-control-card system-proxy-card">
@@ -218,11 +232,12 @@ onUnmounted(() => {
     <div class="card section runtime-control-card tun-quick-card" :class="{ 'tun-on': tunEnabled }">
       <div class="runtime-control-head">
         <div><h2>{{ t("虚拟网卡(TUN)模式") }}</h2><p :class="tunEnabled ? 'good-text' : tunSupported ? 'muted-text' : 'warn-text'">{{ t(tunStatus) }}</p></div>
-        <label class="runtime-control-switch"><span class="switch" :class="{ switching: tunSaving }"><input type="checkbox" :checked="tunDisplayedEnabled" :disabled="tunLoading || tunSaving || Boolean(tunError) || (!tunSupported && !tunEnabled)" :aria-busy="tunSaving" :aria-label="t('虚拟网卡(TUN)模式')" @change="toggleTun"><span /></span></label>
+        <label class="runtime-control-switch"><span class="switch" :class="{ switching: tunSaving }"><input type="checkbox" :checked="tunDisplayedEnabled" :disabled="tunLoading || tunSaving || remoteTunBusy || Boolean(tunError) || (!tunSupported && !tunEnabled)" :aria-busy="tunSaving" :aria-label="t('虚拟网卡(TUN)模式')" @change="toggleTun"><span /></span></label>
       </div>
       <div class="tun-quick-footer">
         <span :class="{ 'warn-text': !tunSupported && !tunEnabled }">{{ t(tunDescription) }}</span>
       </div>
+      <TunRuntimeStatus />
     </div>
   </div>
   <SystemProxySettingsModal v-if="variant === 'dashboard' && runtime.capabilities.hostProxyEnvironment" :open="proxySettingsOpen" :initial-management="management" @close="proxySettingsOpen = false" @saved="proxySettingsSaved" />

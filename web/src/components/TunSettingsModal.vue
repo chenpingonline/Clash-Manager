@@ -3,6 +3,8 @@ import { t } from '@/services/i18n'
 import { runtime } from '@/services/runtime'
 
 import { computed, reactive, ref, watch } from 'vue'
+import TunRuntimeStatus from '@/components/settings/TunRuntimeStatus.vue'
+import { useTunState } from '@/composables/useTunState'
 import TunDiagnosticsPanel from '@/components/settings/TunDiagnostics.vue'
 import TunStackFields from '@/components/settings/TunStackFields.vue'
 import BaseModal from '@/components/BaseModal.vue'
@@ -30,6 +32,7 @@ const defaultTun = (): TunForm => ({
 
 const props = defineProps<{ open: boolean; initialSettings?: NetworkSettingsResponse | null }>()
 const emit = defineEmits<{ close: []; saved: [response: NetworkSettingsResponse]; diagnosed: [capability: NonNullable<NetworkSettingsResponse['tunCapability']>] }>()
+const { tunState: liveTunState, refreshTunState } = useTunState()
 const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
@@ -43,8 +46,13 @@ const operation = useOperationProgress()
 let loadRequest = 0
 let hasSettings = false
 
+watch(liveTunState, state => {
+  if (state.capability) capability.value = { ...state.capability }
+  if (state.phase === 'stopped') offline.value = true
+  else if (state.phase === 'enabled' || state.phase === 'disabled') offline.value = false
+})
 const supported = computed(() => capability.value.supported === true)
-const controlsDisabled = computed(() => loading.value || saving.value || !supported.value)
+const controlsDisabled = computed(() => loading.value || saving.value || liveTunState.value.phase === 'switching' || (!supported.value && !offline.value))
 const capabilityText = computed(() => capability.value.message || (supported.value ? '当前环境支持 TUN。' : '当前环境暂不支持 TUN。'))
 
 function applyResult(result: NetworkSettingsResponse) {
@@ -89,7 +97,7 @@ async function save() {
     error.value = 'MTU 必须是 1280–65535 之间的整数'
     return
   }
-  if (!supported.value) {
+  if (!supported.value && !offline.value) {
     error.value = capabilityText.value
     return
   }
@@ -113,6 +121,7 @@ async function save() {
     notify(error.value, true)
   } finally {
     saving.value = false
+    void refreshTunState()
   }
 }
 
@@ -135,7 +144,7 @@ watch(() => props.open, open => {
         </div>
         <div class="settings-modal-header-actions">
           <button class="ghost" type="button" :disabled="saving" @click="close">{{ t("取消") }}</button>
-          <button type="button" :disabled="loading || saving || !supported" @click="save">{{ t(saving ? '保存中…' : '保存') }}</button>
+          <button type="button" :disabled="loading || saving || liveTunState.phase === 'switching' || (!supported && !offline)" @click="save">{{ t(saving ? '保存中…' : '保存') }}</button>
         </div>
       </div>
     </template>
@@ -145,9 +154,10 @@ watch(() => props.open, open => {
         <div v-if="error" class="local-warning">{{ t(error) }}</div>
 
         <div class="tun-capability" :class="supported ? 'ok' : 'warn'">
-          <strong>{{ t(supported ? (form.enabled ? '已开启' : '已关闭') : '不可用') }}</strong>
+          <strong>{{ t(supported ? '可用' : '不可用') }}</strong>
           <span>{{ t(capabilityText) }}</span>
         </div>
+        <TunRuntimeStatus v-if="open" />
         <TunDiagnosticsPanel v-if="open" :busy="loading || saving" @capability="value => { capability = value; emit('diagnosed', value) }" />
         <p v-if="offline" class="tun-settings-disabled-hint">{{ t("Core 已停止；保存后将在下次启动时生效。") }}</p>
 

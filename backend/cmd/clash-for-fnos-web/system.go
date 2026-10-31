@@ -98,6 +98,10 @@ func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, reques
 			return true
 		}
 		g.forwardHelper(w, r, http.MethodPost, "/app/update/start", body, 15*time.Second)
+	case requestPath == "/api/network/tun/state" && r.Method == http.MethodGet:
+		g.writeTunState(w, r)
+	case requestPath == "/api/network/tun/state/stream" && r.Method == http.MethodGet:
+		g.streamTunState(w, r)
 	case requestPath == "/api/network/tun/diagnostics" && r.Method == http.MethodGet:
 		w.Header().Set("Cache-Control", "no-store")
 		g.forwardHelper(w, r, http.MethodGet, "/network/tun/diagnostics", nil, 10*time.Second)
@@ -251,7 +255,7 @@ func tunOperationMessage(stage string, enabled bool) string {
 
 func (g *gateway) setTunOperation(active, enabled bool, stage string) {
 	g.tunOperationMu.Lock()
-	defer g.tunOperationMu.Unlock()
+	defer func() { g.tunOperationMu.Unlock(); g.publishTunState() }()
 	startedAt := g.tunOperation.StartedAt
 	if active && (!g.tunOperation.Active || startedAt == 0) {
 		startedAt = time.Now().UnixMilli()
@@ -489,12 +493,14 @@ func switchRuntimeTun(ctx context.Context, client *mihomo.Client, enabled bool) 
 }
 
 func (g *gateway) reconcileManagedTunAfterStartup(ctx context.Context) {
+	g.networkMu.Lock()
+	defer g.networkMu.Unlock()
 	var coreStatus map[string]any
 	if err := g.helperJSON(ctx, http.MethodGet, "/status", nil, &coreStatus, 5*time.Second); err != nil {
 		log.Printf("启动时读取 Core 状态失败，跳过 TUN 运行态恢复: %v", err)
 		return
 	}
-	if coreStatus["mode"] != "managed" {
+	if coreStatus["mode"] != "managed" || coreStatus["coreRunIntent"] == false {
 		return
 	}
 	if err := g.waitController(ctx, 20*time.Second); err != nil {
@@ -514,34 +520,29 @@ func (g *gateway) reconcileManagedTunAfterStartup(ctx context.Context) {
 		return
 	}
 
-	client := &mihomo.Client{SettingsFile: g.config.settingsFile}
-	if err := switchRuntimeTun(ctx, client, false); err != nil {
-		log.Printf("启动时释放旧 TUN 运行态失败: %v", err)
+	if err := g.waitVerifiedTun(ctx, true, 2*time.Second); err == nil {
 		return
 	}
-	select {
-	case <-ctx.Done():
+	// A transient outage never erases persisted intent. Restart only an owned Core.
+	if coreStatus["canRestartService"] != true {
 		return
-	case <-time.After(300 * time.Millisecond):
 	}
-	if err := switchRuntimeTun(ctx, client, true); err != nil {
-		initialErr := err
-		log.Printf("启动时恢复 TUN 运行态失败，尝试按持久配置重启托管 Core: %v", initialErr)
-		if restartErr := g.helperJSON(ctx, http.MethodPost, "/core/restart-managed", map[string]any{}, nil, 20*time.Second); restartErr != nil {
-			log.Printf("启动时恢复 TUN 失败且托管 Core 重启失败: 恢复=%v 重启=%v", initialErr, restartErr)
-			return
-		}
-		g.syncControllerSettings(ctx)
-		if readyErr := g.waitController(ctx, 12*time.Second); readyErr != nil {
-			log.Printf("启动时重启托管 Core 后 Controller 未恢复: %v", readyErr)
-			return
-		}
-		if verifyErr := waitRuntimeTun(ctx, client, true, 2*time.Second); verifyErr != nil {
-			log.Printf("启动时重启托管 Core 后 TUN 仍未恢复: %v", verifyErr)
-			return
-		}
+	g.setTunOperation(true, true, "restart-managed")
+	defer g.setTunOperation(false, true, "done")
+	if err := g.helperJSON(ctx, http.MethodPost, "/core/restart-managed", map[string]any{}, nil, 20*time.Second); err != nil {
+		log.Printf("启动时恢复 TUN 失败，保留开启设置: %v", err)
+		return
 	}
-	log.Printf("启动时已重新对账并恢复托管 TUN 运行态")
+	g.syncControllerSettings(ctx)
+	if err := g.waitController(ctx, 12*time.Second); err != nil {
+		log.Printf("启动时确认 TUN 失败，保留开启设置: %v", err)
+		return
+	}
+	if err := g.waitVerifiedTun(ctx, true, 3*time.Second); err != nil {
+		log.Printf("启动时确认 TUN 网卡失败，保留开启设置: %v", err)
+		return
+	}
+	log.Printf("启动时已确认托管 TUN 配置与实际网卡")
 }
 
 func recentTunError(file string) string {
@@ -701,12 +702,42 @@ func (g *gateway) updateTun(w http.ResponseWriter, r *http.Request) {
 	markStage("validate")
 
 	client := &mihomo.Client{SettingsFile: g.config.settingsFile}
+	previousDevice := ""
+	if _, declaresOwnership := prepared["managed"].(bool); declaresOwnership {
+		if rt, readErr := readRuntimeTun(r.Context(), client); readErr == nil {
+			previousDevice = rt.Device
+		}
+	}
 	setStage("runtime")
-	err := switchRuntimeTun(r.Context(), client, *input.Enabled)
+	var err error
 	runtimeMethod := "patch"
 	persisted := false
 	restartManagedFallback := false
-	if err != nil && *input.Enabled {
+	offline := prepared["offline"] == true
+	managedEnable := *input.Enabled && prepared["managed"] == true
+	if offline || managedEnable {
+		setStage("persist-before-restart")
+		var activation map[string]any
+		err = g.helperJSON(r.Context(), http.MethodPost, "/config/activate", map[string]any{"txId": txID}, &activation, 10*time.Second)
+		if err == nil {
+			persisted = true
+			if offline {
+				runtimeMethod = "saved-only"
+			} else {
+				setStage("restart-managed")
+				restartManagedFallback = true
+				err = g.helperJSON(r.Context(), http.MethodPost, "/core/restart-managed", map[string]any{}, nil, 20*time.Second)
+				if err == nil {
+					g.syncControllerSettings(r.Context())
+					err = g.waitController(r.Context(), 12*time.Second)
+				}
+				runtimeMethod = "managed-restart"
+			}
+		}
+	} else {
+		err = switchRuntimeTun(r.Context(), client, *input.Enabled)
+	}
+	if err != nil && *input.Enabled && !managedEnable {
 		var status map[string]any
 		statusErr := g.helperJSON(r.Context(), http.MethodGet, "/status", nil, &status, 3*time.Second)
 		if statusErr == nil && status["mode"] == "managed" && status["canRestartService"] == true {
@@ -735,6 +766,12 @@ func (g *gateway) updateTun(w http.ResponseWriter, r *http.Request) {
 				err = activateErr
 			}
 		}
+	}
+	// New Helper responses declare ownership. Older Helpers retain their legacy
+	// protocol; the state endpoint still reports an unverified interface as unknown.
+	if _, ownsCore := prepared["managed"].(bool); ownsCore && err == nil && !offline {
+		setStage("verify-runtime")
+		err = g.waitVerifiedTun(r.Context(), *input.Enabled, 3*time.Second, previousDevice)
 	}
 	if err != nil {
 		setStage("rollback")
@@ -788,14 +825,16 @@ func (g *gateway) forwardHelper(w http.ResponseWriter, r *http.Request, method, 
 }
 
 func (g *gateway) forwardHelperAndSync(w http.ResponseWriter, r *http.Request, apiPath string, payload any, timeout time.Duration) {
+	if apiPath != "/bootstrap/cancel" {
+		g.networkMu.Lock()
+		defer g.networkMu.Unlock()
+	}
 	id := r.Header.Get("X-Network-Operation")
 	setStage := func(message string, active bool) {
-		if id == "" {
-			return
-		}
 		g.networkOperationMu.Lock()
 		g.coreOperation = networkSaveStatus{ID: id, Active: active, Message: message}
 		g.networkOperationMu.Unlock()
+		g.publishTunState()
 	}
 	setStage("正在准备 Core…", true)
 	defer setStage("Core 操作结束", false)
@@ -873,6 +912,7 @@ func (g *gateway) updateNetworkSettings(w http.ResponseWriter, r *http.Request) 
 		g.networkOperationMu.Lock()
 		g.networkOperation = networkSaveStatus{ID: r.Header.Get("X-Network-Operation"), Active: true, Message: message}
 		g.networkOperationMu.Unlock()
+		g.publishTunState()
 	}
 	setStage("1/4 正在检查端口冲突并校验配置…")
 	defer func() { g.networkOperationMu.Lock(); g.networkOperation.Active = false; g.networkOperationMu.Unlock() }()
@@ -912,6 +952,12 @@ func (g *gateway) updateNetworkSettings(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	txID := fmt.Sprint(prepared["txId"])
+	previousDevice := ""
+	if _, declared := prepared["tunEnabled"].(bool); declared {
+		if rt, err := readRuntimeTun(r.Context(), &mihomo.Client{SettingsFile: g.config.settingsFile}); err == nil {
+			previousDevice = rt.Device
+		}
+	}
 	controllerChanged, _ := prepared["controllerChanged"].(bool)
 	restartForController := false
 	if controllerChanged {
@@ -922,6 +968,20 @@ func (g *gateway) updateNetworkSettings(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		restartForController = status["mode"] == "managed" && status["canRestartService"] == true
+	}
+	tunSaveSucceeded := false
+	changesTun := input["tun"] != nil
+	restartForController = restartForController || prepared["managed"] == true && prepared["tunEnabled"] == true && prepared["previousTunEnabled"] == false
+	if changesTun {
+		target, _ := prepared["tunEnabled"].(bool)
+		g.setTunOperation(true, target, "validate")
+		defer func() {
+			if tunSaveSucceeded {
+				g.setTunOperation(false, target, "done")
+			} else {
+				g.setTunOperation(false, target, "failed")
+			}
+		}()
 	}
 	rollback := func(cause error, runtime, restartRuntime bool) {
 		setStage("应用失败，正在回滚配置…")
@@ -1019,6 +1079,12 @@ func (g *gateway) updateNetworkSettings(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	if _, available := prepared["tunEnabled"].(bool); available && err == nil && activation["method"] != "saved-only" {
+		target, _ := prepared["tunEnabled"].(bool)
+		if target || changesTun {
+			err = g.waitVerifiedTun(r.Context(), target, 3*time.Second, previousDevice)
+		}
+	}
 	if err != nil {
 		rollback(err, activation["method"] != "saved-only", restartForController)
 		return
@@ -1035,6 +1101,7 @@ func (g *gateway) updateNetworkSettings(w http.ResponseWriter, r *http.Request) 
 		settings = map[string]any{}
 	}
 	settings["dnsOverrideEnabled"], settings["dns"] = nextEnabled, nextDNS
+	tunSaveSucceeded = true
 	writeJSON(w, 200, map[string]any{"ok": true, "settings": settings, "controller": controller, "configPath": prepared["target"], "backup": prepared["backup"], "validation": prepared["validation"], "activation": activation["method"], "activationReason": activation["reason"], "warning": nil, "proxyEnvironment": proxy, "tunCapability": prepared["tunCapability"]})
 }
 
@@ -1422,6 +1489,7 @@ func (g *gateway) updateCore(ctx context.Context, restart, force bool, id string
 		g.networkOperationMu.Lock()
 		g.coreOperation = networkSaveStatus{ID: id, Active: true, Stage: "downloading", Message: message, Progress: progress.percent(), DownloadedBytes: progress.downloaded, TotalBytes: progress.total, Attempt: progress.attempt, MaxAttempts: progress.maxAttempts, Retrying: progress.retrying}
 		g.networkOperationMu.Unlock()
+		g.publishTunState()
 	})
 	if err != nil {
 		return nil, err

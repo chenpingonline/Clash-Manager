@@ -87,12 +87,14 @@ func TestTunFastPathPatchesRuntimeThenPersists(t *testing.T) {
 	}
 }
 
-func TestStartupReconcilesEnabledManagedTun(t *testing.T) {
+func TestStartupLeavesHealthyManagedTunUntouched(t *testing.T) {
 	t.Parallel()
 	helperSocket := startTunHelper(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/status":
 			writeJSON(w, http.StatusOK, map[string]any{"mode": "managed"})
+		case "/network/tun/interface":
+			writeJSON(w, 200, map[string]any{"name": "Meta", "checked": true, "exists": true, "up": true, "tun": true})
 		case "/network/status":
 			writeJSON(w, http.StatusOK, map[string]any{"settings": map[string]any{"tun": map[string]any{"enabled": true}}})
 		default:
@@ -117,7 +119,7 @@ func TestStartupReconcilesEnabledManagedTun(t *testing.T) {
 			patches = append(patches, runtimeEnabled)
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodGet && r.URL.Path == "/configs":
-			writeJSON(w, http.StatusOK, map[string]any{"tun": map[string]bool{"enable": runtimeEnabled}})
+			writeJSON(w, http.StatusOK, map[string]any{"tun": map[string]any{"enable": runtimeEnabled, "device": "Meta"}})
 		default:
 			http.NotFound(w, r)
 		}
@@ -128,7 +130,7 @@ func TestStartupReconcilesEnabledManagedTun(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	gateway.reconcileManagedTunAfterStartup(ctx)
-	if len(patches) != 2 || patches[0] || !patches[1] || !runtimeEnabled {
+	if len(patches) != 0 || !runtimeEnabled {
 		t.Fatalf("patches=%v runtimeEnabled=%t", patches, runtimeEnabled)
 	}
 }
@@ -166,14 +168,16 @@ func TestStartupDoesNotTouchDisabledManagedTun(t *testing.T) {
 	}
 }
 
-func TestStartupFallsBackToManagedRestartWhenTunReenableFails(t *testing.T) {
+func TestStartupRestartsOnceWhenManagedTunIsMissing(t *testing.T) {
 	t.Parallel()
-	runtimeEnabled := true
+	runtimeEnabled := false
 	restarts := 0
 	helperSocket := startTunHelper(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/status":
-			writeJSON(w, http.StatusOK, map[string]any{"mode": "managed"})
+			writeJSON(w, http.StatusOK, map[string]any{"mode": "managed", "canRestartService": true})
+		case "/network/tun/interface":
+			writeJSON(w, 200, map[string]any{"name": "Meta", "checked": true, "exists": runtimeEnabled, "up": runtimeEnabled, "tun": runtimeEnabled})
 		case "/network/status":
 			writeJSON(w, http.StatusOK, map[string]any{"settings": map[string]any{"tun": map[string]any{"enabled": true}}})
 		case "/core/restart-managed":
@@ -205,7 +209,7 @@ func TestStartupFallsBackToManagedRestartWhenTunReenableFails(t *testing.T) {
 			runtimeEnabled = false
 			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodGet && r.URL.Path == "/configs":
-			writeJSON(w, http.StatusOK, map[string]any{"tun": map[string]bool{"enable": runtimeEnabled}})
+			writeJSON(w, http.StatusOK, map[string]any{"tun": map[string]any{"enable": runtimeEnabled, "device": "Meta"}})
 		default:
 			http.NotFound(w, r)
 		}
@@ -216,7 +220,7 @@ func TestStartupFallsBackToManagedRestartWhenTunReenableFails(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	gateway.reconcileManagedTunAfterStartup(ctx)
-	if len(patches) != 2 || patches[0] || !patches[1] || restarts != 1 || !runtimeEnabled {
+	if len(patches) != 0 || restarts != 1 || !runtimeEnabled {
 		t.Fatalf("patches=%v restarts=%d runtimeEnabled=%t", patches, restarts, runtimeEnabled)
 	}
 }
