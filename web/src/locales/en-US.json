@@ -2220,5 +2220,8 @@
   "独立代理入口总开关必须为布尔值": "The listener master switch must be a boolean",
   "只能应用当前配置的独立代理入口": "Only listeners for the active profile can be applied",
   "NAS 局域网 IP": "NAS LAN IP",
-  "连接地址：{arg0}": "Connect to: {arg0}"
+  "连接地址：{arg0}": "Connect to: {arg0}",
+  "编辑中": "Editing",
+  "完成": "Done",
+  "认证": "Authentication"
 }
