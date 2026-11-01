@@ -915,9 +915,9 @@ onMounted(initialize)
           </div>
 
           <div v-else-if="category.key === 'behavior'" class="settings-accordion-panel">
-            <div class="section log-display-settings"><div class="section-head"><h2>{{ t('日志显示') }}</h2></div>
-              <div class="field"><label for="log-display-limit">{{ t('显示行数') }}</label><AppSelect id="log-display-limit" :model-value="logDisplayLimit" :options="logLineOptions.map(value => ({ value, label: value + ' ' + t('行') }))" @update:model-value="saveLogDisplayLimit" /></div>
-              <p class="hint">{{ t('保存在当前浏览器，进入日志页时生效；较少行数可降低页面负载。') }}</p>
+            <div class="log-display-settings"><div class="section-head"><h2>{{ t('日志显示') }}</h2></div>
+              <div class="log-display-row"><label for="log-display-limit">{{ t('显示行数') }}</label><AppSelect id="log-display-limit" :model-value="logDisplayLimit" :options="logLineOptions.map(value => ({ value, label: value + ' ' + t('行') }))" @update:model-value="saveLogDisplayLimit" /></div>
+              <p class="hint">{{ t('仅保存在当前浏览器') }}</p>
             </div>
 <div v-if="runtime.capabilities.appIcons" class="app-icon-settings"><div class="section-head"><div><h2>{{ t("软件图标") }}</h2></div></div><div v-if="icons.error" class="local-warning">{{ t("读取图标设置失败：") }}{{ t(icons.error) }}</div><div class="app-icon-picker"><button v-for="icon in icons.options || []" :key="icon.id" type="button" class="app-icon-choice" :class="{ active: icon.id === selectedIcon }" :disabled="icons.ok === false || Boolean(busy)" :title="t(icon.name || icon.id)" @click="chooseIcon(icon.id)"><img :src="icon.preview || `${APP_PREFIX}/icons/${icon.id}_256.png`" alt=""><span class="app-icon-choice-state">{{ icon.id === selectedIcon ? '✓' : '' }}</span></button></div></div>
           </div>
@@ -988,6 +988,13 @@ onMounted(initialize)
 </template>
 
 <style scoped>
+.log-display-settings { margin: 0 0 24px; }
+.log-display-settings .section-head { margin-bottom: 10px; }
+.log-display-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; max-width: 360px; }
+.log-display-row label { flex: none; white-space: nowrap; margin: 0; color: var(--text); font-size: 13px; }
+.log-display-row :deep(.app-select) { flex: 0 0 140px; width: 140px; min-width: 0; height: 30px; min-height: 30px; padding: 4px 10px; font-size: 13px; }
+.log-display-settings .hint { margin: 6px 0 0; font-size: 12px; line-height: 1.5; }
+
 
 .settings-home :deep(.setting-search-highlight) { background-color: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); border-radius: 6px; }
 /* A single focus border, without the additional outline and halo. */
