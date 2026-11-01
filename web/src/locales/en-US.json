@@ -2223,5 +2223,6 @@
   "连接地址：{arg0}": "Connect to: {arg0}",
   "编辑中": "Editing",
   "完成": "Done",
-  "认证": "Authentication"
+  "认证": "Authentication",
+  "读取网络配置失败": "Failed to read network settings"
 }

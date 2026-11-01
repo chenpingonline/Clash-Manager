@@ -132,7 +132,7 @@ func (g *gateway) readTunState(ctx context.Context) (s tunState) {
 		return s
 	}
 	var networkStatus map[string]any
-	if err := g.helperJSON(ctx, http.MethodGet, "/network/status", nil, &networkStatus, 2*time.Second); err != nil {
+	if err := g.helperJSON(ctx, http.MethodGet, "/network/status?summary=true", nil, &networkStatus, 2*time.Second); err != nil {
 		s.Phase = "unknown"
 		s.Message = "暂时无法读取 TUN 状态，已保留原有设置"
 		return s

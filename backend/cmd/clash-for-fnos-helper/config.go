@@ -1648,6 +1648,11 @@ func numberFromMap(value any, key string, fallback float64) float64 {
 	return fallback
 }
 func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
+	return h.readNetworkStatus(ctx, true)
+}
+
+// Basic settings and TUN status do not need the expensive listener management view.
+func (h *helper) readNetworkStatus(ctx context.Context, includeListeners bool) (map[string]any, error) {
 	active, err := h.networkConfig()
 	if err != nil {
 		return nil, err
@@ -1687,11 +1692,13 @@ func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 		return nil, err
 	}
 	settings["proxyAuthentication"] = auth
-	independent, err := h.independentListenerStatus(raw)
-	if err != nil {
-		return nil, err
+	if includeListeners {
+		independent, err := h.independentListenerStatus(raw)
+		if err != nil {
+			return nil, err
+		}
+		settings["independentListeners"] = independent
 	}
-	settings["independentListeners"] = independent
 	proc := h.primary()
 	capability := h.tunDiagnostics()["capability"]
 	binary := h.config.managedCore

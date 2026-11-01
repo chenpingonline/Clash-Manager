@@ -885,7 +885,11 @@ func (g *gateway) dnsSettings() (bool, map[string]any, error) {
 func (g *gateway) networkSettings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	var status map[string]any
-	if err := g.helperJSON(r.Context(), http.MethodGet, "/network/status", nil, &status, 10*time.Second); err != nil {
+	helperPath := "/network/status"
+	if r.URL.Query().Get("summary") == "true" {
+		helperPath += "?summary=true"
+	}
+	if err := g.helperJSON(r.Context(), http.MethodGet, helperPath, nil, &status, 10*time.Second); err != nil {
 		writeJSON(w, 502, map[string]string{"error": err.Error()})
 		return
 	}

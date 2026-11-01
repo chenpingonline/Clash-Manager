@@ -5,6 +5,7 @@ import AppSelect from '@/components/AppSelect.vue'
 import SettingsSearch from '@/components/settings/SettingsSearch.vue'
 import type { SettingsSearchEntry } from '@/services/settings-search'
 import { t } from '@/services/i18n'
+import { createSettingsLoader, settingsResources } from '@/services/settings-loading'
 
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import ChangelogModal from '@/components/ChangelogModal.vue'
@@ -51,7 +52,7 @@ const defaultNetwork = (): NetworkForm => ({
 
 const requestedSectionValue = new URLSearchParams(location.hash.split('?')[1] || '').get('section')
 const requestedSection = (['core', 'network', 'dns', 'tun', 'advanced', 'behavior', 'bypass', 'update'] as Section[]).find(section => section === requestedSectionValue) || null
-const loading = ref(true), error = ref(''), open = ref<Section>(requestedSection || 'core'), busy = ref(''), tunSwitching = ref(false)
+const open = ref<Section>(requestedSection || 'core'), busy = ref(''), tunSwitching = ref(false)
 const tunProgress = ref('')
 const tunFeatures = ref<TunFeatures>({})
 const changelogOpen = ref(false), changelogLatest = ref(false)
@@ -261,6 +262,7 @@ async function revealSetting(entry: SettingsSearchEntry) {
   selectSection(item.section)
   if (item.section === 'core') coreTab.value = item.tab as typeof coreTab.value
   if (item.section === 'dns') dnsTab.value = item.tab as typeof dnsTab.value
+  await load(false)
   await nextTick()
   const target = document.querySelector<HTMLElement>(`#settings-panel-${item.section} ${item.selector}`)
   const wrapper = target?.closest<HTMLElement>('.field, .setting-toggle, .port-row') || target
@@ -437,27 +439,56 @@ function applyNetwork(value: NetworkSetting, fallbackPort: number) {
   for (const key of ['mixed', 'socks', 'http', 'redir', 'tproxy'] as const) Object.assign(network[key], defaults[key], value[key] || {})
   network.mixed.port ||= fallbackPort; network.allowLan = Boolean(value.allowLan); network.bindAddress = value.bindAddress || "*"; Object.assign(network.core, defaults.core, value.core || {}); Object.assign(network.tun, defaults.tun, value.tun || {}); tunRouteExcludeText.value = list(network.tun.routeExcludeAddress); network.dnsEnabled = value.dnsEnabled === true; network.dnsOverrideEnabled = value.dnsOverrideEnabled === true; Object.assign(network.dns, structuredClone(defaultDns), value.dns || {}); syncDnsText()
 }
-async function load() {
-  loading.value = true
-  secretVisible.value = false
-  revealedSecret.value = ''
-  try {
-    const [sys, settings, net, proxy, update, iconData, geoData] = await Promise.all([
-      api<SystemStatus>('/api/system/status').catch((cause): SystemStatus => ({ available: false, error: errorMessage(cause) })), api<ManagerSettings>('/api/settings'), api<NetworkSettingsResponse>('/api/network/settings').catch((cause): NetworkSettingsResponse => ({ error: errorMessage(cause), settings: null, tunCapability: { supported: false } })), (runtime.value.capabilities.hostProxyEnvironment ? api<ProxyEnvironmentResponse>('/api/system/proxy-environment') : Promise.resolve<ProxyEnvironmentResponse>({})).catch((cause): ProxyEnvironmentResponse => ({ ok: false, error: errorMessage(cause) })), api<AppUpdateInfo>('/api/app/update-info').catch((cause): AppUpdateInfo => ({ error: errorMessage(cause) })), (runtime.value.capabilities.appIcons ? api<AppIconsResponse>('/api/app/icons') : Promise.resolve<AppIconsResponse>({})).catch((cause): AppIconsResponse => ({ ok: false, error: errorMessage(cause), selected: 'cat-orbit', options: [] })),
-      api<GeoStatus>('/api/geo/status').catch((cause): GeoStatus => ({ error: errorMessage(cause), canUpdate: false })),
-    ])
-    tunFeatures.value = net.tunFeatures || {}
-    networkOffline.value = net.offline === true
+async function readSettings<T>(path: string, signal: AbortSignal): Promise<T> {
+  const value = await api<T>(path, { signal })
+  signal.throwIfAborted()
+  return value
+}
+const resources = createSettingsLoader({
+  system: async signal => {
+    const sys = await readSettings<SystemStatus>('/api/system/status', signal)
+    system.value = sys; selectedCoreMode.value = sys.coreMode === 'external' ? 'external' : 'managed'
+  },
+  manager: async signal => {
+    const settings = await readSettings<ManagerSettings>('/api/settings', signal)
     syncBypassPreference(settings)
-    system.value = sys; selectedCoreMode.value = sys.coreMode === 'external' ? 'external' : 'managed'; Object.assign(manager, settings, { bypassPageEnabled: settings.bypassPageEnabled === true, healthcheckUrl: settings.healthcheckUrl || healthcheckPresets[0].url }); setAppUpdateNoticeEnabled(settings.notifyAppUpdates !== false); applyNetwork(net.settings || {}, Number(sys.managedMixedPort || 7890)); environment.value = proxy; applyAppUpdateResult(update); icons.value = iconData; selectedIcon.value = iconData.selected || iconData.defaultId || 'cat-orbit'; geo.value = geoData; Object.assign(geoForm, { autoUpdate: geoData.settings?.autoUpdate === true, updateInterval: Number(geoData.settings?.updateInterval || 24) })
-    if (runtime.value.capabilities.appUpdates) void refreshAppInstall()
+    Object.assign(manager, settings, { bypassPageEnabled: settings.bypassPageEnabled === true, healthcheckUrl: settings.healthcheckUrl || healthcheckPresets[0].url })
+    setAppUpdateNoticeEnabled(settings.notifyAppUpdates !== false)
+  },
+  network: async signal => {
+    const net = await readSettings<NetworkSettingsResponse>('/api/network/settings?summary=true', signal)
+    if (!net.settings) throw new Error(net.error || '读取网络配置失败')
+    tunFeatures.value = net.tunFeatures || {}; networkOffline.value = net.offline === true
+    applyNetwork(net.settings, Number(system.value.managedMixedPort || 7890))
+    tunSupported.value = net.tunCapability?.supported !== false; tunSupportText.value = net.tunCapability?.message || ''
+    if (proxyForm.followMixedPort) proxyForm.port = Number(network.mixed.port || 7890)
+  },
+  environment: async signal => {
+    const proxy = await readSettings<ProxyEnvironmentResponse>('/api/system/proxy-environment', signal)
+    environment.value = proxy
     const setting = proxy.management?.settings
     Object.assign(proxyForm, { enabled: setting?.enabled !== false, followMixedPort: setting?.followMixedPort !== false, port: Number(setting?.port || network.mixed.port || 7890), noProxy: setting?.noProxy || 'localhost,127.0.0.1,::1', targets: { environment: setting?.targets?.environment !== false, profile: setting?.targets?.profile !== false, bashrc: setting?.targets?.bashrc !== false } })
-    tunSupported.value = net.tunCapability?.supported !== false; tunSupportText.value = net.tunCapability?.message || (tunSupported.value ? '当前 Mihomo 具备 TUN 所需权限，可直接启用' : !net.tunCapability?.tunDevice ? '当前系统没有 /dev/net/tun，暂不能启用 TUN' : '当前 Mihomo 不是 root 且没有 CAP_NET_ADMIN，暂不能启用 TUN')
-    error.value = ''
-  } catch (cause) { error.value = errorMessage(cause) }
-  finally { loading.value = false }
-}
+  },
+  update: async signal => {
+    applyAppUpdateResult(await readSettings<AppUpdateInfo>('/api/app/update-info', signal))
+    if (runtime.value.capabilities.appUpdates) void refreshAppInstall()
+  },
+  icons: async signal => {
+    const value = await readSettings<AppIconsResponse>('/api/app/icons', signal)
+    icons.value = value; selectedIcon.value = value.selected || value.defaultId || 'cat-orbit'
+  },
+  geo: async signal => {
+    const value = await readSettings<GeoStatus>('/api/geo/status', signal)
+    geo.value = value; Object.assign(geoForm, { autoUpdate: value.settings?.autoUpdate === true, updateInterval: Number(value.settings?.updateInterval || 24) })
+  },
+})
+const requiredResources = computed(() => settingsResources(open.value, coreTab.value))
+const loading = computed(() => requiredResources.value.some(key => resources.state[key].pending || !resources.state[key].ready && !resources.state[key].error))
+const error = computed(() => requiredResources.value.map(key => resources.state[key].error).filter(Boolean).join('；'))
+async function load(force = true) { await resources.load(requiredResources.value, force) }
+watch([open, coreTab], () => { void load(false) })
+onBeforeUnmount(resources.dispose)
+
 async function enableControllerDetection() {
   if (manager.controllerAutoDetect !== false) await saveExternalController(true)
 }
@@ -677,19 +708,18 @@ async function updateGeoData() {
   finally { geoBusy.value = '' }
 }
 async function initialize() {
-  await load()
   if (!categories.value.some(category => category.key === open.value)) open.value = 'core'
+  await load(false)
 }
 onMounted(initialize)
 </script>
 
 <template>
   <Teleport defer to="#page-title-meta">
-    <SettingsSearch :entries="settingSearchEntries" :disabled="loading || Boolean(error)" @select="revealSetting" />
+    <SettingsSearch :entries="settingSearchEntries" @select="revealSetting" />
   </Teleport>
 
-  <AsyncState :loading="loading" :error="t(error)">
-    <div class="settings-home settings-compact">
+  <div class="settings-home settings-compact">
       <Teleport defer to="#page-navigation">
       <div class="settings-category-tabs" role="tablist" :aria-label="t('设置')">
         <button v-for="(category, index) in categories" :id="`settings-tab-${category.key}`" :key="category.key" type="button" role="tab" :aria-selected="open === category.key" :aria-controls="`settings-panel-${category.key}`" :tabindex="open === category.key ? 0 : -1" @click="selectSection(category.key)" @keydown="navigateCategory($event, index)">
@@ -700,6 +730,10 @@ onMounted(initialize)
       <div class="settings-tab-content">
         <template v-for="category in categories" :key="category.key">
         <div v-if="open === category.key" :id="`settings-panel-${category.key}`" class="settings-category-panel" role="tabpanel" :aria-labelledby="`settings-tab-${category.key}`" tabindex="0">
+            <div v-if="category.key === 'core'" class="core-tabs" role="tablist" :aria-label="t('Mihomo Core 设置')">
+              <button v-for="(tab, index) in coreTabs" :id="`core-tab-${tab.key}`" :key="tab.key" type="button" role="tab" :aria-selected="coreTab === tab.key" :aria-controls="`core-panel-${tab.key}`" :tabindex="coreTab === tab.key ? 0 : -1" @click="coreTab = tab.key" @keydown="navigateCoreTab($event, index)">{{ t(tab.label) }}</button>
+            </div>
+          <AsyncState :loading="loading" :error="t(error)">
           <div v-if="category.key === 'network'" class="settings-accordion-panel network-card"><p v-if="networkOffline" class="hint">{{ t("Core 已停止，当前编辑的是托管启动配置；修改会自动保存，完成后请启动内核。") }}</p><p v-if="network.mixed.enabled" id="mixed-port-hint" class="port-dependency-note">{{ t("混合代理已同时提供 HTTP 与 SOCKS5 服务。要编辑其他入站端口，请先关闭混合代理。") }}</p><div class="network-columns"><section class="network-port-section"><h2>{{ t("代理端口") }}</h2><div class="port-list"><PortRow id="netController" v-model="network.controller" title="Controller API" :description="t('Mihomo REST API · Manager 使用 127.0.0.1 连接')" locked @change="saveNetwork('controller')" /><PortRow id="netMixed" v-model="network.mixed" :title="t('混合代理端口')" :description="t('同时接受 HTTP 与 SOCKS5 代理')" @change="saveNetwork('mixed')" /><PortRow id="netSocks" v-model="network.socks" :title="t('SOCKS5 代理端口')" :description="t('单独提供 SOCKS5 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('socks')" /><PortRow id="netHttp" v-model="network.http" :title="t('HTTP(S) 代理端口')" :description="t('单独提供 HTTP CONNECT/HTTP 代理')" :disabled="network.mixed.enabled" @change="saveNetwork('http')" /><PortRow id="netRedir" v-model="network.redir" :title="t('Redir 透明代理端口')" :description="t('Linux TCP REDIRECT 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('redir')" /><PortRow id="netTproxy" v-model="network.tproxy" :title="t('TProxy 透明代理端口')" :description="t('Linux TPROXY TCP/UDP 入站')" :disabled="network.mixed.enabled" @change="saveNetwork('tproxy')" /></div></section><section class="network-option-section"><h2>{{ t("连接选项") }}</h2><div class="network-options"><IndependentListeners :busy="authSaving || netState === 'pending' || netState === 'saving'" /><ProxyAuthenticationSettings :model-value="proxyAuthentication" :busy="authSaving || netState === 'pending' || netState === 'saving'" :load="loadProxyAuthentication" :save="saveProxyAuthentication" /><ProxyBindAddress :model-value="network.bindAddress" v-model:allow-lan="network.allowLan" :busy="netState === 'pending' || netState === 'saving'" :save="saveProxyBindAddress" @lan-change="saveNetwork('allowLan')" /><SettingToggle data-setting="setting-network-core-ipv6" v-model="network.core.ipv6" :title="t('全局 IPv6')" :description="t('允许 Mihomo 接收和处理 IPv6 流量')" @change="saveNetwork('ipv6')" /><SettingToggle data-setting="setting-network-core-unifiedDelay" v-model="network.core.unifiedDelay" :title="t('统一延迟')" :description="t('使用统一 RTT 算法，使不同协议的测速更便于比较')" @change="saveNetwork('unifiedDelay')" /></div></section></div><div class="dns-autosave-state" :class="netState" role="status" aria-live="polite">{{ t(netMessage) }}</div></div>
 
           <div v-else-if="category.key === 'tun'" class="settings-accordion-panel tun-card" :class="{ 'tun-on': network.tun.enabled }">
@@ -753,9 +787,6 @@ onMounted(initialize)
           <div v-else-if="category.key === 'advanced'" class="settings-accordion-panel proxy-env-card"><div v-if="environment.error" class="local-warning">{{ t("读取系统代理环境失败：") }}{{ t(environment.error) }}</div><div class="proxy-env-manage"><div v-if="!proxyAvailable" class="local-warning">{{ t("Root Helper 不可用，当前只能查看环境变量，无法修改系统文件。") }}</div><div class="proxy-env-manage-grid"><SettingToggle data-setting="setting-proxyForm-enabled" v-model="proxyForm.enabled" :title="t('启用代理环境变量')" :description="t('关闭时仅移除本应用管理的配置块')" :disabled="!proxyAvailable" @change="saveEnvironment(120)" /><SettingToggle data-setting="setting-proxyForm-followMixedPort" v-model="proxyForm.followMixedPort" :title="t('自动跟随 Mixed Port')" :description="t('端口变化时自动同步')" :disabled="!proxyAvailable" @change="saveEnvironment(120)" /><div class="field proxy-env-no-proxy"><label for="proxy-bypass-input">{{ t("代理绕过设置") }}</label><div class="system-proxy-bypass-editor" :class="{ disabled: !proxyAvailable }"><span v-for="(item, index) in proxyBypassItems" :key="item" class="system-proxy-bypass-tag">{{ item }}<button type="button" :aria-label="t(`移除 ${item}`)" :disabled="!proxyAvailable" @click="removeProxyBypass(index)">×</button></span><input id="proxy-bypass-input" v-model="proxyBypassInput" :disabled="!proxyAvailable" :aria-label="t('添加代理绕过地址')" :placeholder="t('输入域名、IP 或 CIDR，按回车添加')" @keydown="proxyBypassKeydown" @blur="addProxyBypass"></div><small>{{ t("保存为 NO_PROXY；多个条目会以英文逗号分隔。") }}</small></div></div><div class="proxy-env-target-title">{{ t("应用范围") }}</div><div class="proxy-env-target-grid"><SettingToggle data-setting="setting-proxyForm-targets-environment" v-model="proxyForm.targets.environment" :title="t('系统登录环境')" description="/etc/environment" :disabled="!proxyAvailable" @change="saveEnvironment(120)" /><SettingToggle data-setting="setting-proxyForm-targets-profile" v-model="proxyForm.targets.profile" :title="t('登录 Shell')" description="/etc/profile" :disabled="!proxyAvailable" @change="saveEnvironment(120)" /><SettingToggle data-setting="setting-proxyForm-targets-bashrc" v-model="proxyForm.targets.bashrc" :title="t('Bash 交互环境')" description="/etc/bash.bashrc" :disabled="!proxyAvailable" @change="saveEnvironment(120)" /></div><div class="hint proxy-env-manage-note">{{ t("修改前由后端自动备份原文件；关闭后只移除 Clash for fnos 管理块。新值主要对新登录会话生效。") }}</div></div><div class="proxy-env-divider"><span>{{ t("当前检测结果") }}</span></div><div class="proxy-env-files"><div v-for="file in environment.files || []" :key="file.path" class="proxy-env-source"><div class="proxy-env-source-head"><strong class="mono">{{ file.path || '--' }}</strong><span class="proxy-env-status" :class="file.variables?.length ? 'active' : ''">{{ t(!file.exists ? '不存在' : file.readable === false ? '不可读' : file.variables?.length ? '已检测到代理设置' : '未设置') }}</span></div><div v-if="file.error" class="proxy-env-error">{{ t(file.error) }}</div><div v-else class="proxy-env-vars"><div v-for="variable in file.variables || []" :key="`${variable.key}-${variable.line}`" class="proxy-env-var"><span class="mono proxy-env-key">{{ variable.key }}</span><span class="mono proxy-env-value">{{ variable.value }}</span><span v-if="variable.line" class="proxy-env-line">L{{ t(variable.line) }}</span></div><span v-if="!file.variables?.length" class="proxy-env-empty">{{ t("未设置代理环境变量") }}</span></div></div></div><div class="dns-autosave-state" :class="envState">{{ t(envMessage) }}</div></div>
 
           <div v-else-if="category.key === 'core'" class="settings-accordion-panel update-panel" id="core-settings">
-            <div class="core-tabs" role="tablist" :aria-label="t('Mihomo Core 设置')">
-              <button v-for="(tab, index) in coreTabs" :id="`core-tab-${tab.key}`" :key="tab.key" type="button" role="tab" :aria-selected="coreTab === tab.key" :aria-controls="`core-panel-${tab.key}`" :tabindex="coreTab === tab.key ? 0 : -1" @click="coreTab = tab.key" @keydown="navigateCoreTab($event, index)">{{ t(tab.label) }}</button>
-            </div>
             <div v-show="coreTab === 'manage'" id="core-panel-manage" role="tabpanel" aria-labelledby="core-tab-manage">
             <div class="core-status-card">
             <div class="update-row core-update-row">
@@ -934,11 +965,12 @@ onMounted(initialize)
 
             <p v-if="appUpdate.directRetry" class="hint">{{ t("常规请求失败，已通过不使用 HTTP/HTTPS 代理的重试获取更新信息。") }}</p>
           </div>
+          </AsyncState>
+          <button v-if="error && !loading" class="ghost" @click="load()">{{ t('重试') }}</button>
         </div>
         </template>
       </div>
     </div>
-  </AsyncState>
   <ChangelogModal :open="changelogOpen" :latest="changelogLatest ? appUpdate.latest : undefined" @close="changelogOpen = false" />
 </template>
 

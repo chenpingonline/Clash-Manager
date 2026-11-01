@@ -1,6 +1,6 @@
 {
   "name": "clash-manager-web",
-  "version": "1.6.31",
+  "version": "1.6.32",
   "private": true,
   "type": "module",
   "scripts": {

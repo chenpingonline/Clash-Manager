@@ -270,3 +270,25 @@ func TestIndependentUDPDisabledDoesNotReserveUDPPort(t *testing.T) {
 		t.Fatal("UDP enabled did not check occupied port")
 	}
 }
+
+func TestNetworkSummaryPreservesSettingsWithoutListenerManagement(t *testing.T) {
+	h := offlineNetworkHelper(t)
+	full, err := h.networkStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, err := h.readNetworkStatus(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullSettings := full["settings"].(map[string]any)
+	if _, ok := fullSettings["independentListeners"]; !ok {
+		t.Fatal("legacy full status changed")
+	}
+	delete(fullSettings, "independentListeners")
+	expected, _ := json.Marshal(full)
+	actual, _ := json.Marshal(summary)
+	if string(expected) != string(actual) {
+		t.Fatalf("summary changed settings: %s != %s", expected, actual)
+	}
+}

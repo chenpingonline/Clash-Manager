@@ -150,7 +150,7 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case "/network/tun/diagnostics":
 			result = h.tunDiagnostics()
 		case "/network/status":
-			result, err = h.networkStatus(r.Context())
+			result, err = h.readNetworkStatus(r.Context(), r.URL.Query().Get("summary") != "true")
 		case "/geo/status":
 			result, err = h.geoStatus()
 		case "/app/icon/status":
