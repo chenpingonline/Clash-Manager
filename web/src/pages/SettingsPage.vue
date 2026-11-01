@@ -920,7 +920,6 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshLogDisplayOnFoc
           <div v-else-if="category.key === 'behavior'" class="settings-accordion-panel">
             <div class="log-display-settings"><div class="section-head"><h2>{{ t('日志显示') }}</h2></div>
               <div class="log-display-row"><label for="log-display-limit">{{ t('显示行数') }}</label><AppSelect id="log-display-limit" :disabled="logDisplayLoading || logDisplaySaving || !logDisplayReady" :model-value="logDisplayLimit" :options="logLineOptions.map(value => ({ value, label: value + ' ' + t('行') }))" @update:model-value="saveLogDisplayLimit" /></div>
-              <p class="hint">{{ t('保存在服务端，所有设备共用') }}</p>
               <p v-if="logDisplaySaving" class="hint" role="status">{{ t('保存中…') }}</p>
               <p v-if="logDisplayError" class="error" role="alert">{{ logDisplayError }}</p>
             </div>
