@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, useId } from 'vue'
 import BaseModal from '@/components/BaseModal.vue'
 import AppSelect from '@/components/AppSelect.vue'
 import PolicySelect from '@/components/PolicySelect.vue'
@@ -11,7 +11,18 @@ import { t } from '@/services/i18n'
 import { availableListenerName, availableListenerPort, copyListener, listenerID } from '@/services/independent-listeners'
 import type { IndependentListener, IndependentListenerStatus, ProfileItem } from '@/types/api'
 
-const props = defineProps<{ busy: boolean }>()
+const props = defineProps<{ busy: boolean; modelValue: boolean; ready: boolean; saveEnabled: (enabled: boolean) => Promise<void> }>()
+const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
+const masterId = `independent-master-${useId()}`
+const quickSaving = ref(false)
+async function toggleMaster(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (props.busy || quickSaving.value || !props.ready) { input.checked = props.modelValue; return }
+  quickSaving.value = true
+  try { await props.saveEnabled(input.checked); notify('独立代理入口已保存并应用') }
+  catch (cause) { notify(errorMessage(cause), true) }
+  finally { quickSaving.value = false; input.checked = props.modelValue }
+}
 const open = ref(false), loading = ref(false), saving = ref(false), loaded = ref(false), error = ref('')
 const entries = ref<IndependentListener[]>([]), targets = ref<string[]>([]), reserved = ref<number[]>([])
 const enabled = ref(true), current = ref(false), targetGroups = ref<string[]>([]), profiles = ref<ProfileItem[]>([]), profileId = ref('')
@@ -19,8 +30,21 @@ const unassigned = ref<IndependentListener[]>([]), assignUnassigned = ref(false)
 const search = ref(''), selected = ref<string[]>([]), editor = ref<IndependentListener | null>(null), addressMode = ref('local')
 const accountsOpen = ref(false)
 const initial = ref(''), pendingSwitch = ref<string | null>(null), pendingClose = ref(false), pendingDelete = ref<string[]>([])
+const confirmDiscard = computed(() => pendingClose.value || pendingSwitch.value !== null)
+function cancelDiscard() { if (saving.value) return; pendingClose.value = false; pendingSwitch.value = null }
+async function discardChanges() {
+  const shouldClose = pendingClose.value, nextProfile = pendingSwitch.value
+  cancelDiscard()
+  if (shouldClose) await close(true)
+  else if (nextProfile !== null) await switchProfile(nextProfile, true)
+}
+async function saveAndContinue() {
+  if (blocked.value) return
+  if (editor.value) { finishEdit(); if (editor.value) return }
+  if (await save()) await discardChanges()
+}
 const trigger = ref<HTMLButtonElement>(), editorPanel = ref<HTMLElement>()
-const blocked = computed(() => loading.value || saving.value || props.busy)
+const blocked = computed(() => loading.value || saving.value || quickSaving.value || props.busy)
 const fingerprint = () => JSON.stringify({ enabled: enabled.value, entries: entries.value, assignUnassigned: assignUnassigned.value })
 const dirty = computed(() => loaded.value && fingerprint() !== initial.value)
 const filtered = computed(() => entries.value.filter(entry => `${entry.name} ${entry.proxy} ${entry.port} ${entry.listen}`.toLowerCase().includes(search.value.toLowerCase())))
@@ -47,6 +71,7 @@ const endpoint = () => `/api/independent-listeners?profileId=${encodeURIComponen
 function apply(status: IndependentListenerStatus) {
   entries.value = (status.entries || []).map(copyListener)
   enabled.value = status.enabled !== false; current.value = status.current === true
+  if (current.value) emit('update:modelValue', enabled.value)
   targets.value = status.targets || []; targetGroups.value = status.targetGroups || []; reserved.value = status.reservedPorts || []
   unassigned.value = (status.unassigned || []).map(copyListener); assignUnassigned.value = false
   selected.value = []; editor.value = null; search.value = ''; initial.value = fingerprint()
@@ -83,6 +108,9 @@ async function edit(entry: IndependentListener) {
   addressMode.value = entry.listen === '127.0.0.1' ? 'local' : entry.listen === '0.0.0.0' ? 'lan' : 'custom'
   error.value = ''; pendingDelete.value = []; accountsOpen.value = false
   await nextTick(); editorPanel.value?.scrollIntoView({ block: 'nearest' }); editorPanel.value?.querySelector<HTMLInputElement>('[data-listener-name]')?.focus()
+}
+function listenLabel(address: string) {
+  return t(address === '127.0.0.1' ? '仅本机' : address === '0.0.0.0' ? '所有 IPv4 网卡' : '指定地址')
 }
 function setAddress(mode: string) {
   addressMode.value = mode
@@ -145,49 +173,48 @@ function status(entry: IndependentListener) {
   return t('就绪')
 }
 async function save() {
-  if (blocked.value || !loaded.value || editor.value) return
+  if (blocked.value || !loaded.value || editor.value) return false
   saving.value = true; error.value = ''
   try {
     await api(endpoint(), jsonRequest('PUT', { entries: entries.value, enabled: enabled.value, assignUnassigned: assignUnassigned.value }))
     notify(current.value ? '独立代理入口已保存并应用' : '独立代理入口已保存，下次应用该配置时生效')
     await load()
-  } catch (cause) { error.value = errorMessage(cause) }
+    return loaded.value
+  } catch (cause) { error.value = errorMessage(cause); return false }
   finally { saving.value = false }
 }
 </script>
 <template>
   <div class="setting-toggle independent-setting">
-    <div><strong>{{ t('独立代理入口') }}</strong><small>{{ t('按配置管理端口、目标和独立认证') }}</small></div>
-    <button ref="trigger" class="ghost" type="button" :disabled="busy" aria-haspopup="dialog" :aria-expanded="open" @click="show">{{ t('管理入口') }}</button>
+    <div class="independent-copy">
+      <div class="independent-heading"><label :for="masterId"><strong>{{ t('独立代理入口') }}</strong></label></div>
+      <label class="independent-description" :for="masterId">{{ t('按配置管理端口、目标和独立认证') }}</label>
+    </div>
+    <div class="independent-controls"><button ref="trigger" class="ghost independent-trigger" type="button" :disabled="busy || quickSaving" aria-haspopup="dialog" :aria-expanded="open" @click="show">{{ t('管理入口') }}</button>
+<label class="switch"><input :id="masterId" type="checkbox" :checked="modelValue" :disabled="busy || quickSaving || !ready || open" :aria-label="t('启用当前配置的独立代理入口')" @change="toggleMaster"><span /></label></div>
   </div>
-  <BaseModal :open="open" :title="t('独立代理入口')" :show-header="false" :closable="!blocked" card-class="independent-listeners-modal" @close="close()">
+  <BaseModal :open="open" :title="t('独立代理入口')" :show-header="false" :closable="!blocked && !confirmDiscard && !pendingDelete.length" :inert="confirmDiscard || pendingDelete.length > 0" card-class="independent-listeners-modal" @close="close()">
     <form class="listener-form" @submit.prevent="finishEdit">
-      <div class="settings-modal-header"><div class="listener-title"><h3>{{ t('独立代理入口') }}</h3><HelpPopover label="独立代理入口" :teleport="false" @keydown.esc.stop><span>{{ t('总开关仅控制应用创建的入口，订阅自带入口保持不变。') }}</span><span>{{ t('入口按目标名称跟随本配置更新；目标消失时暂停，同名目标恢复后自动恢复。') }}</span></HelpPopover></div><div class="settings-modal-header-actions"><span v-if="editor || dirty" class="hint">{{ t(editor ? '编辑中' : '待保存') }}</span><button class="ghost" type="button" :disabled="blocked" @click="close()">{{ t('关闭') }}</button><button type="button" :disabled="blocked || !loaded || !!editor || !dirty" @click="save">{{ t(saving ? '保存中…' : current ? '保存并应用' : '保存') }}</button></div></div>
+      <div class="settings-modal-header"><div class="listener-title"><h3>{{ t('独立代理入口') }}</h3><HelpPopover label="独立代理入口" :teleport="false" @keydown.esc.stop><span>{{ t('总开关仅控制应用创建的入口，订阅自带入口保持不变。') }}</span><span>{{ t('入口按目标名称跟随本配置更新；目标消失时暂停，同名目标恢复后自动恢复。') }}</span></HelpPopover><span v-if="loaded" class="listener-config-note">{{ t(current ? '当前配置：保存后立即校验并应用。' : '未应用配置：保存不影响当前运行，下次应用时生效。') }}</span></div><div class="settings-modal-header-actions"><span v-if="editor || dirty" class="hint">{{ t(editor ? '编辑中' : '待保存') }}</span><button class="ghost" type="button" :disabled="blocked" @click="close()">{{ t('关闭') }}</button><button type="button" :disabled="blocked || !loaded || !!editor || !dirty" @click="save">{{ t(saving ? '保存中…' : current ? '保存并应用' : '保存') }}</button></div></div>
       <p v-if="error" class="error-text" role="alert">{{ t(error) }}</p>
-      <div v-if="pendingClose || pendingSwitch !== null" class="listener-confirm" role="alert">
-        <span>{{ t('有未保存的更改，是否放弃？') }}</span><button class="ghost" type="button" @click="pendingClose = false; pendingSwitch = null">{{ t('继续编辑') }}</button><button class="ghost danger" type="button" @click="pendingClose ? close(true) : switchProfile(pendingSwitch!, true)">{{ t('放弃更改') }}</button>
-      </div>
       <div class="listener-scroll">
-        <div class="listener-toolbar"><label class="profile-field"><span>{{ t('配置') }}</span><AppSelect :model-value="profileId" :options="profileOptions" :disabled="blocked" :label="t('入口所属配置')" @update:model-value="switchProfile" /></label><label class="listener-check"><input v-model="enabled" type="checkbox" :disabled="blocked || !loaded || !!editor">{{ t('启用本配置的独立代理入口') }}</label></div>
-        <p class="field-note">{{ t(current ? '当前配置：保存后立即校验并应用。' : '未应用配置：保存不影响当前运行，下次应用时生效。') }} </p>
+        <div class="listener-toolbar profile-toolbar"><label class="profile-field"><span>{{ t('配置') }}</span><AppSelect :model-value="profileId" :options="profileOptions" :disabled="blocked" :label="t('入口所属配置')" @update:model-value="switchProfile" /></label><button class="ghost" type="button" :disabled="blocked || !loaded || !!editor || entries.length >= 64" @click="add">{{ t('添加入口') }}</button><label class="listener-check"><input v-model="enabled" type="checkbox" :disabled="blocked || !loaded || !!editor">{{ t('启用本配置的独立代理入口') }}</label></div>
         <p v-if="loading" role="status">{{ t('正在读取…') }}</p>
         <template v-if="loaded">
           <div v-if="unassigned.length && !assignUnassigned" class="listener-confirm"><span>{{ t('发现旧版待分配入口，添加到本配置后默认停用。') }}</span><button class="ghost" type="button" :disabled="blocked || !!editor" @click="assignLegacy">{{ t('添加到本配置') }}</button></div>
-          <div class="listener-toolbar"><input v-model="search" :disabled="blocked || !!editor" type="search" :placeholder="t('搜索名称、目标、地址或端口')" :aria-label="t('搜索入口')"><span class="hint">{{ t('共 {arg0} 个入口', { arg0: rowCount }) }}</span><button class="ghost" type="button" :disabled="blocked || !!editor || entries.length >= 64" @click="add">{{ t('添加入口') }}</button></div>
-          <div v-if="selected.length" class="listener-toolbar bulk-actions"><span>{{ t('已选择 {arg0} 个入口', { arg0: selected.length }) }}</span><button class="ghost" type="button" :disabled="blocked || !!editor" @click="bulkEnable(true)">{{ t('批量启用') }}</button><button class="ghost" type="button" :disabled="blocked || !!editor" @click="bulkEnable(false)">{{ t('批量停用') }}</button><button class="ghost danger" type="button" :disabled="blocked || !!editor" @click="pendingDelete = [...selected]">{{ t('批量删除') }}</button></div>
-          <div v-if="pendingDelete.length" class="listener-confirm" role="alert"><span>{{ t('删除所选入口？保存后生效。') }}</span><button class="ghost" type="button" @click="pendingDelete = []">{{ t('取消') }}</button><button class="ghost danger" type="button" @click="removeSelected">{{ t('确认删除') }}</button></div>
+          <div class="listener-toolbar search-toolbar"><input v-model="search" :disabled="blocked || !!editor" type="search" :placeholder="t('搜索名称、目标、地址或端口')" :aria-label="t('搜索入口')"><span class="hint">{{ t('共 {arg0} 个入口', { arg0: rowCount }) }}<template v-if="selected.length"> · {{ t('已选择 {arg0} 个入口', { arg0: selected.length }) }}</template></span><div v-if="selected.length" class="bulk-actions"><button class="ghost" type="button" :disabled="blocked || !!editor" @click="bulkEnable(true)">{{ t('批量启用') }}</button><button class="ghost" type="button" :disabled="blocked || !!editor" @click="bulkEnable(false)">{{ t('批量停用') }}</button><button class="ghost danger" type="button" :disabled="blocked || !!editor" @click="pendingDelete = [...selected]">{{ t('批量删除') }}</button></div></div>
           <div class="listener-table-wrap">
             <table class="listener-table">
-              <colgroup><col class="col-select"><col class="col-enabled"><col class="col-name"><col class="col-protocol"><col class="col-address"><col class="col-port"><col class="col-target"><col class="col-udp"><col class="col-status"><col class="col-actions"></colgroup>
+              <colgroup><col class="col-select"><col class="col-enabled"><col class="col-name"><col class="col-protocol"><col class="col-udp"><col class="col-address"><col class="col-port"><col class="col-target"><col class="col-status"><col class="col-actions"></colgroup>
               <thead><tr>
                 <th><input type="checkbox" :checked="allSelected" :disabled="!filtered.length || blocked || !!editor" :aria-label="t('选择全部可见入口')" @change="selectAll"></th>
-                <th>{{ t('启用') }}</th><th>{{ t('入口名称') }}</th><th>{{ t('协议') }}</th><th>{{ t('监听地址') }}</th><th>{{ t('监听端口') }}</th><th>{{ t('目标节点或策略组') }}</th><th>UDP</th><th>{{ t('状态') }}</th><th>{{ t('操作') }}</th>
+                <th>{{ t('启用') }}</th><th>{{ t('入口名称') }}</th><th>{{ t('协议') }}</th><th>{{ t('UDP 转发') }}</th><th>{{ t('监听地址') }}</th><th>{{ t('监听端口') }}</th><th>{{ t('目标节点或策略组') }}</th><th>{{ t('状态') }}</th><th>{{ t('操作') }}</th>
               </tr></thead>
               <tbody>
                 <template v-for="entry in rows" :key="entry.id">
                   <tr v-if="editor && editor.id === entry.id" :ref="setEditorRow" class="listener-edit-row" :aria-label="t('编辑入口')">
                     <td><input type="checkbox" disabled :aria-label="t('选择入口 {arg0}', { arg0: editor.name || t('新入口') })"></td>
-                    <td><input v-model="editor.enabled" type="checkbox" :disabled="blocked" :aria-label="t('启用此入口')"></td>
+                    <td><label class="switch"><input v-model="editor.enabled" type="checkbox" :disabled="blocked" :aria-label="t('启用此入口')"><span /></label></td>
                     <td>
                       <div class="name-input">
                         <input v-model="editor.name" data-listener-name required maxlength="128" autocomplete="off" :disabled="blocked" :aria-label="t('入口名称')" :placeholder="t('入口名称')">
@@ -195,6 +222,7 @@ async function save() {
                       </div>
                     </td>
                     <td><AppSelect v-model="editor.type" :label="t('协议')" :disabled="blocked" :options="[{ value: 'mixed', label: 'Mixed' }, { value: 'socks', label: 'SOCKS5' }, { value: 'http', label: 'HTTP' }]" /></td>
+                    <td><input type="checkbox" :disabled="blocked || editor.type === 'http'" :checked="editor.type !== 'http' && editor.udp" @change="editor.udp = !editor.udp" :aria-label="t('启用 UDP')"></td>
                     <td>
                       <div class="address-input">
                         <AppSelect :model-value="addressMode" :label="t('监听方式')" :disabled="blocked" :options="[{ value: 'local', label: t('仅本机') }, { value: 'lan', label: t('所有 IPv4 网卡') }, { value: 'custom', label: t('指定地址') }]" @update:model-value="setAddress" />
@@ -207,7 +235,6 @@ async function save() {
                     </td>
                     <td><input v-model.number="editor.port" required type="number" min="1" max="65535" step="1" :disabled="blocked" :aria-label="t('监听端口')"></td>
                     <td class="listener-target"><PolicySelect :model-value="editor.proxy" :options="targets" :option-kinds="targetKinds" :disabled="blocked" :hide-label="true" label="目标节点或策略组" placeholder="请选择" @update:model-value="chooseTarget" /></td>
-                    <td><input type="checkbox" :disabled="blocked || editor.type === 'http'" :checked="editor.type !== 'http' && editor.udp" @change="editor.udp = !editor.udp" :aria-label="t('启用 UDP')"></td>
                     <td class="hint">{{ t('编辑中') }}</td>
                     <td><div class="row-actions edit-actions">
                       <button type="submit" :disabled="blocked">{{ t('完成') }}</button>
@@ -217,10 +244,10 @@ async function save() {
                   </tr>
                   <tr v-else>
                     <td><input type="checkbox" :checked="selected.includes(entry.id)" :disabled="blocked || !!editor" :aria-label="t('选择入口 {arg0}', { arg0: entry.name })" @change="toggleSelected(entry.id)"></td>
-                    <td><input v-model="entry.enabled" type="checkbox" :disabled="blocked || !!editor" :aria-label="t('启用入口 {arg0}', { arg0: entry.name })"></td>
+                    <td><label class="switch"><input v-model="entry.enabled" type="checkbox" :disabled="blocked || !!editor" :aria-label="t('启用入口 {arg0}', { arg0: entry.name })"><span /></label></td>
                     <td class="listener-name" :title="entry.name">{{ entry.name }}</td><td>{{ entry.type === 'socks' ? 'SOCKS5' : entry.type === 'http' ? 'HTTP' : 'Mixed' }}</td>
-                    <td class="listener-name" :title="entry.listen">{{ entry.listen }}</td><td>{{ entry.port }}</td><td class="listener-name" :title="entry.proxy">{{ entry.proxy }}</td>
                     <td>{{ t(entry.type !== 'http' && entry.udp ? '开启' : '关闭') }}</td>
+                    <td class="listener-address" :title="`${listenLabel(entry.listen)} · ${entry.listen}`"><span>{{ listenLabel(entry.listen) }}</span><small>{{ entry.listen }}</small></td><td>{{ entry.port }}</td><td class="listener-name" :title="entry.proxy">{{ entry.proxy }}</td>
                     <td :class="entry.enabled && enabled && !targets.includes(entry.proxy) ? 'warn-text' : 'hint'">{{ status(entry) }}</td>
                     <td><div class="row-actions">
                       <button class="ghost" type="button" :disabled="blocked || !!editor" :aria-label="t('编辑入口 {arg0}', { arg0: entry.name })" @click="edit(entry)">{{ t('编辑') }}</button>
@@ -249,43 +276,85 @@ async function save() {
       </div>
     </form>
   </BaseModal>
+  <BaseModal :open="confirmDiscard" :title="t('未保存的更改')" :closable="!blocked" @close="cancelDiscard">
+    <p class="listener-discard-message">{{ t('有未保存的更改，请选择保存或放弃。') }}</p>
+    <p v-if="error" class="error-text" role="alert">{{ t(error) }}</p>
+    <div class="listener-discard-actions">
+      <button class="ghost" type="button" :disabled="blocked" autofocus @click="cancelDiscard">{{ t('继续编辑') }}</button>
+      <button class="ghost danger" type="button" :disabled="blocked" @click="discardChanges">{{ t('放弃更改') }}</button>
+      <button type="button" :disabled="blocked || !loaded" @click="saveAndContinue">{{ t(saving ? '保存中…' : pendingClose ? '保存并关闭' : '保存并切换') }}</button>
+    </div>
+  </BaseModal>
+  <BaseModal :open="pendingDelete.length > 0" :title="t('确认删除')" @close="pendingDelete = []">
+    <p class="listener-discard-message">{{ t('确定删除所选的 {arg0} 个入口？保存后生效。', { arg0: pendingDelete.length }) }}</p>
+    <div class="listener-discard-actions">
+      <button class="ghost" type="button" autofocus @click="pendingDelete = []">{{ t('取消') }}</button>
+      <button class="ghost danger" type="button" @click="removeSelected">{{ t('确认删除') }}</button>
+    </div>
+  </BaseModal>
 </template>
 <style scoped>
+.listener-discard-message { margin: 12px 0 24px; }
+.listener-discard-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .independent-setting { grid-column: 1 / -1; }
+.independent-copy { min-width: 0; }
+.independent-setting > .independent-controls { display: flex; flex-direction: row; align-items: center; gap: 10px; flex: none; }
+.independent-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.independent-heading label, .independent-description { cursor: pointer; }
+.independent-description { display: block; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.independent-trigger.ghost { white-space: nowrap; }
 .independent-setting small { display: block; color: var(--muted); }
 .independent-setting > button { flex: none; white-space: nowrap; }
+.listener-form > .settings-modal-header { margin-bottom: 8px; gap: 12px; }
+.listener-form .settings-modal-header-actions { gap: 8px; }
+.listener-form .settings-modal-header-actions > button, .listener-toolbar > button, .bulk-actions > button { display: inline-flex; align-items: center; justify-content: center; height: 32px; min-height: 32px; padding: 0 12px; font-size: 12px; line-height: 1.2; white-space: nowrap; }
+.listener-form .settings-modal-header-actions > button { min-width: 56px; }
+.listener-toolbar > button { min-width: 80px; }
 .listener-form { display: flex; flex-direction: column; min-height: 0; max-height: calc(88vh - 32px); }
-.listener-title { display: flex; align-items: center; gap: 8px; }
+.listener-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.listener-config-note { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.6; }
 .listener-title h3 { margin: 0; }
 .listener-scroll { min-height: 0; overflow-y: auto; padding: 0 3px 3px; }
 .listener-toolbar, .listener-check, .listener-confirm, .row-actions, .name-input, .address-input { display: flex; align-items: center; gap: 8px; }
-.listener-toolbar { flex-wrap: wrap; margin: 12px 0; gap: 10px 16px; }
-.listener-toolbar > input[type=search] { flex: 1; min-width: 160px; width: auto; }
-.profile-field { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 180px; }
+.listener-toolbar { flex-wrap: wrap; margin: 0 0 12px; gap: 8px 12px; min-height: 32px; font-size: 12px; }
+.listener-toolbar > input[type=search] { flex: 0 1 520px; min-width: 160px; width: 520px; max-width: 100%; }
+.profile-field { display: flex; align-items: center; gap: 8px; flex: 0 1 420px; width: 420px; max-width: 100%; min-width: 180px; }
+.profile-toolbar .listener-check { margin-left: 0; }
+.profile-toolbar > button { flex: none; }
+.bulk-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-left: auto; }
+.listener-toolbar .hint { font-size: 12px; white-space: nowrap; }
+.listener-toolbar > input[type=search], .profile-field :deep(.app-select) { height: 32px; min-height: 32px; padding: 0 10px; font-size: 12px; }
 .profile-field :deep(.app-select) { flex: 1; }
 .listener-check { white-space: nowrap; }
-.listener-check input, .listener-table input[type=checkbox] { width: 14px; height: 14px; margin: 0; flex: none; }
+.listener-check input, .listener-table input[type=checkbox] { width: 14px; height: 14px; margin: 0; padding: 0; flex: none; }
+.listener-check input:focus, .listener-table input[type=checkbox]:focus { box-shadow: none; }
+.listener-check input:focus:not(:focus-visible), .listener-table input[type=checkbox]:focus:not(:focus-visible) { outline: none; }
+.listener-table .switch { width: 32px !important; height: 18px !important; vertical-align: middle; }
+.listener-table .switch > span:after { width: 12px; height: 12px; top: 2px; left: 2px; }
+.listener-table .switch input:checked + span:after { transform: translateX(14px); }
 .field-note { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 8px 0; }
 .listener-confirm { flex-wrap: wrap; padding: 10px; border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
 .listener-confirm > span { flex: 1; min-width: 160px; }
 .listener-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 2px; }
 .listener-table { width: 100%; min-width: 1080px; table-layout: fixed; border-collapse: collapse; text-align: left; font-size: 12px; }
 .listener-table .col-select { width: 30px; }
-.listener-table .col-enabled { width: 42px; }
+.listener-table .col-enabled { width: 52px; }
 .listener-table .col-name { width: 160px; }
 .listener-table .col-protocol { width: 104px; }
 .listener-table .col-address { width: 164px; }
 .listener-table .col-port { width: 80px; }
 .listener-table .col-target { width: 200px; }
-.listener-table .col-udp { width: 42px; }
+.listener-table .col-udp { width: 72px; }
 .listener-table .col-status { width: 64px; }
 .listener-table .col-actions { width: 160px; }
 .listener-table th, .listener-table td { padding: 9px 7px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .listener-table tr:last-child td { border-bottom: 0; }
 .listener-name { overflow: hidden; text-overflow: ellipsis; }
-.listener-table .empty-state { text-align: center; color: var(--muted); padding: 24px; }
+.listener-address > span, .listener-address > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.listener-address > small { margin-top: 3px; font-size: 10px; line-height: 1.4; color: var(--muted); }
+.listener-table .empty-state { text-align: center; color: var(--muted); padding: 20px; }
 .row-actions { gap: 5px; flex-wrap: wrap; }
-.row-actions button { padding: 4px 6px; font-size: 12px; white-space: nowrap; }
+.row-actions button { height: 28px; min-height: 28px; padding: 0 8px; font-size: 12px; line-height: 1.2; white-space: nowrap; }
 .listener-edit-row, .listener-auth-row { background: rgba(70,130,235,.06); }
 .listener-edit-row td { vertical-align: middle; }
 .listener-edit-row input:not([type=checkbox]), .listener-edit-row :deep(.app-select), .listener-edit-row :deep(.policy-select-trigger) { width: 100%; min-width: 0; min-height: 30px; height: 30px; padding: 4px 6px; font-size: 12px; }
@@ -311,6 +380,8 @@ async function save() {
 @media (max-width:600px) {
  .settings-modal-header { flex-wrap: wrap; gap: 8px; }
  .profile-field { flex-basis: 100%; }
+ .profile-toolbar .listener-check { margin-left: 0; }
+ .search-toolbar > input[type=search] { flex-basis: 100%; }
  .listener-auth { max-width: calc(100vw - 72px); }
  .listener-users { grid-template-columns: minmax(0,1fr); }
 }

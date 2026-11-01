@@ -1537,11 +1537,9 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 	if err != nil {
 		return nil, err
 	}
-	if value, exists := input["independentListeners"]; exists {
-		entries, err := decodeIndependentListeners(value)
-		if err != nil {
-			return nil, err
-		}
+	_, hasEntries := input["independentListeners"]
+	_, hasMaster := input["independentListenersEnabled"]
+	if hasEntries || hasMaster {
 		scope := stringField(input, "listenerScope")
 		if scope == "" {
 			scope = h.activeIndependentScope()
@@ -1559,6 +1557,13 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 			return nil, storeErr
 		}
 		previous := scopeConfig(store, scope)
+		entries := previous.Entries
+		if hasEntries {
+			entries, err = decodeIndependentListeners(input["independentListeners"])
+			if err != nil {
+				return nil, err
+			}
+		}
 		enabled := previous.Enabled
 		if value, exists := input["independentListenersEnabled"]; exists {
 			var ok bool
@@ -1580,6 +1585,7 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 		patch[independentProfilesKey] = store
 		raw = string(merged)
 		settings["independentListeners"] = independentStatus(raw, config, scopeConfig(store, "unassigned"))
+		settings["independentListenersEnabled"], settings["independentListenerScope"] = enabled, scope
 	}
 	if address, explicit := patch["bind-address"]; explicit {
 		preferences["bind-address"] = address
@@ -1692,6 +1698,19 @@ func (h *helper) readNetworkStatus(ctx context.Context, includeListeners bool) (
 		return nil, err
 	}
 	settings["proxyAuthentication"] = auth
+	h.mu.Lock()
+	preferences, _, preferenceErr := h.readUserSettings()
+	var store map[string]independentConfig
+	if preferenceErr == nil {
+		store, preferenceErr = h.independentStore(preferences)
+	}
+	h.mu.Unlock()
+	if preferenceErr != nil {
+		return nil, preferenceErr
+	}
+	scope := h.activeIndependentScope()
+	settings["independentListenersEnabled"] = scopeConfig(store, scope).Enabled
+	settings["independentListenerScope"] = scope
 	if includeListeners {
 		independent, err := h.independentListenerStatus(raw)
 		if err != nil {

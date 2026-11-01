@@ -346,6 +346,8 @@ export interface IndependentListener {
 }
 export interface IndependentListenerStatus { enabled?: boolean; current?: boolean; profileId?: string; unassigned?: IndependentListener[]; reservedPorts?: number[]; entries: IndependentListener[]; targets: string[]; targetGroups?: string[]; missingTargets: string[] }
 export interface NetworkSetting {
+  independentListenersEnabled?: boolean
+  independentListenerScope?: string
   independentListeners?: IndependentListenerStatus
   controller?: { host?: string; port?: number }
   mixed?: PortSetting; socks?: PortSetting; http?: PortSetting; redir?: PortSetting; tproxy?: PortSetting

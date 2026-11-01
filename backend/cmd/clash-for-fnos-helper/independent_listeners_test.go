@@ -292,3 +292,43 @@ func TestNetworkSummaryPreservesSettingsWithoutListenerManagement(t *testing.T) 
 		t.Fatalf("summary changed settings: %s != %s", expected, actual)
 	}
 }
+
+func TestIndependentMasterOnlyUpdatePreservesEntries(t *testing.T) {
+	h := offlineNetworkHelper(t)
+	ctx := context.Background()
+	entries := []configyaml.IndependentListener{{ID: "quick-master", Name: "Retained", Type: "mixed", Listen: "127.0.0.1", Port: 40192, Proxy: "DIRECT", Enabled: true, Users: []configyaml.ProxyAccount{}}}
+	persist := func(input map[string]any) {
+		t.Helper()
+		prepared, err := h.updateNetwork(ctx, input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id := prepared["txId"].(string)
+		if _, err = h.activateConfig(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = h.commitConfig(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	persist(independentInput(t, entries))
+	for _, enabled := range []bool{false, true} {
+		persist(map[string]any{"independentListenersEnabled": enabled, "listenerScope": "runtime"})
+		full, err := h.networkStatus(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings := full["settings"].(map[string]any)
+		status := settings["independentListeners"].(map[string]any)
+		saved := status["entries"].([]configyaml.IndependentListener)
+		if settings["independentListenersEnabled"] != enabled || status["enabled"] != enabled || len(saved) != 1 || saved[0].ID != entries[0].ID || !saved[0].Enabled {
+			t.Fatalf("master toggle changed entries: %#v", status)
+		}
+	}
+	if _, err := h.updateNetwork(ctx, map[string]any{"independentListenersEnabled": false, "listenerScope": "profile:other"}); err == nil {
+		t.Fatal("stale profile toggle accepted")
+	}
+	if _, err := h.updateNetwork(ctx, map[string]any{"independentListenersEnabled": "false"}); err == nil {
+		t.Fatal("non-boolean master accepted")
+	}
+}

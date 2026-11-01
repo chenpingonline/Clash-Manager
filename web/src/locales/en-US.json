@@ -2224,5 +2224,12 @@
   "编辑中": "Editing",
   "完成": "Done",
   "认证": "Authentication",
-  "读取网络配置失败": "Failed to read network settings"
+  "读取网络配置失败": "Failed to read network settings",
+  "UDP 转发": "UDP relay",
+  "启用当前配置的独立代理入口": "Enable independent listeners for the active profile",
+  "未保存的更改": "Unsaved changes",
+  "有未保存的更改，请选择保存或放弃。": "You have unsaved changes. Save or discard them.",
+  "保存并关闭": "Save and close",
+  "保存并切换": "Save and switch",
+  "确定删除所选的 {arg0} 个入口？保存后生效。": "Delete the {arg0} selected listeners? Takes effect after saving."
 }
