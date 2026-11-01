@@ -107,6 +107,8 @@ func (g *gateway) handleSystemAPI(w http.ResponseWriter, r *http.Request, reques
 		g.forwardHelper(w, r, http.MethodGet, "/network/tun/diagnostics", nil, 10*time.Second)
 	case requestPath == "/api/network/tun/repair" && r.Method == http.MethodPost:
 		g.forwardHelper(w, r, http.MethodPost, "/network/tun/repair", map[string]any{}, 15*time.Second)
+	case requestPath == "/api/independent-listeners" && (r.Method == http.MethodGet || r.Method == http.MethodPut):
+		g.manageIndependentListeners(w, r)
 	case requestPath == "/api/network/settings" && r.Method == http.MethodGet:
 		g.networkSettings(w, r)
 	case requestPath == "/api/network/settings/status" && r.Method == http.MethodGet:

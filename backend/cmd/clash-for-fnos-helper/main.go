@@ -194,6 +194,12 @@ func (h *helper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result, err = h.prepareRuntimeMode(r.Context(), stringField(body, "mode"))
 	case "/network/tun/repair":
 		result = h.repairTun(r.Context())
+	case "/independent/read":
+		result, err = h.readIndependentListeners(body)
+	case "/independent/save":
+		result, err = h.saveInactiveIndependentListeners(body)
+	case "/independent/delete":
+		result, err = h.deleteIndependentListeners(body)
 	case "/config/compose":
 		result, err = h.composeUserSettings(body)
 	case "/config/rule-asset":

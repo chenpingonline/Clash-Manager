@@ -60,23 +60,34 @@ func networkListeners(raw string) []networkListener {
 	}
 	return result
 }
-func validateNetworkPorts(raw, previous string, offline bool) error {
+func configuredNetworkListeners(raw string) ([]networkListener, error) {
 	next := networkListeners(raw)
 	extra, err := customNetworkListeners(raw)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	next = append(next, extra...)
 	// Reject duplicate TCP/UDP ports before probing, including currently owned ports.
 	for i, item := range next {
 		if _, _, err := net.SplitHostPort(item.address); err != nil {
-			return fmt.Errorf("%s 监听地址无效: %w", item.label, err)
+			return nil, fmt.Errorf("%s 监听地址无效: %w", item.label, err)
 		}
 		for _, prior := range next[:i] {
 			if networkListenersOverlap(prior, item) {
-				return fmt.Errorf("端口冲突：%s 已用于 %s，%s 请更换端口", item.address, prior.label, item.label)
+				return nil, fmt.Errorf("端口冲突：%s 已用于 %s，%s 请更换端口", item.address, prior.label, item.label)
 			}
 		}
+	}
+	return next, nil
+}
+func validateConfiguredNetworkPorts(raw string) error {
+	_, err := configuredNetworkListeners(raw)
+	return err
+}
+func validateNetworkPorts(raw, previous string, offline bool) error {
+	next, err := configuredNetworkListeners(raw)
+	if err != nil {
+		return err
 	}
 	old := []networkListener{}
 	if !offline {

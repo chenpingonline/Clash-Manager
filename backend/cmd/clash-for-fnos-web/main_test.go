@@ -115,6 +115,12 @@ func TestProfileImportListPatchAndDeleteAreServedByGo(t *testing.T) {
 		profilesFile: filepath.Join(root, "profiles.json"),
 		profileDir:   filepath.Join(root, "profiles"),
 	}
+	cfg.privilegedSocket = startTunHelper(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/independent/delete" && r.URL.Path != "/independent/read" {
+			t.Errorf("unexpected helper request %s", r.URL.Path)
+		}
+		writeJSON(w, 200, map[string]any{"ok": true})
+	}))
 	handler := newGateway(cfg)
 	importRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(importRecorder, httptest.NewRequest(http.MethodPost, "/app/clash-for-fnos/api/profiles/import", strings.NewReader(`{"Name":"本地测试","Content":"port: 7890\n"}`)))

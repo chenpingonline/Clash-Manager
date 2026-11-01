@@ -20,6 +20,7 @@ type IndependentListener struct {
 	Port    int            `json:"port"`
 	Proxy   string         `json:"proxy"`
 	Enabled bool           `json:"enabled"`
+	UDP     *bool          `json:"udp,omitempty"`
 	Users   []ProxyAccount `json:"users"`
 }
 
@@ -187,10 +188,6 @@ func MergeIndependentListeners(raw []byte, entries, previous []IndependentListen
 	}
 	missing := []string{}
 	for _, e := range entries {
-		if names[e.Name] {
-			return nil, nil, fmt.Errorf("独立代理入口 %s 与订阅 listeners 名称冲突", e.Name)
-		}
-		names[e.Name] = true
 		if !e.Enabled {
 			continue
 		}
@@ -198,7 +195,12 @@ func MergeIndependentListeners(raw []byte, entries, previous []IndependentListen
 			missing = append(missing, e.ID)
 			continue
 		}
-		value := map[string]any{"name": e.Name, "type": e.Type, "listen": e.Listen, "port": e.Port, "proxy": e.Proxy, "udp": e.Type != "http"}
+		if names[e.Name] {
+			return nil, nil, fmt.Errorf("独立代理入口 %s 与订阅 listeners 名称冲突", e.Name)
+		}
+		names[e.Name] = true
+		udp := e.Type != "http" && (e.UDP == nil || *e.UDP)
+		value := map[string]any{"name": e.Name, "type": e.Type, "listen": e.Listen, "port": e.Port, "proxy": e.Proxy, "udp": udp}
 		// An explicit empty users list opts out of global authentication. Never
 		// implicitly inherit credentials or bypass rules from the shared proxy port.
 		value["users"] = e.Users

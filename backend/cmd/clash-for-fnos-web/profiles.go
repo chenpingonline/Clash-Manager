@@ -390,7 +390,16 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 		return true
 	}
 	if r.Method == http.MethodDelete {
-		items := state.Items[:0]
+		g.networkMu.Lock()
+		defer g.networkMu.Unlock()
+		// Bind legacy preferences before changing the current profile catalog.
+		scope := map[string]any{"scope": "profile:" + id, "content": "proxies: []\n"}
+		if err := g.helperJSON(r.Context(), http.MethodPost, "/independent/read", scope, nil, 10*time.Second); err != nil {
+			writeJSON(w, 502, map[string]string{"error": err.Error()})
+			return true
+		}
+		previous := state
+		items := make([]*profile, 0, len(state.Items)-1)
 		for _, candidate := range state.Items {
 			if candidate.ID != id {
 				items = append(items, candidate)
@@ -400,15 +409,20 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 		if state.Current != nil && *state.Current == id {
 			state.Current = nil
 		}
+		if err := g.writeProfiles(state); err != nil {
+			writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return true
+		}
+		if err := g.helperJSON(r.Context(), http.MethodPost, "/independent/delete", scope, nil, 10*time.Second); err != nil {
+			restoreErr := g.writeProfiles(previous)
+			writeJSON(w, 502, map[string]string{"error": errors.Join(err, restoreErr).Error()})
+			return true
+		}
 		_ = os.Remove(filepath.Join(g.config.profileDir, id+".yaml"))
 		for _, suffix := range configyaml.ExtensionKinds {
 			_ = os.Remove(filepath.Join(g.config.profileDir, id+"."+suffix))
 		}
-		if err := g.writeProfiles(state); err != nil {
-			writeJSON(w, 500, map[string]string{"error": err.Error()})
-		} else {
-			writeJSON(w, 200, map[string]bool{"ok": true})
-		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
 		return true
 	}
 	return false
@@ -739,22 +753,12 @@ func (g *gateway) activateProfileLocked(ctx context.Context, state *profileState
 	if err != nil {
 		return nil, err
 	}
-	extensions, err := g.readProfileExtensions(item.ID)
-	if err != nil {
-		return nil, fmt.Errorf("读取订阅增强失败: %w", err)
+	if stage != nil {
+		stage("enhancing", "正在合并配置增强与全局增强…")
 	}
-	globalExtensions, err := g.readProfileExtensions("_global")
+	content, err = g.independentProfileContent(item, content)
 	if err != nil {
-		return nil, fmt.Errorf("读取全局增强失败: %w", err)
-	}
-	if len(extensions) > 0 || len(globalExtensions) > 0 {
-		if stage != nil {
-			stage("enhancing", "正在合并配置增强与全局增强…")
-		}
-		content, err = configyaml.ApplyProfileExtensionChain(content, item.Name, globalExtensions, extensions)
-		if err != nil {
-			return nil, fmt.Errorf("应用配置增强失败: %w", err)
-		}
+		return nil, err
 	}
 	g.networkMu.Lock()
 	defer g.networkMu.Unlock()
@@ -763,7 +767,7 @@ func (g *gateway) activateProfileLocked(ctx context.Context, state *profileState
 		return nil, err
 	}
 	var composed map[string]any
-	if err = g.helperJSON(ctx, http.MethodPost, "/config/compose", map[string]any{"content": string(content), "dnsOverrideEnabled": enabled, "dns": dns}, &composed, 10*time.Second); err != nil {
+	if err = g.helperJSON(ctx, http.MethodPost, "/config/compose", map[string]any{"content": string(content), "dnsOverrideEnabled": enabled, "dns": dns, "listenerScope": "profile:" + item.ID}, &composed, 10*time.Second); err != nil {
 		return nil, err
 	}
 	effective, ok := composed["content"].(string)
@@ -1365,4 +1369,22 @@ func (g *gateway) handleLocalConfigAPI(w http.ResponseWriter, r *http.Request, r
 		writeJSON(w, 200, map[string]any{"item": publicProfile(item, state.Current), "applied": body.Apply, "sourcePath": candidate.Path})
 	}
 	return true
+}
+
+func (g *gateway) independentProfileContent(item *profile, content []byte) ([]byte, error) {
+	extensions, err := g.readProfileExtensions(item.ID)
+	if err != nil {
+		return nil, fmt.Errorf("读取订阅增强失败: %w", err)
+	}
+	globalExtensions, err := g.readProfileExtensions("_global")
+	if err != nil {
+		return nil, fmt.Errorf("读取全局增强失败: %w", err)
+	}
+	if len(extensions) > 0 || len(globalExtensions) > 0 {
+		content, err = configyaml.ApplyProfileExtensionChain(content, item.Name, globalExtensions, extensions)
+		if err != nil {
+			return nil, fmt.Errorf("应用配置增强失败: %w", err)
+		}
+	}
+	return content, nil
 }

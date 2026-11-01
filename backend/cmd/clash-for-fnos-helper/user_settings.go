@@ -141,6 +141,10 @@ func (h *helper) composeUserSettings(input map[string]any) (map[string]any, erro
 	if err != nil {
 		return nil, err
 	}
+	store, err := h.independentStore(settings)
+	if err != nil {
+		return nil, err
+	}
 	if enabled, _ := input["dnsOverrideEnabled"].(bool); enabled {
 		if dns, ok := input["dns"].(map[string]any); ok {
 			normalized, hosts := normalizeDNSForYAML(dns)
@@ -152,20 +156,28 @@ func (h *helper) composeUserSettings(input map[string]any) (map[string]any, erro
 			settings["hosts"] = hostMap(hosts)
 		}
 	}
-	entries, err := independentPreferences(settings)
-	if err != nil {
-		return nil, err
+	scope := stringField(input, "listenerScope")
+	if scope == "" {
+		scope = h.activeIndependentScope()
 	}
+	if !validIndependentScope(scope) {
+		return nil, fail(400, "独立代理入口配置无效")
+	}
+	config := scopeConfig(store, scope)
 	delete(settings, configyaml.IndependentListenersKey)
+	delete(settings, independentProfilesKey)
 	content, err := configyaml.MergeOverrides([]byte(stringField(input, "content")), settings)
 	if err != nil {
 		return nil, fmt.Errorf("合并用户设置失败: %w", err)
 	}
-	if len(entries) > 0 {
-		content, _, err = configyaml.MergeIndependentListeners(content, entries, entries)
-		if err != nil {
-			return nil, err
-		}
+	// Always merge, including disabled/empty lists, to clean up owned entries.
+	previous := []configyaml.IndependentListener{}
+	for _, saved := range store {
+		previous = append(previous, saved.Entries...)
+	}
+	content, _, err = configyaml.MergeIndependentListeners(content, config.effective(), previous)
+	if err != nil {
+		return nil, err
 	}
 	content, err = ensureLANBindWithPreferences(content, settings)
 	if err != nil {

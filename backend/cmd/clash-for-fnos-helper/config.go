@@ -1542,16 +1542,44 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 		if err != nil {
 			return nil, err
 		}
-		previous, err := independentPreferences(preferences)
-		if err != nil {
-			return nil, err
+		scope := stringField(input, "listenerScope")
+		if scope == "" {
+			scope = h.activeIndependentScope()
 		}
-		merged, missing, err := configyaml.MergeIndependentListeners([]byte(raw), entries, previous)
+		if !validIndependentScope(scope) {
+			return nil, fail(400, "独立代理入口配置无效")
+		}
+		if scope != h.activeIndependentScope() {
+			return nil, fail(409, "只能应用当前配置的独立代理入口")
+		}
+		h.mu.Lock()
+		store, storeErr := h.independentStore(preferences)
+		h.mu.Unlock()
+		if storeErr != nil {
+			return nil, storeErr
+		}
+		previous := scopeConfig(store, scope)
+		enabled := previous.Enabled
+		if value, exists := input["independentListenersEnabled"]; exists {
+			var ok bool
+			enabled, ok = value.(bool)
+			if !ok {
+				return nil, fail(400, "独立代理入口总开关必须为布尔值")
+			}
+		}
+		config := independentConfig{Enabled: enabled, Entries: entries}
+		merged, _, err := configyaml.MergeIndependentListeners([]byte(raw), config.effective(), allIndependentEntries(store))
 		if err != nil {
 			return nil, fail(400, err.Error())
 		}
+		store[scope] = config
+		if boolField(input, "assignUnassigned") {
+			delete(store, "unassigned")
+		}
+		delete(patch, configyaml.IndependentListenersKey)
+		patch[independentProfilesKey] = store
 		raw = string(merged)
-		settings["independentListeners"] = map[string]any{"entries": entries, "targets": configyaml.IndependentListenerTargets(merged), "targetGroups": configyaml.IndependentListenerTargetGroups(merged), "missingTargets": missing}
+		settings["independentListeners"] = independentStatus(raw, config, scopeConfig(store, "unassigned"))
 	}
 	if address, explicit := patch["bind-address"]; explicit {
 		preferences["bind-address"] = address

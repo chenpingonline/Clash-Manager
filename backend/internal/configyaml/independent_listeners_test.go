@@ -49,7 +49,7 @@ func TestIndependentListenersSubscriptionMergeAndRecovery(t *testing.T) {
 }
 func TestIndependentListenerCollisionAndCredentials(t *testing.T) {
 	entry := listenerFixture()
-	if _, _, err := MergeIndependentListeners([]byte("listeners: [{name: US entry, type: http, port: 9000}]"), []IndependentListener{entry}, nil); err == nil {
+	if _, _, err := MergeIndependentListeners([]byte("proxies: [{name: US}]\nlisteners: [{name: US entry, type: http, port: 9000}]"), []IndependentListener{entry}, nil); err == nil {
 		t.Fatal("overwrote subscription listener")
 	}
 	entry.Users = []ProxyAccount{{Username: "user", Password: "p:a:ss"}}
@@ -109,5 +109,46 @@ func TestIndependentListenerTargetGroups(t *testing.T) {
 	}
 	if groups := IndependentListenerTargetGroups([]byte("invalid: [")); len(groups) != 0 {
 		t.Fatalf("malformed config returned groups: %v", groups)
+	}
+}
+
+func TestDisabledIndependentListenersDoNotConflict(t *testing.T) {
+	entry := listenerFixture()
+	entry.Enabled = false
+	source := []byte("proxies: [{name: US}]\nlisteners: [{name: US entry, type: http, port: 9000}]\n")
+	raw, _, err := MergeIndependentListeners(source, []IndependentListener{entry}, nil)
+	if err != nil || !strings.Contains(string(raw), "port: 9000") || strings.Contains(string(raw), listenerMarker) {
+		t.Fatal("disabled entry changed subscription", err, string(raw))
+	}
+	entry.Enabled = true
+	entry.Proxy = "absent"
+	if _, missing, err := MergeIndependentListeners(source, []IndependentListener{entry}, nil); err != nil || len(missing) != 1 {
+		t.Fatal("missing target should pause before conflict checking", err, missing)
+	}
+}
+
+func TestIndependentListenerUDPSetting(t *testing.T) {
+	for _, protocol := range []string{"mixed", "socks", "http"} {
+		for _, udp := range []bool{false, true} {
+			entry := listenerFixture()
+			entry.Type = protocol
+			entry.Proxy = "DIRECT"
+			entry.UDP = &udp
+			raw, _, err := MergeIndependentListeners([]byte("proxies: []\n"), []IndependentListener{entry}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config struct {
+				Listeners []struct {
+					UDP bool `yaml:"udp"`
+				} `yaml:"listeners"`
+			}
+			if err := yaml.Unmarshal(raw, &config); err != nil {
+				t.Fatal(err)
+			}
+			if config.Listeners[0].UDP != (udp && protocol != "http") {
+				t.Fatalf("unexpected UDP for %s: %t", protocol, udp)
+			}
+		}
 	}
 }
