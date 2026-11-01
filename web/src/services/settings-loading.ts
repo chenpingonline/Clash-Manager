@@ -1,13 +1,13 @@
 import { reactive } from 'vue'
 import { errorMessage } from './api'
 export type SettingsSection = 'core' | 'network' | 'dns' | 'tun' | 'advanced' | 'behavior' | 'bypass' | 'update'
-export type SettingsResource = 'system' | 'manager' | 'network' | 'environment' | 'update' | 'icons' | 'geo'
+export type SettingsResource = 'system' | 'manager' | 'network' | 'environment' | 'update' | 'icons' | 'geo' | 'logDisplay'
 export function settingsResources(section: SettingsSection, tab: string): SettingsResource[] {
   switch (section) {
     case 'core': return tab === 'geo' ? ['geo'] : tab === 'delay' ? ['manager'] : ['system', 'manager']
     case 'network': case 'dns': case 'tun': return ['network']
     case 'advanced': return ['system', 'network', 'environment']
-    case 'behavior': return ['icons']
+    case 'behavior': return ['icons', 'logDisplay']
     case 'bypass': return ['manager']
     case 'update': return ['manager', 'update']
   }

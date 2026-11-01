@@ -11,7 +11,7 @@ import { containsLog, displayLogTime, logDateBoundary, normalizeLog, plainCoreOu
 import { notify } from '@/services/toast'
 import type { LogItem } from '@/types/api'
 
-import { appendLogBatch, isLogBottom, logDisplayLimit, logLineOptions, saveLogDisplayLimit } from '@/services/log-view'
+import { appendLogBatch, isLogBottom, logDisplayLimit, logLineOptions, loadLogDisplayLimit, logDisplayLoading, logDisplaySaving, logDisplayReady, logDisplayError, saveLogDisplayLimit } from '@/services/log-view'
 
 type Policy = { days: number; maxMiB: number }
 type Settings = { history: Policy; core: Policy; saveLevel: string }
@@ -107,7 +107,7 @@ async function readSettings(edit = true) {
   finally { if (settingsController === request) settingsBusy.value = false }
 }
 function openSettings() { settingsOpen.value = true; void readSettings() }
-defineExpose({ refreshPage: async () => { await load(); await readSettings(false) } })
+defineExpose({ refreshPage: async () => { await syncDisplayLimit(); await load(); await readSettings(false) } })
 function closeSettings() { if (!settingsBusy.value) settingsOpen.value = false }
 async function saveSettings() {
   if (!draft.value) return
@@ -122,18 +122,34 @@ async function clearCore() {
   catch (cause) { if (!isAbortError(cause)) settingsError.value = errorMessage(cause) }
   finally { settingsBusy.value = false }
 }
-function changeLimit() { saveLogDisplayLimit(limit.value); void load() }
+async function changeLimit(value: number) { if (await saveLogDisplayLimit(value)) await load() }
+let displayInitialized = false, pageDisposed = false
+const displayController = new AbortController()
+async function syncDisplayLimit() {
+  if (logDisplayLoading.value || logDisplaySaving.value) return
+  const previous = limit.value
+  try { await loadLogDisplayLimit(displayController.signal) } catch { /* Keep the safe default and show a retryable display error. */ }
+  if (!pageDisposed && displayInitialized && previous !== limit.value && !queryDirty.value) await load()
+}
+async function initializeDisplay() {
+  await syncDisplayLimit()
+  if (pageDisposed) return
+  displayInitialized = true
+  await load()
+}
+function refreshDisplayOnFocus() { if (!settingsOpen.value) void syncDisplayLimit() }
 watch([query, from, to], () => { if (historyMode.value) { queryDirty.value = true; error.value = ''; controller?.abort(); loading.value = false; items.value = []; coreLines.value = []; nextCursor.value = ''; cursors.value = ['']; pageIndex.value = 0 } })
-onMounted(() => { void load(); void readSettings(false); statusTimer = window.setInterval(() => { if (!settingsOpen.value && !settingsBusy.value) void readSettings(false) }, 30000) })
-onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopStream(); window.clearTimeout(batchTimer); cancelAnimationFrame(renderFrame); window.clearInterval(statusTimer) })
+onMounted(() => { void initializeDisplay(); void readSettings(false); window.addEventListener('focus', refreshDisplayOnFocus); statusTimer = window.setInterval(() => { if (!settingsOpen.value && !settingsBusy.value) { void readSettings(false); void syncDisplayLimit() } }, 30000) })
+onBeforeUnmount(() => { pageDisposed = true; displayController.abort(); window.removeEventListener('focus', refreshDisplayOnFocus); controller?.abort(); settingsController?.abort(); stopStream(); window.clearTimeout(batchTimer); cancelAnimationFrame(renderFrame); window.clearInterval(statusTimer) })
 </script>
 
 <template>
   <Teleport defer to="#page-actions"><div class="log-tools">
     <div class="log-search-wrap"><Search :size="14" :stroke-width="1.8" aria-hidden="true" /><input v-model="query" type="search" class="log-search" :placeholder="t(historyMode ? '搜索保留的历史日志' : '搜索最近日志')" :aria-label="t('搜索日志')" @keydown.enter="historyMode && load()"></div>
-    <AppSelect v-model.number="limit" class="log-limit-select" :aria-label="t('显示行数')" @change="changeLimit" :options="[...(logLineOptions).map((value) => ({ value: value, label: (value) + ' ' + (t('行')) }))]" />
+    <AppSelect :model-value="limit" :disabled="logDisplayLoading || logDisplaySaving || !logDisplayReady" class="log-limit-select" :aria-label="t('显示行数')" @update:model-value="changeLimit" :options="[...(logLineOptions).map((value) => ({ value: value, label: (value) + ' ' + (t('行')) }))]" />
     <AppSelect v-if="!isCore" v-model="level" class="log-level-select" :aria-label="t('显示级别')" @change="load()" :options="[...(['debug', 'info', 'warning', 'error']).map((value) => ({ value: (value), label: (value) }))]" />
   </div></Teleport>
+  <p v-if="logDisplayError" class="error log-storage-error" role="alert">{{ logDisplayError }} <button class="ghost" :disabled="logDisplayLoading" @click="syncDisplayLimit">{{ t('重新读取') }}</button></p>
   <form v-if="historyMode" class="log-history-tools" @submit.prevent="load()">
     <div class="log-history-query">
       <template v-if="!isCore"><label>{{ t('开始日期') }}<input v-model="from" type="date"></label><label>{{ t('结束日期') }}<input v-model="to" type="date"></label></template>

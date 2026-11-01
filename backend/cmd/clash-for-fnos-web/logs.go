@@ -35,6 +35,10 @@ func (g *gateway) logSettingsStatus(ctx context.Context) (map[string]any, error)
 	return map[string]any{"settings": settings, "history": history, "core": core}, nil
 }
 func (g *gateway) handleLogSettings(w http.ResponseWriter, r *http.Request, path string) bool {
+	if path == "/api/logs/display" {
+		g.logDisplaySettings(w, r)
+		return true
+	}
 	if path != "/api/logs/settings" && path != "/api/logs/core" {
 		return false
 	}

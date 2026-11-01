@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { logDisplayLimit, logLineOptions, saveLogDisplayLimit } from '@/services/log-view'
+import { logDisplayLimit, logLineOptions, loadLogDisplayLimit, logDisplayLoading, logDisplaySaving, logDisplayReady, logDisplayError, saveLogDisplayLimit } from '@/services/log-view'
 import TunRuntimeStatus from '@/components/settings/TunRuntimeStatus.vue'
 import { useTunState } from '@/composables/useTunState'
 import AppSelect from '@/components/AppSelect.vue'
@@ -482,6 +482,7 @@ const resources = createSettingsLoader({
     applyAppUpdateResult(await readSettings<AppUpdateInfo>('/api/app/update-info', signal))
     if (runtime.value.capabilities.appUpdates) void refreshAppInstall()
   },
+  logDisplay: signal => loadLogDisplayLimit(signal),
   icons: async signal => {
     const value = await readSettings<AppIconsResponse>('/api/app/icons', signal)
     icons.value = value; selectedIcon.value = value.selected || value.defaultId || 'cat-orbit'
@@ -720,7 +721,9 @@ async function initialize() {
   if (!categories.value.some(category => category.key === open.value)) open.value = 'core'
   await load(false)
 }
-onMounted(initialize)
+function refreshLogDisplayOnFocus() { if (open.value === 'behavior') void loadLogDisplayLimit().catch(() => {}) }
+onMounted(() => { void initialize(); window.addEventListener('focus', refreshLogDisplayOnFocus) })
+onBeforeUnmount(() => window.removeEventListener('focus', refreshLogDisplayOnFocus))
 </script>
 
 <template>
@@ -916,8 +919,10 @@ onMounted(initialize)
 
           <div v-else-if="category.key === 'behavior'" class="settings-accordion-panel">
             <div class="log-display-settings"><div class="section-head"><h2>{{ t('日志显示') }}</h2></div>
-              <div class="log-display-row"><label for="log-display-limit">{{ t('显示行数') }}</label><AppSelect id="log-display-limit" :model-value="logDisplayLimit" :options="logLineOptions.map(value => ({ value, label: value + ' ' + t('行') }))" @update:model-value="saveLogDisplayLimit" /></div>
-              <p class="hint">{{ t('仅保存在当前浏览器') }}</p>
+              <div class="log-display-row"><label for="log-display-limit">{{ t('显示行数') }}</label><AppSelect id="log-display-limit" :disabled="logDisplayLoading || logDisplaySaving || !logDisplayReady" :model-value="logDisplayLimit" :options="logLineOptions.map(value => ({ value, label: value + ' ' + t('行') }))" @update:model-value="saveLogDisplayLimit" /></div>
+              <p class="hint">{{ t('保存在服务端，所有设备共用') }}</p>
+              <p v-if="logDisplaySaving" class="hint" role="status">{{ t('保存中…') }}</p>
+              <p v-if="logDisplayError" class="error" role="alert">{{ logDisplayError }}</p>
             </div>
 <div v-if="runtime.capabilities.appIcons" class="app-icon-settings"><div class="section-head"><div><h2>{{ t("软件图标") }}</h2></div></div><div v-if="icons.error" class="local-warning">{{ t("读取图标设置失败：") }}{{ t(icons.error) }}</div><div class="app-icon-picker"><button v-for="icon in icons.options || []" :key="icon.id" type="button" class="app-icon-choice" :class="{ active: icon.id === selectedIcon }" :disabled="icons.ok === false || Boolean(busy)" :title="t(icon.name || icon.id)" @click="chooseIcon(icon.id)"><img :src="icon.preview || `${APP_PREFIX}/icons/${icon.id}_256.png`" alt=""><span class="app-icon-choice-state">{{ icon.id === selectedIcon ? '✓' : '' }}</span></button></div></div>
           </div>

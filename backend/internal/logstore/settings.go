@@ -61,7 +61,11 @@ func SaveSettings(file string, s Settings) error {
 	if err := s.Validate(); err != nil {
 		return err
 	}
-	body, err := json.MarshalIndent(s, "", "  ")
+	return saveSettingsJSON(file, s)
+}
+
+func saveSettingsJSON(file string, value any) error {
+	body, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}

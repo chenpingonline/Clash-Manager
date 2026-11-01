@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createSettingsLoader, settingsResources, type SettingsResource } from './settings-loading'
 function fixture() {
-  const loaders = Object.fromEntries(['system', 'manager', 'network', 'environment', 'update', 'icons', 'geo'].map(key => [key, vi.fn(async (_signal: AbortSignal) => {})])) as Record<SettingsResource, ReturnType<typeof vi.fn<(signal: AbortSignal) => Promise<void>>>>
+  const loaders = Object.fromEntries(['system', 'manager', 'network', 'environment', 'update', 'icons', 'geo', 'logDisplay'].map(key => [key, vi.fn(async (_signal: AbortSignal) => {})])) as Record<SettingsResource, ReturnType<typeof vi.fn<(signal: AbortSignal) => Promise<void>>>>
   return { loaders, loader: createSettingsLoader(loaders) }
 }
 describe('settings section loading', () => {
@@ -9,7 +9,7 @@ describe('settings section loading', () => {
     const { loaders, loader } = fixture()
     await loader.load(settingsResources('core', 'manage'))
     expect(loaders.system).toHaveBeenCalledOnce(); expect(loaders.manager).toHaveBeenCalledOnce()
-    for (const key of ['network', 'environment', 'update', 'icons', 'geo'] as const) expect(loaders[key]).not.toHaveBeenCalled()
+    for (const key of ['network', 'environment', 'update', 'icons', 'geo', 'logDisplay'] as const) expect(loaders[key]).not.toHaveBeenCalled()
   })
   it('keeps another tab usable while network is stalled, and deduplicates shared reads', async () => {
     const { loaders, loader } = fixture()

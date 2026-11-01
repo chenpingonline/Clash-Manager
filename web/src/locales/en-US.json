@@ -2236,5 +2236,7 @@
   "日志显示": "Log display",
   "保存在当前浏览器，进入日志页时生效；较少行数可降低页面负载。": "Saved in this browser and used when opening logs. Fewer lines reduce page load.",
   "日志 行数 性能": "Logs lines performance",
-  "仅保存在当前浏览器": "Saved only in this browser"
+  "仅保存在当前浏览器": "Saved only in this browser",
+  "日志显示行数无效": "Invalid log display limit",
+  "保存在服务端，所有设备共用": "Saved on the server and shared across all devices"
 }
