@@ -2231,5 +2231,9 @@
   "有未保存的更改，请选择保存或放弃。": "You have unsaved changes. Save or discard them.",
   "保存并关闭": "Save and close",
   "保存并切换": "Save and switch",
-  "确定删除所选的 {arg0} 个入口？保存后生效。": "Delete the {arg0} selected listeners? Takes effect after saving."
+  "确定删除所选的 {arg0} 个入口？保存后生效。": "Delete the {arg0} selected listeners? Takes effect after saving.",
+  "软件图标、应用外观与日志显示": "App icon, appearance and log display",
+  "日志显示": "Log display",
+  "保存在当前浏览器，进入日志页时生效；较少行数可降低页面负载。": "Saved in this browser and used when opening logs. Fewer lines reduce page load.",
+  "日志 行数 性能": "Logs lines performance"
 }

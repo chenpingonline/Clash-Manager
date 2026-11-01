@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { logDisplayLimit, logLineOptions, saveLogDisplayLimit } from '@/services/log-view'
 import TunRuntimeStatus from '@/components/settings/TunRuntimeStatus.vue'
 import { useTunState } from '@/composables/useTunState'
 import AppSelect from '@/components/AppSelect.vue'
@@ -167,11 +168,11 @@ const allCategories: Array<{ key: Section; title: string; description: string }>
   { key: 'dns', title: 'DNS 与解析', description: 'Mihomo DNS、解析服务器、Fake IP、回退策略与 Hosts' },
   { key: 'tun', title: '虚拟网卡(TUN)设置', description: 'TUN 详细参数与系统流量接管' },
   { key: 'advanced', title: '环境变量设置', description: '管理系统登录与 Shell 的代理环境变量' },
-  { key: 'behavior', title: '其他设置', description: '软件图标与应用外观' },
+  { key: 'behavior', title: '其他设置', description: '软件图标、应用外观与日志显示' },
   { key: 'bypass', title: '旁路由', description: '控制旁路由菜单与页面检查' },
   { key: 'update', title: '更新设置', description: '应用版本、检查更新与更新提示' },
 ]
-const categories = computed(() => allCategories.filter(item => (item.key !== 'advanced' || runtime.value.capabilities.hostProxyEnvironment) && (item.key !== 'behavior' || runtime.value.capabilities.appIcons)).map(item => {
+const categories = computed(() => allCategories.filter(item => (item.key !== 'advanced' || runtime.value.capabilities.hostProxyEnvironment)).map(item => {
   if (item.key === 'update' && runtime.value.platform === 'linux') return { ...item, description: 'Linux 安装包版本与升级方式' }
   if (item.key === 'update' && runtime.value.platform === 'docker') return { ...item, description: 'Docker 镜像版本与升级方式' }
   return item
@@ -241,6 +242,7 @@ const settingSearchCatalog: Array<SettingsSearchEntry & { section: Section; tab:
   {"section": "advanced", "tab": "", "label": "登录 Shell", "selector": "[data-setting=\"setting-proxyForm-targets-profile\"]", "keywords": "profile"},
   {"section": "advanced", "tab": "", "label": "Bash 交互环境", "selector": "[data-setting=\"setting-proxyForm-targets-bashrc\"]", "keywords": "bashrc"},
   {"section": "advanced", "tab": "", "label": "代理绕过设置", "selector": "#proxy-bypass-input", "keywords": "NO_PROXY"},
+  {"section": "behavior", "tab": "", "label": "日志显示", "selector": ".log-display-settings", "keywords": "日志 行数 性能"},
   {"section": "behavior", "tab": "", "label": "软件图标", "selector": ".app-icon-settings", "keywords": "icon 外观"},
   {"section": "bypass", "tab": "", "label": "显示旁路由菜单", "selector": "#bypass-page-preference", "keywords": "旁路由 菜单 检查 显示 隐藏 bypassPageEnabled"},
   {"section": "update", "tab": "", "label": "更新设置", "selector": ".update-panel", "keywords": "版本 应用 更新 通知"},
@@ -913,6 +915,10 @@ onMounted(initialize)
           </div>
 
           <div v-else-if="category.key === 'behavior'" class="settings-accordion-panel">
+            <div class="section log-display-settings"><div class="section-head"><h2>{{ t('日志显示') }}</h2></div>
+              <div class="field"><label for="log-display-limit">{{ t('显示行数') }}</label><AppSelect id="log-display-limit" :model-value="logDisplayLimit" :options="logLineOptions.map(value => ({ value, label: value + ' ' + t('行') }))" @update:model-value="saveLogDisplayLimit" /></div>
+              <p class="hint">{{ t('保存在当前浏览器，进入日志页时生效；较少行数可降低页面负载。') }}</p>
+            </div>
 <div v-if="runtime.capabilities.appIcons" class="app-icon-settings"><div class="section-head"><div><h2>{{ t("软件图标") }}</h2></div></div><div v-if="icons.error" class="local-warning">{{ t("读取图标设置失败：") }}{{ t(icons.error) }}</div><div class="app-icon-picker"><button v-for="icon in icons.options || []" :key="icon.id" type="button" class="app-icon-choice" :class="{ active: icon.id === selectedIcon }" :disabled="icons.ok === false || Boolean(busy)" :title="t(icon.name || icon.id)" @click="chooseIcon(icon.id)"><img :src="icon.preview || `${APP_PREFIX}/icons/${icon.id}_256.png`" alt=""><span class="app-icon-choice-state">{{ icon.id === selectedIcon ? '✓' : '' }}</span></button></div></div>
           </div>
 

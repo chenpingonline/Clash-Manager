@@ -2,7 +2,7 @@
 import AppSelect from '@/components/AppSelect.vue'
 import { Search } from 'lucide-vue-next'
 import { t } from '@/services/i18n'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import HighlightText from '@/components/HighlightText.vue'
 import LogMessage from '@/components/LogMessage.vue'
 import SequenceFormDialog from '@/components/SequenceFormDialog.vue'
@@ -10,6 +10,8 @@ import { api, APP_PREFIX, errorMessage, isAbortError } from '@/services/api'
 import { containsLog, displayLogTime, logDateBoundary, normalizeLog, plainCoreOutput, type CoreLogLine, type NormalizedLog } from '@/services/logs'
 import { notify } from '@/services/toast'
 import type { LogItem } from '@/types/api'
+
+import { appendLogBatch, isLogBottom, logDisplayLimit, logLineOptions, saveLogDisplayLimit } from '@/services/log-view'
 
 type Policy = { days: number; maxMiB: number }
 type Settings = { history: Policy; core: Policy; saveLevel: string }
@@ -19,11 +21,15 @@ type HistoryPage = Stats & { items?: LogItem[]; nextCursor: string; hasMore: boo
 type CorePage = Stats & { lines: CoreLogLine[]; nextCursor: string; hasMore: boolean }
 const source = ref<'runtime' | 'core'>('runtime'), coreLines = ref<CoreLogLine[]>([])
 const isCore = computed(() => source.value === 'core')
-const items = ref<NormalizedLog[]>([]), query = ref(''), limit = ref(800), level = ref('info'), running = ref(true), wrapLines = ref(false), loading = ref(true), error = ref('')
+type LiveLog = NormalizedLog & { key: number }
+let logSequence = 0
+const keyedLog = (item: LogItem): LiveLog => ({ ...normalizeLog(item), key: ++logSequence })
+const items = shallowRef<LiveLog[]>([]), query = ref(''), limit = logDisplayLimit, level = ref('info'), running = ref(true), wrapLines = ref(false), loading = ref(true), error = ref('')
 const queryDirty = ref(false)
 const historyMode = ref(false), from = ref(''), to = ref(''), cursors = ref<string[]>(['']), pageIndex = ref(0), nextCursor = ref('')
 const settingsOpen = ref(false), status = ref<Status | null>(null), draft = ref<Settings | null>(null), settingsBusy = ref(false), settingsError = ref('')
 const box = ref<HTMLElement | null>(null)
+const following = ref(true)
 const filtered = computed(() => historyMode.value ? items.value : items.value.filter(item => containsLog(item, query.value)))
 const visible = computed(() => historyMode.value ? filtered.value : filtered.value.slice(-limit.value))
 const visibleCore = computed(() => historyMode.value ? coreLines.value : coreLines.value.filter(line => line.message.toLowerCase().includes(query.value.trim().toLowerCase())))
@@ -36,26 +42,33 @@ const summary = computed(() => {
   if (isCore.value) return t(`本页 ${visibleCore.value.length} 行 Core 输出`)
   return t(historyMode.value ? `本页 ${visible.value.length} 条历史日志` : `显示 ${visible.value.length} / ${filtered.value.length} 条 · 最近 ${items.value.length} 条日志中筛选`)
 })
-let stream: EventSource | null = null, controller: AbortController | null = null, settingsController: AbortController | null = null, renderFrame = 0, statusTimer = 0, coreTimer = 0
+let stream: EventSource | null = null, controller: AbortController | null = null, settingsController: AbortController | null = null, renderFrame = 0, batchTimer = 0, statusTimer = 0, coreTimer = 0
 const bytes = (value: number) => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KiB` : `${(value / 1048576).toFixed(2)} MiB`
-function scrollBottom() { cancelAnimationFrame(renderFrame); renderFrame = requestAnimationFrame(() => nextTick(() => { if (box.value) box.value.scrollTop = box.value.scrollHeight })) }
-function stopStream() { stream?.close(); stream = null; window.clearTimeout(coreTimer) }
+let pendingLogs: LiveLog[] = []
+function trackScroll() { if (box.value) following.value = isLogBottom(box.value.scrollTop, box.value.clientHeight, box.value.scrollHeight) }
+function flushLogs() {
+  window.clearTimeout(batchTimer); batchTimer = 0
+  if (!pendingLogs.length) return
+  items.value = appendLogBatch(items.value, pendingLogs, limit.value); pendingLogs = []; scrollBottom()
+}
+function scrollBottom() { if (!following.value) return; cancelAnimationFrame(renderFrame); renderFrame = requestAnimationFrame(() => nextTick(() => { if (box.value && following.value) box.value.scrollTop = box.value.scrollHeight })) }
+function stopStream() { stream?.close(); stream = null; flushLogs(); window.clearTimeout(coreTimer) }
 function startStream() {
   stopStream()
   if (!running.value || historyMode.value) return
   if (isCore.value) { coreTimer = window.setTimeout(() => void load(false, true), 3000); return }
   stream = new EventSource(`${APP_PREFIX}/api/stream/logs?level=${encodeURIComponent(level.value)}`)
   stream.onmessage = event => {
-    try { items.value.push(normalizeLog(JSON.parse(event.data) as LogItem)); if (items.value.length > 2000) items.value.shift(); scrollBottom() }
+    try { pendingLogs = appendLogBatch(pendingLogs, [keyedLog(JSON.parse(event.data) as LogItem)], limit.value); if (!batchTimer) batchTimer = window.setTimeout(flushLogs, 100) }
     catch { /* Keep streaming after malformed events. */ }
   }
 }
 async function load(reset = true, background = false) {
   queryDirty.value = false; stopStream(); controller?.abort(); const request = new AbortController(); controller = request; if (!background) loading.value = true
-  if (reset) { cursors.value = ['']; pageIndex.value = 0 }
+  if (reset) { following.value = true; cursors.value = ['']; pageIndex.value = 0 }
   try {
     if (!isCore.value && historyMode.value && from.value && to.value && from.value > to.value) throw new Error(t('开始日期不能晚于结束日期'))
-    const params = new URLSearchParams({ limit: String(isCore.value || historyMode.value ? limit.value : 2000) })
+    const params = new URLSearchParams({ limit: String(limit.value) })
     if (!isCore.value) params.set('level', level.value)
     if (historyMode.value) {
       params.set('search', query.value); params.set('cursor', cursors.value[pageIndex.value] || '')
@@ -70,7 +83,7 @@ async function load(reset = true, background = false) {
     } else {
       const data = await api<HistoryPage>(`/api/logs/history?${params}`, { signal: request.signal })
       if (controller !== request || request.signal.aborted) return
-      items.value = (data.items || []).map(normalizeLog); nextCursor.value = data.hasMore ? data.nextCursor : ''; error.value = ''
+      items.value = (data.items || []).map(keyedLog); nextCursor.value = data.hasMore ? data.nextCursor : ''; error.value = ''
       if (status.value) status.value.history = data
     }
     startStream(); scrollBottom()
@@ -109,15 +122,16 @@ async function clearCore() {
   catch (cause) { if (!isAbortError(cause)) settingsError.value = errorMessage(cause) }
   finally { settingsBusy.value = false }
 }
+function changeLimit() { saveLogDisplayLimit(limit.value); void load() }
 watch([query, from, to], () => { if (historyMode.value) { queryDirty.value = true; error.value = ''; controller?.abort(); loading.value = false; items.value = []; coreLines.value = []; nextCursor.value = ''; cursors.value = ['']; pageIndex.value = 0 } })
 onMounted(() => { void load(); void readSettings(false); statusTimer = window.setInterval(() => { if (!settingsOpen.value && !settingsBusy.value) void readSettings(false) }, 30000) })
-onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopStream(); cancelAnimationFrame(renderFrame); window.clearInterval(statusTimer) })
+onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopStream(); window.clearTimeout(batchTimer); cancelAnimationFrame(renderFrame); window.clearInterval(statusTimer) })
 </script>
 
 <template>
   <Teleport defer to="#page-actions"><div class="log-tools">
     <div class="log-search-wrap"><Search :size="14" :stroke-width="1.8" aria-hidden="true" /><input v-model="query" type="search" class="log-search" :placeholder="t(historyMode ? '搜索保留的历史日志' : '搜索最近日志')" :aria-label="t('搜索日志')" @keydown.enter="historyMode && load()"></div>
-    <AppSelect v-model.number="limit" class="log-limit-select" :aria-label="t('显示行数')" @change="(isCore || historyMode) && load()" :options="[...([100, 200, 500, 800, 2000]).map((value) => ({ value: value, label: (value) + ' ' + (t('行')) }))]" />
+    <AppSelect v-model.number="limit" class="log-limit-select" :aria-label="t('显示行数')" @change="changeLimit" :options="[...(logLineOptions).map((value) => ({ value: value, label: (value) + ' ' + (t('行')) }))]" />
     <AppSelect v-if="!isCore" v-model="level" class="log-level-select" :aria-label="t('显示级别')" @change="load()" :options="[...(['debug', 'info', 'warning', 'error']).map((value) => ({ value: (value), label: (value) }))]" />
   </div></Teleport>
   <form v-if="historyMode" class="log-history-tools" @submit.prevent="load()">
@@ -146,7 +160,7 @@ onBeforeUnmount(() => { controller?.abort(); settingsController?.abort(); stopSt
     <label class="log-wrap-control"><span>{{ t('自动换行') }}</span><span class="switch quick-switch"><input v-model="wrapLines" type="checkbox"><span /></span></label>
   </div>
   <p v-if="isCore && currentStats?.error" class="error log-storage-error" role="alert">{{ currentStats.error }}</p>
-  <div ref="box" class="logs logs-full persistent-horizontal-scrollbar" :class="{ 'wrap-lines': wrapLines, 'core-output': isCore }"><template v-if="isCore"><div v-for="line in visibleCore" :key="line.key" class="core-log-line"><LogMessage :text="line.message" :query="query" /><span v-if="line.truncated" class="muted"> {{ t('（此行过长，已截断）') }}</span></div></template><template v-else><div v-for="(item, index) in visible" :key="`${index}-${item.time}`" class="log-line" :class="`log-${item.level}`"><span :title="item.time"><HighlightText :text="item.time" :query="query" /></span><span><HighlightText :text="item.level" :query="query" /></span><span><LogMessage :text="item.message" :query="query" /></span></div></template><div v-if="!(isCore ? visibleCore.length : visible.length) && !loading" class="empty">{{ t(error ? '日志读取失败，请重新读取' : queryDirty ? '筛选已更改，请点击查询' : query ? '没有匹配的日志' : isCore ? '暂无托管 Core 输出日志' : '暂无日志') }}</div></div>
+  <div ref="box" @scroll.passive="trackScroll" class="logs logs-full persistent-horizontal-scrollbar" :class="{ 'wrap-lines': wrapLines, 'core-output': isCore }"><template v-if="isCore"><div v-for="line in visibleCore" :key="line.key" class="core-log-line"><LogMessage :text="line.message" :query="query" /><span v-if="line.truncated" class="muted"> {{ t('（此行过长，已截断）') }}</span></div></template><template v-else><div v-for="item in visible" :key="item.key" class="log-line" :class="`log-${item.level}`"><span :title="item.time"><HighlightText :text="item.time" :query="query" /></span><span><HighlightText :text="item.level" :query="query" /></span><span><LogMessage :text="item.message" :query="query" /></span></div></template><div v-if="!(isCore ? visibleCore.length : visible.length) && !loading" class="empty">{{ t(error ? '日志读取失败，请重新读取' : queryDirty ? '筛选已更改，请点击查询' : query ? '没有匹配的日志' : isCore ? '暂无托管 Core 输出日志' : '暂无日志') }}</div></div>
   <SequenceFormDialog :open="settingsOpen" :title="t('日志设置')" compact @close="closeSettings">
     <p class="muted log-policy-help">{{ t('超过保留天数或容量上限时，自动清理最旧日志。保留天数为 0 时不限时间，仍受容量限制。') }}</p>
     <p v-if="settingsError" class="error" role="alert">{{ t(settingsError) }}</p><p v-if="settingsBusy && !draft" class="muted">{{ t('正在读取…') }}</p>
