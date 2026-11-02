@@ -1041,7 +1041,8 @@ func (g *gateway) updateNetworkSettings(w http.ResponseWriter, r *http.Request) 
 			g.syncControllerSettings(r.Context())
 		} else if effective, ok := prepared["effectiveContent"].(string); ok {
 			setStage("3/4 正在应用到 Mihomo…")
-			if err = g.applyConfig(r.Context(), []byte(effective)); err != nil {
+			previous, _ := prepared["previousContent"].(string)
+			if err = g.applyConfig(r.Context(), []byte(effective), []byte(previous)); err != nil {
 				rollback(err, true, false)
 				return
 			}

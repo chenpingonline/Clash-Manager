@@ -434,11 +434,15 @@ func minimum(a, b int) int {
 	}
 	return b
 }
-func (g *gateway) applyConfig(ctx context.Context, raw []byte) error {
-	return applyConfigWithClient(ctx, &mihomo.Client{SettingsFile: g.config.settingsFile}, raw)
+func (g *gateway) applyConfig(ctx context.Context, raw []byte, previous ...[]byte) error {
+	if len(previous) == 0 {
+		saved, _ := os.ReadFile(g.config.managedConfigFile)
+		previous = append(previous, saved)
+	}
+	return applyConfigWithClient(ctx, &mihomo.Client{SettingsFile: g.config.settingsFile}, raw, previous...)
 }
 
-func applyConfigWithClient(ctx context.Context, client *mihomo.Client, raw []byte) error {
+func applyConfigWithClient(ctx context.Context, client *mihomo.Client, raw []byte, previous ...[]byte) error {
 	normalized, err := configyaml.NormalizeTunDNSHijack(raw)
 	if err != nil {
 		return err
@@ -447,8 +451,7 @@ func applyConfigWithClient(ctx context.Context, client *mihomo.Client, raw []byt
 	if _, err := configyaml.TunDNSRequirements(raw); err != nil {
 		return err
 	}
-	body, _ := json.Marshal(map[string]any{"path": "", "payload": string(raw)})
-	return mihomoRequest(ctx, client, http.MethodPut, "/configs?force=true", bytes.NewReader(body), 120*time.Second)
+	return reloadConfigListeners(ctx, client, raw, previous...)
 }
 
 // Preserve the authenticated live endpoint before replacing any config files.
@@ -534,7 +537,7 @@ func restoreRuntimeConfigWithClient(client *mihomo.Client, raw []byte) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	if err := applyConfigWithClient(ctx, client, raw); err != nil {
+	if err := restoreConfigListeners(ctx, client, raw); err != nil {
 		return fmt.Errorf("运行态回滚失败: %w", err)
 	}
 	return nil
@@ -569,7 +572,7 @@ func (g *gateway) saveAndApplyConfig(ctx context.Context, raw []byte) error {
 		return err
 	}
 	applyStarted := time.Now()
-	if err := applyConfigWithClient(ctx, client, raw); err != nil {
+	if err := applyConfigWithClient(ctx, client, raw, previous); err != nil {
 		return err
 	}
 	applyDuration := time.Since(applyStarted).Milliseconds()
@@ -632,6 +635,9 @@ func (g *gateway) syncStartupConfigWithStage(ctx context.Context, raw []byte, st
 	previous, previousErr := os.ReadFile(g.config.managedConfigFile)
 	if previousErr != nil && activeErr == nil {
 		previous = activeRaw
+	}
+	if len(activeRaw) == 0 {
+		activeRaw = previous
 	}
 	var syncResult map[string]any
 	progress("validate", "正在备份并使用 Mihomo 校验配置…")
@@ -705,7 +711,7 @@ func (g *gateway) syncStartupConfigWithStage(ctx context.Context, raw []byte, st
 	} else if activation["method"] == "hot-reload" {
 		progress("apply", "正在应用运行配置…")
 		applyStarted := time.Now()
-		if err := applyConfigWithClient(ctx, client, effective); err != nil {
+		if err := applyConfigWithClient(ctx, client, effective, activeRaw); err != nil {
 			return nil, rollback(fmt.Errorf("应用运行配置失败: %w", err), true)
 		}
 		stages["apply"] = time.Since(applyStarted).Milliseconds()

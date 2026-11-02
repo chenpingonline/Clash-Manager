@@ -108,3 +108,33 @@ func TestCustomListenerRangesAndAddressConflicts(t *testing.T) {
 		t.Fatal("different specific addresses conflict")
 	}
 }
+
+// Issue #21: handwritten listeners omit udp, which Mihomo defaults to true.
+func TestCustomListenerImplicitUDPProfileSwitch(t *testing.T) {
+	for _, protocol := range []string{"mixed", "socks", "tproxy", "shadowsocks", "snell"} {
+		t.Run(protocol, func(t *testing.T) {
+			udp, err := net.ListenPacket("udp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer udp.Close()
+			_, port, _ := net.SplitHostPort(udp.LocalAddr().String())
+			base := "external-controller: 127.0.0.1:9191\n"
+			old := base + "listeners: [{name: handwritten, type: " + protocol + ", listen: 127.0.0.1, port: " + port + "}]\n"
+			next := base + "listeners: [{name: managed, type: mixed, listen: 127.0.0.1, udp: true, port: " + port + "}]\n"
+			if err := validateNetworkPorts(next, old, false); err != nil {
+				t.Fatalf("current Core's implicit UDP rejected: %v", err)
+			}
+			if err := validateNetworkPorts(old, base, false); err == nil || !strings.Contains(err.Error(), "udp") {
+				t.Fatalf("external UDP occupancy not detected: %v", err)
+			}
+			disabled := strings.Replace(old, "port: ", "udp: false, port: ", 1)
+			if err := validateNetworkPorts(next, disabled, false); err == nil {
+				t.Fatal("udp:false incorrectly claims occupied UDP socket")
+			}
+			if err := validateNetworkPorts(next, old, true); err == nil {
+				t.Fatal("offline validation skipped occupied port")
+			}
+		})
+	}
+}

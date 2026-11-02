@@ -141,7 +141,7 @@ func customNetworkListeners(raw string) ([]networkListener, error) {
 			Type   string `yaml:"type"`
 			Listen string `yaml:"listen"`
 			Port   any    `yaml:"port"`
-			UDP    bool   `yaml:"udp"`
+			UDP    *bool  `yaml:"udp"`
 		} `yaml:"listeners"`
 	}
 	if err := yaml.Unmarshal([]byte(raw), &config); err != nil {
@@ -185,7 +185,12 @@ func customNetworkListeners(raw string) ([]networkListener, error) {
 				if !udpOnly {
 					result = append(result, networkListener{"tcp", address, e.Name})
 				}
-				if udpOnly || e.UDP || e.Type == "tproxy" || e.Type == "shadowsocks" {
+				udpDefault := e.Type == "mixed" || e.Type == "socks" || e.Type == "tproxy" || e.Type == "shadowsocks" || e.Type == "snell"
+				udpEnabled := udpDefault
+				if e.UDP != nil {
+					udpEnabled = *e.UDP
+				}
+				if udpOnly || udpEnabled {
 					result = append(result, networkListener{"udp", address, e.Name})
 				}
 			}
