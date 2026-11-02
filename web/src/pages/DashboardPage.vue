@@ -96,6 +96,7 @@ let closeBootstrapStatusStream: (() => void) | null = null
 let profileJobTimer = 0
 let profileJobController: AbortController | null = null
 let stopped = false
+const pageController = new AbortController()
 let coreDownloadCancelRequested = false
 
 const working = computed(() => ['checking', 'downloading', 'canceling', 'installing', 'starting'].includes(status.value?.bootstrap?.state || ''))
@@ -216,13 +217,14 @@ function closeNodeMenuOnOutsidePointer(event: PointerEvent) {
 
 let proxiesPending: Promise<boolean> | null = null
 function loadProxies(): Promise<boolean> {
+  if (stopped) return Promise.resolve(false)
   if (proxiesPending) return proxiesPending
   proxiesPending = fetchProxies().finally(() => { proxiesPending = null })
   return proxiesPending
 }
 async function fetchProxies() {
   try {
-    const data = await api<ProxiesResponse>('/api/proxies')
+    const data = await api<ProxiesResponse>('/api/proxies', { signal: pageController.signal })
     if (stopped) return false
     rawProxies.value = data.proxies || {}
     if (data.delayContext) delayTests.setContext(data.delayContext)
@@ -232,6 +234,7 @@ async function fetchProxies() {
     proxyError.value = ''
     return true
   } catch (cause) {
+    if (stopped || isAbortError(cause)) return false
     proxyError.value = errorMessage(cause)
     return false
   }
@@ -239,10 +242,12 @@ async function fetchProxies() {
 
 async function loadProfiles() {
   try {
-    const data = await api<ProfilesResponse>('/api/profiles')
+    const data = await api<ProfilesResponse>('/api/profiles', { signal: pageController.signal })
+    if (stopped) return
     profiles.value = data.items || []
     profileError.value = ''
   } catch (cause) {
+    if (stopped || isAbortError(cause)) return
     profileError.value = errorMessage(cause)
   }
 }
@@ -298,9 +303,14 @@ async function pollProxies() {
   if (!stopped) proxyPollTimer = window.setTimeout(pollProxies, 3000)
 }
 async function applyNode(groupName: string, name: string) {
-  await api(`/api/proxies/${encodeURIComponent(groupName)}`, jsonRequest('PUT', { name }))
-  if (!await loadProxies()) throw new Error('节点已应用，但读取节点状态失败，请刷新后重试')
+  if (stopped) return false
+  await api(`/api/proxies/${encodeURIComponent(groupName)}`, { ...jsonRequest('PUT', { name }), signal: pageController.signal })
+  if (stopped) return false
+  const verified = await loadProxies()
+  if (stopped) return false
+  if (!verified) throw new Error('节点已应用，但读取节点状态失败，请刷新后重试')
   syncCurrentDelay()
+  return true
 }
 async function loadDashboardDetails(reapplyNode = false) {
   exitReady.value = false
@@ -313,9 +323,10 @@ async function loadDashboardDetails(reapplyNode = false) {
     try {
       // Reapply manual selectors only. PUT on URLTest pins its current node
       // and silently replaces automatic selection with a fixed choice.
-      await applyNode(group.name, group.proxy.now)
+      if (!await applyNode(group.name, group.proxy.now)) return
     } catch (cause) {
-      locationError.value = `重新应用当前节点失败：${errorMessage(cause)}`
+      if (stopped || isAbortError(cause)) return
+      locationError.value = errorMessage(cause)
       notify(locationError.value, true)
       return
     } finally {
@@ -350,6 +361,7 @@ async function load() {
       refreshCoreHealth(),
       (runtime.value.capabilities.hostProxyEnvironment ? api<ProxyEnvironmentResponse>('/api/system/proxy-environment') : Promise.resolve<ProxyEnvironmentResponse>({})).catch(cause => ({ error: errorMessage(cause) })),
     ])
+    if (stopped) return
     status.value = health
     if (!coreModeEdited.value) selectedCoreMode.value = (health.system?.coreMode || health.bootstrap?.mode) === 'external' ? 'external' : 'managed'
     environment.value = proxyEnvironment
@@ -391,6 +403,7 @@ async function refreshRuntime(refreshTraffic = false) {
       (runtime.value.capabilities.hostProxyEnvironment ? api<ProxyEnvironmentResponse>('/api/system/proxy-environment') : Promise.resolve<ProxyEnvironmentResponse>({})),
       runtimeControl.value?.refreshState(),
     ])
+    if (stopped) return
     status.value = health
     if (!coreModeEdited.value) selectedCoreMode.value = (health.system?.coreMode || health.bootstrap?.mode) === 'external' ? 'external' : 'managed'
     environment.value = proxyEnvironment
@@ -459,10 +472,11 @@ async function chooseNode(name: string) {
   if (!group || !name || name === group.proxy.now) return
   nodeSelecting.value = true
   try {
-    await applyNode(group.name, name)
+    if (!await applyNode(group.name, name)) return
     notify(`已切换到 ${name}`)
     await loadExitLocation()
   } catch (cause) {
+    if (stopped || isAbortError(cause)) return
     notify(errorMessage(cause), true)
   } finally {
     nodeSelecting.value = false
@@ -640,6 +654,7 @@ onMounted(() => {
 defineExpose({ refreshPage })
 onBeforeUnmount(() => {
   stopped = true
+  pageController.abort()
   invalidateExitLocation()
   window.clearTimeout(proxyPollTimer)
   dashboardStream?.close()
