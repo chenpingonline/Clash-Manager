@@ -160,7 +160,7 @@ export interface TrafficHistoryResponse {
   samples?: TrafficSample[]
 }
 
-export interface ProfilesResponse { items?: ProfileItem[] }
+export interface ProfilesResponse { defaultUserAgent?: string; items?: ProfileItem[] }
 export type ProfileExtensionKind = 'rules' | 'proxies' | 'groups' | 'override' | 'script'
 
 export interface ExitLocationResponse {

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { t, getLocale } from '@/services/i18n'
 
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import AppSelect from '@/components/AppSelect.vue'
 import AsyncState from '@/components/AsyncState.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import ConfigErrorNotice from '@/components/ConfigErrorNotice.vue'
@@ -15,6 +16,7 @@ import { dismissConfigErrors, notify } from '@/services/toast'
 import type { LocalConfigCandidate, LocalDiscoveryResponse, LocalRuntime, ProfileExtensionKind, ProfileItem, ProfileJob, ProfilesResponse } from '@/types/api'
 
 import { runtime } from '@/services/runtime'
+import { useCoreHealth } from '@/composables/useCoreHealth'
 
 type RemoteForm = { userAgent: string; name: string; url: string; intervalMinutes: number; autoUpdate: boolean; autoApply: boolean }
 const emptyForm = (): RemoteForm => ({ userAgent: '', name: '', url: '', intervalMinutes: 360, autoUpdate: true, autoApply: false })
@@ -29,7 +31,48 @@ function openRuleImport(item?: ProfileItem) {
   ruleImportProfile.value = item || null
   ruleImportOpen.value = true
 }
-const useCustomUserAgent = ref(false)
+const { health, loading: coreHealthLoading, refresh: refreshCoreHealth } = useCoreHealth()
+const vergeFallback = 'clash-verge/v2.5.10'
+const vergeUserAgent = ref(vergeFallback)
+const defaultUserAgent = ref('')
+const customUaEnabled = ref(false)
+const uaSelection = ref('custom')
+const presetUserAgents = computed(() => {
+  const version = [health.value?.version?.version, discovery.value.runtime?.binaryVersion]
+    .map(value => value?.match(/^v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$/)?.[1]).find(Boolean)
+  return [
+    { value: 'mihomo', label: version ? `mihomo/v${version}` : 'mihomo', disabled: !version },
+    { value: 'verge', label: vergeUserAgent.value },
+    { value: 'meta', label: 'clash.meta/alpha' },
+  ]
+})
+const userAgentOptions = computed(() => [
+  ...presetUserAgents.value,
+  { value: 'custom', label: t('自定义') },
+])
+
+watch(modal, async (current, _, onCleanup) => {
+  if (current !== 'remote') return
+  if (!coreHealthLoading.value) void refreshCoreHealth().catch(() => {})
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  const timeout = window.setTimeout(() => controller.abort(), 5000)
+  try {
+    const response = await fetch('https://api.github.com/repos/clash-verge-rev/clash-verge-rev/releases/latest', {
+      signal: controller.signal, cache: 'no-cache', credentials: 'omit', referrerPolicy: 'no-referrer',
+    })
+    if (!response.ok) return
+    const release = await response.json()
+    const version = typeof release.tag_name === 'string' && /^v?(\d+\.\d+\.\d+)$/.exec(release.tag_name)
+    if (version && !release.draft && !release.prerelease && !controller.signal.aborted) {
+      vergeUserAgent.value = `clash-verge/v${version[1]}`
+    }
+  } catch {
+    // Keep the last successful version, or the initial fallback when offline.
+  } finally {
+    window.clearTimeout(timeout)
+  }
+})
 const openEditMenuId = ref('')
 const form = reactive<RemoteForm>(emptyForm()), fileName = ref('本地配置'), selectedFile = ref<File | null>(null)
 const importedPaths = computed(() => new Set(items.value.map(item => item.sourcePath).filter(Boolean)))
@@ -38,7 +81,9 @@ const jobControllers = new Map<string, AbortController>()
 
 function openRemote(item?: ProfileItem) {
   editing.value = item || null
-  useCustomUserAgent.value = Boolean(item?.customUserAgent)
+  const savedUA = item?.customUserAgent || ''
+  customUaEnabled.value = Boolean(savedUA)
+  uaSelection.value = presetUserAgents.value.find(option => !option.disabled && option.label === savedUA)?.value || 'custom'
   Object.assign(form, item ? { userAgent: item.customUserAgent || '', name: item.name, url: item.url || '', intervalMinutes: item.intervalMinutes ?? 360, autoUpdate: Boolean(item.autoUpdate), autoApply: Boolean(item.autoApply) } : emptyForm())
   modal.value = 'remote'
 }
@@ -99,7 +144,7 @@ function runtimeDetail(runtime: LocalRuntime) {
 function runtimeTag(runtime: LocalRuntime) { return runtime.mode === 'managed' ? '托管模式' : runtime.mode === 'external' ? '本机 Core' : '自动检测' }
 
 async function loadProfiles() {
-  try { const data = await api<ProfilesResponse>('/api/profiles'); if (alive) { items.value = data.items || []; error.value = '' } }
+  try { const data = await api<ProfilesResponse>('/api/profiles'); if (alive) { items.value = data.items || []; defaultUserAgent.value = data.defaultUserAgent || ''; error.value = '' } }
   catch (cause) { if (alive) error.value = errorMessage(cause) }
   finally { if (alive) loading.value = false }
 }
@@ -115,7 +160,9 @@ async function saveRemote() {
   if (!Number.isFinite(form.intervalMinutes) || form.intervalMinutes < 5) return notify('更新间隔不能小于 5 分钟', true)
   busyId.value = 'remote'
   try {
-    const payload = { ...form, userAgent: useCustomUserAgent.value ? form.userAgent.trim() : '', name: form.name.trim(), url: form.url.trim() }
+    const selectedUA = uaSelection.value === 'custom' ? form.userAgent.trim()
+      : presetUserAgents.value.find(option => option.value === uaSelection.value && !option.disabled)?.label || ''
+    const payload = { ...form, userAgent: customUaEnabled.value ? selectedUA : '', name: form.name.trim(), url: form.url.trim() }
     await api(editing.value ? `/api/profiles/${editing.value.id}` : '/api/profiles', jsonRequest(editing.value ? 'PATCH' : 'POST', payload))
     notify(editing.value ? '订阅设置已保存' : '订阅已添加'); modal.value = null; await loadProfiles()
   } catch (cause) { notify(errorMessage(cause), true) }
@@ -263,8 +310,45 @@ onBeforeUnmount(() => {
     </div></details>
   </div>
   <div class="card section local-discovery-card"><div class="section-head"><div><h2>{{ t("本机 Mihomo 配置") }}</h2><p>{{ t(runtime.platform === 'linux' ? '读取托管 Mihomo 配置和 APP_IMPORT_PATHS 指定的导入目录' : runtime.platform === 'docker' ? '读取容器内 Mihomo 配置和明确挂载的导入目录' : '自动读取当前 Mihomo 配置；用户文件仅从 fnOS 明确授权的目录读取') }}</p></div><button class="ghost small" @click="scan">{{ t("重新扫描") }}</button></div><AsyncState :loading="localLoading" :error="t(localError)"><div v-if="discovery.error" class="local-warning">{{ t("扫描失败：") }}{{ t(discovery.error) }}</div><div class="local-access-summary" :class="discovery.authorizedPaths?.length ? 'active' : 'warn'"><strong>{{ t(discovery.authorizedPaths?.length ? `已授权 ${discovery.authorizedPaths.length} 个文件夹` : '尚未授权用户文件夹') }}</strong><span v-if="discovery.authorizedPaths?.length"><span v-for="path in discovery.authorizedPaths" :key="path" class="mono">{{ path }}</span></span><span v-else>{{ t(runtime.platform === 'linux' ? '请通过 APP_IMPORT_PATHS 指定 YAML 导入目录；也可以直接上传配置文件。' : runtime.platform === 'docker' ? '请将 YAML 目录挂载到容器，并通过 APP_IMPORT_PATHS 指定；也可以直接上传配置文件。' : '如需从 NAS 共享目录导入 YAML，请到 fnOS「系统设置 → 应用 → Clash for fnos → 访问权限」添加文件夹。') }}</span></div><div class="local-processes"><div v-if="discovery.runtime" class="local-process" :class="{ managed: discovery.runtime.mode === 'managed' && discovery.runtime.running, none: !discovery.runtime.running }"><div class="local-process-dot" :class="{ off: !discovery.runtime.running }" /><div class="local-process-main"><strong>{{ t(runtimeTitle(discovery.runtime)) }}</strong><div class="mono muted local-process-args" :title="runtimeDetail(discovery.runtime)">{{ runtimeDetail(discovery.runtime) }}</div></div><span class="tag">{{ t(runtimeTag(discovery.runtime)) }}</span></div><template v-else><div v-for="process in discovery.processes || []" :key="process.pid" class="local-process"><div class="local-process-dot" /><div class="local-process-main"><strong>PID {{ t(process.pid) }} · {{ process.exe || 'mihomo' }}</strong><div class="mono muted local-process-args">{{ (process.args || []).join(' ') }}</div></div><span class="tag">{{ t(process.containerized ? '容器进程' : '主机进程') }}</span></div><div v-if="!discovery.processes?.length" class="local-process none"><div class="local-process-dot off" /><div><strong>{{ t("未获取到 Mihomo 运行状态") }}</strong><div class="muted">{{ t("仍会继续检查常见 config.yaml 路径") }}</div></div></div></template></div><div v-if="discovery.candidates?.length" class="local-config-list"><div v-for="candidate in discovery.candidates" :key="candidate.path" class="local-config-row"><div class="local-config-icon">Y</div><div class="local-config-main"><div class="local-config-path mono" :title="candidate.path">{{ candidate.path }}</div><div class="local-config-meta"><span>{{ t(candidate.source || '检测') }}</span><span v-if="candidate.namespace === 'process-root'">{{ t("进程根目录") }}</span><span v-if="candidate.size">{{ t(formatBytes(candidate.size)) }}</span><span v-if="candidate.mtime">{{ t(formatTime(candidate.mtime)) }}</span></div></div><div class="local-config-state" :class="candidate.readable ? 'good' : candidate.exists ? 'bad' : 'muted'"><span v-if="importedPaths.has(candidate.path)" class="local-imported">{{ t("已导入") }}</span> {{ t(candidateState(candidate)) }}</div><div class="actions local-config-actions"><template v-if="candidate.readable && candidate.token"><button class="ghost small" :disabled="Boolean(busyId)" @click="importNas(candidate, false)">{{ t("导入") }}</button><button class="success small" :disabled="Boolean(busyId)" @click="importNas(candidate, true)">{{ t("导入并应用") }}</button></template><button v-else class="ghost small" disabled>{{ t(candidateState(candidate)) }}</button></div></div></div></AsyncState></div>
-<BaseModal :open="modal === 'remote'" card-class="remote-profile-modal" :title="t(editing ? '编辑订阅' : '添加远程订阅')" @close="modal = null"><div class="form-grid remote-fields"><div class="field"><label for="profile-remote-name">{{ t("名称") }}</label><input id="profile-remote-name" v-model="form.name" :placeholder="t('例如：机场订阅')"></div><div class="field"><label for="profile-remote-interval">{{ t("更新间隔（分钟）") }}</label><input id="profile-remote-interval" v-model.number="form.intervalMinutes" type="number" min="5"></div><div class="field full"><label for="profile-remote-url">{{ t("订阅 URL") }}</label><input id="profile-remote-url" v-model="form.url" placeholder="https://..."></div><div class="field full profile-checkbox-field"><label class="profile-checkbox-label"><input v-model="useCustomUserAgent" type="checkbox"><span>{{ t('自定义 User-Agent') }}</span></label></div>
-    <div v-if="useCustomUserAgent" class="field full"><label for="profile-remote-ua">User-Agent</label><input id="profile-remote-ua" v-model="form.userAgent" :placeholder="t('留空使用默认值')" spellcheck="false" autocapitalize="none"></div><div class="field profile-checkbox-field"><label class="profile-checkbox-label"><input v-model="form.autoUpdate" type="checkbox"><span>{{ t("自动更新") }}</span></label></div><div class="field profile-checkbox-field"><label class="profile-checkbox-label"><input v-model="form.autoApply" type="checkbox"><span>{{ t("当前配置更新后自动应用") }}</span></label></div></div><div class="actions" style="margin-top:16px"><button class="small" :disabled="busyId === 'remote'" @click="saveRemote">{{ t(busyId === 'remote' ? '处理中…' : editing ? '保存修改' : '添加订阅') }}</button><button class="ghost small" @click="modal = null">{{ t("取消") }}</button></div></BaseModal>
+  <BaseModal :open="modal === 'remote'" card-class="remote-profile-modal" :title="t(editing ? '编辑订阅' : '添加远程订阅')" @close="modal = null">
+    <div class="remote-fields">
+      <label for="profile-remote-name">{{ t("名称") }}</label>
+      <input id="profile-remote-name" v-model="form.name" :placeholder="t('例如：机场订阅')">
+      <label for="profile-remote-interval">{{ t("更新间隔（分钟）") }}</label>
+      <input id="profile-remote-interval" v-model.number="form.intervalMinutes" type="number" min="5">
+      <label for="profile-remote-url">{{ t("订阅 URL") }}</label>
+      <input id="profile-remote-url" v-model="form.url" class="remote-wide" placeholder="https://...">
+      <span class="remote-label">User-Agent</span>
+      <div class="remote-wide remote-check" :title="customUaEnabled ? undefined : defaultUserAgent">
+        <input id="profile-ua-enabled" v-model="customUaEnabled" type="checkbox" :aria-label="t('自定义 User-Agent')">
+        <label for="profile-ua-enabled">{{ t("自定义") }}</label>
+      </div>
+      <template v-if="customUaEnabled">
+        <label for="profile-remote-ua-choice">{{ t("预设") }}</label>
+        <div class="remote-wide remote-ua-controls">
+          <AppSelect id="profile-remote-ua-choice" v-model="uaSelection" :label="t('预设')" :options="userAgentOptions" />
+          <template v-if="uaSelection === 'custom'">
+            <label for="profile-remote-ua">{{ t("自定义值") }}</label>
+            <input id="profile-remote-ua" v-model="form.userAgent" :placeholder="t('留空使用默认值')" spellcheck="false" autocapitalize="none">
+          </template>
+        </div>
+      </template>
+    </div>
+    <div class="remote-options">
+      <div class="remote-check">
+        <input id="profile-auto-update" v-model="form.autoUpdate" type="checkbox">
+        <label for="profile-auto-update">{{ t("自动更新") }}</label>
+      </div>
+      <div class="remote-check">
+        <input id="profile-auto-apply" v-model="form.autoApply" type="checkbox">
+        <label for="profile-auto-apply">{{ t("当前配置更新后自动应用") }}</label>
+      </div>
+    </div>
+    <div class="actions remote-actions">
+      <button class="ghost small" @click="modal = null">{{ t("取消") }}</button>
+      <button class="small" :disabled="busyId === 'remote'" @click="saveRemote">{{ t(busyId === 'remote' ? '处理中…' : editing ? '保存修改' : '添加订阅') }}</button>
+    </div>
+  </BaseModal>
   <BaseModal :open="modal === 'file'" :title="t('从当前电脑导入 YAML')" @close="modal = null"><div class="hint" style="margin-bottom:12px">{{ t("这里选择的是当前浏览器所在电脑上的文件；服务端本机配置请使用页面底部的自动扫描。") }}</div><div class="field"><label for="profile-file-name">{{ t("名称") }}</label><input id="profile-file-name" v-model="fileName"></div><div class="field" style="margin-top:10px"><label for="profile-file-input">{{ t("选择文件") }}</label><input id="profile-file-input" type="file" accept=".yaml,.yml,.txt" @change="selectedFile = ($event.target as HTMLInputElement).files?.[0] || null"></div><div class="actions" style="margin-top:16px"><button :disabled="busyId === 'file'" @click="importFile">{{ t(busyId === 'file' ? '处理中…' : '导入') }}</button><button class="ghost" @click="modal = null">{{ t("取消") }}</button></div></BaseModal>
   <ProfileExtensionEditor :open="Boolean(extensionKind && (extensionGlobal || extensionProfile))" :profile="extensionProfile" :kind="extensionKind" :global="extensionGlobal" @saved="extensionSaved" @close="closeExtension" />
   <RuleImportModal :open="ruleImportOpen" :profile="ruleImportProfile" @close="ruleImportOpen = false" @saved="loadProfiles" />
@@ -273,11 +357,51 @@ onBeforeUnmount(() => {
 <style scoped>
 :global(.modal-card.remote-profile-modal) { padding-top: 18px; }
 :global(.remote-profile-modal > h3) { margin: 0 0 14px; }
-.remote-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 36px; }
-.remote-fields .field:has(> input) { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
-.remote-fields label[for] { font-weight: 600; color: var(--text); }
+.remote-fields {
+  display: grid;
+  grid-template-columns: fit-content(8rem) minmax(0, 1fr) auto minmax(70px, .45fr);
+  align-items: center;
+  gap: 12px 8px;
+}
+.remote-fields > label, .remote-ua-controls > label, .remote-label {
+  text-align: end;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.remote-fields label[for="profile-remote-interval"] { margin-inline-start: 28px; }
 .remote-fields input { min-width: 0; }
+.remote-wide { grid-column: 2 / -1; }
+.remote-ua-controls { display: flex; align-items: center; gap: 8px; }
+.remote-ua-controls > .app-select { width: 148px; max-width: 100%; flex: none; }
+.remote-ua-controls > .app-select:only-child { width: auto; min-width: 175px; }
+.remote-ua-controls > label { flex: none; margin-inline-start: 28px; }
+.remote-ua-controls > input { flex: 1; }
+.remote-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.remote-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.remote-check label, .remote-check input { cursor: pointer; }
+.remote-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  box-shadow: none;
+  accent-color: var(--accent);
+}
+.remote-check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.remote-actions { justify-content: flex-end; margin-top: 18px; }
 @media (max-width: 700px) {
-  .remote-fields { grid-template-columns: minmax(0, 1fr); }
+  .remote-fields { grid-template-columns: fit-content(7rem) minmax(0, 1fr); }
+  .remote-ua-controls { display: contents; }
+  .remote-ua-controls > .app-select, .remote-ua-controls > .app-select:only-child { width: 100%; min-width: 0; }
+  .remote-fields label[for="profile-remote-interval"], .remote-ua-controls > label { margin-inline-start: 0; }
 }
 </style>

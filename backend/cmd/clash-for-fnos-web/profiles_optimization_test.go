@@ -88,6 +88,22 @@ func TestProfileUpdateUsesConditionalRequestAndSkipsUnchangedContent(t *testing.
 	}
 }
 
+func TestDefaultUAUpgradeDownloadsFreshProfile(t *testing.T) {
+	t.Parallel()
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.UserAgent() != "clash-verge/v2.5.10" || r.Header.Get("If-None-Match") != "" || r.Header.Get("If-Modified-Since") != "" {
+			t.Errorf("unexpected upgraded request headers: %v", r.Header)
+		}
+		_, _ = io.WriteString(w, "mode: rule")
+	}))
+	defer remote.Close()
+	item := &profile{URL: remote.URL, ETag: `"old"`, LastModified: time.Unix(0, 0).UTC().Format(http.TimeFormat), LastDownload: map[string]any{"userAgent": "clash-verge/v2.4.3"}}
+	body, _, _, _, _, err := (&gateway{}).downloadProfile(t.Context(), item)
+	if err != nil || string(body) != "mode: rule" {
+		t.Fatalf("upgraded download: %q, %v", body, err)
+	}
+}
+
 func TestManualProfileUpdateDoesNotImplicitlyApply(t *testing.T) {
 	t.Parallel()
 	var requests atomic.Int32

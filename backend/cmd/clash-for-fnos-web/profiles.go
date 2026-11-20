@@ -24,7 +24,7 @@ import (
 
 const (
 	maxProfileSize        = 12 << 20
-	defaultSubscriptionUA = "clash-verge/v2.4.3"
+	defaultSubscriptionUA = "clash-verge/v2.5.10"
 )
 
 type profile struct {
@@ -197,7 +197,7 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 		for _, item := range state.Items {
 			items = append(items, publicProfile(item, state.Current))
 		}
-		writeJSON(w, 200, map[string]any{"current": state.Current, "items": items})
+		writeJSON(w, 200, map[string]any{"current": state.Current, "items": items, "defaultUserAgent": defaultSubscriptionUA})
 		return true
 	}
 	if requestPath == "/api/profiles" && r.Method == http.MethodPost {
@@ -644,11 +644,14 @@ func (g *gateway) downloadProfile(ctx context.Context, item *profile) ([]byte, m
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	ua := item.effectiveUserAgent()
 	req.Header.Set("User-Agent", ua)
-	if item.ETag != "" {
-		req.Header.Set("If-None-Match", item.ETag)
-	}
-	if item.LastModified != "" {
-		req.Header.Set("If-Modified-Since", item.LastModified)
+	// Subscription servers may return different representations for different UAs.
+	if previousUA, _ := item.LastDownload["userAgent"].(string); previousUA == ua {
+		if item.ETag != "" {
+			req.Header.Set("If-None-Match", item.ETag)
+		}
+		if item.LastModified != "" {
+			req.Header.Set("If-Modified-Since", item.LastModified)
+		}
 	}
 	started := time.Now()
 	response, err := client.Do(req)
