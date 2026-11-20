@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onUnmounted, ref, shallowRef, useA
 import { Check, ChevronDown } from 'lucide-vue-next'
 import { nextSelectIndex, searchSelectIndex, type SelectOption } from '@/services/select-options'
 
-const props = withDefaults(defineProps<{ modelValue: T; options: SelectOption[]; disabled?: boolean; placeholder?: string; label?: string; modelModifiers?: { number?: boolean } }>(), { disabled: false, placeholder: '', label: '' })
+const props = withDefaults(defineProps<{ modelValue: T; options: SelectOption[]; singleLine?: boolean; disabled?: boolean; placeholder?: string; label?: string; modelModifiers?: { number?: boolean } }>(), { disabled: false, placeholder: '', label: '' })
 // The root is a fragment (button + teleported panel), so inherited attributes never
 // reach the trigger; read them explicitly and expose the label on the combobox.
 defineOptions({ inheritAttrs: false })
@@ -48,7 +48,18 @@ async function show(direction: 1 | -1 = 1) {
   const width = Math.min(Math.max(rect.width, 150), window.innerWidth - 16)
   const below = window.innerHeight - rect.bottom - 14, above = rect.top - 14
   const useBelow = below >= Math.min(280, props.options.length * 32 + 10) || below >= above
-  position.value = { left: `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`, width: `${width}px`, maxHeight: `${Math.max(40, Math.min(320, useBelow ? below : above))}px`, ...(useBelow ? { top: `${rect.bottom + 6}px` } : { bottom: `${window.innerHeight - rect.top + 6}px` }) }
+  const horizontal: Record<string, string> = {}
+  if (props.singleLine) {
+    const alignLeft = rect.left < window.innerWidth / 2
+    const inset = Math.max(8, alignLeft ? rect.left : window.innerWidth - rect.right)
+    horizontal[alignLeft ? 'left' : 'right'] = `${inset}px`
+    horizontal.width = 'max-content'
+    horizontal.maxWidth = `${window.innerWidth - inset - 8}px`
+  } else {
+    horizontal.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`
+    horizontal.width = `${width}px`
+  }
+  position.value = { ...horizontal, maxHeight: `${Math.max(40, Math.min(320, useBelow ? below : above))}px`, ...(useBelow ? { top: `${rect.bottom + 6}px` } : { bottom: `${window.innerHeight - rect.top + 6}px` }) }
   const selectedIndex = props.options.findIndex(option => option.value === props.modelValue && !option.disabled)
   active.value = selectedIndex >= 0 ? selectedIndex : nextSelectIndex(props.options, direction === 1 ? -1 : 0, direction)
   open.value = true
@@ -108,7 +119,7 @@ onUnmounted(() => portalTarget.value?.remove())
   <button ref="trigger" type="button" class="app-select" v-bind="forwarded" role="combobox" :disabled="disabled" aria-haspopup="listbox" :aria-expanded="open" :aria-controls="open ? id : undefined" :aria-activedescendant="open && active >= 0 ? `${id}-${active}` : undefined" :title="String(selected?.label ?? placeholder)" @click.stop="open ? close() : show()" @keydown="keyboard" @blur="close">
     <span class="app-select-value">{{ selected?.label ?? placeholder }}</span><ChevronDown :size="14" :stroke-width="1.8" aria-hidden="true" />
     <Teleport v-if="open && portalTarget" :to="portalTarget">
-      <div :id="id" ref="panel" class="app-select-menu" role="listbox" :aria-label="accessibleLabel" :style="position" @pointerdown.prevent @click.stop>
+      <div :id="id" ref="panel" class="app-select-menu" :class="{ 'single-line': singleLine }" role="listbox" :aria-label="accessibleLabel" :style="position" @pointerdown.prevent @click.stop>
         <button v-for="(option, index) in options" :id="`${id}-${index}`" :key="`${typeof option.value}:${option.value}`" type="button" role="option" :aria-selected="modelValue === option.value" :aria-disabled="option.disabled || undefined" :disabled="option.disabled" :class="{ active: active === index }" tabindex="-1" @pointermove="!option.disabled && (active = index)" @click.stop="choose(index)">
           <span>{{ option.label }}</span><Check v-if="modelValue === option.value" :size="14" aria-hidden="true" />
         </button>
@@ -126,6 +137,8 @@ onUnmounted(() => portalTarget.value?.remove())
 .app-select-menu { position: fixed; z-index: 1100; overflow-y: auto; overscroll-behavior: contain; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
 .app-select-menu button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); font-size: 12px; font-weight: 400; text-align: left; }
 .app-select-menu button > span { min-width: 0; overflow-wrap: anywhere; }
+.app-select-menu.single-line button { justify-content: flex-start; }
+.app-select-menu.single-line button > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .app-select-menu button > svg { flex: none; }
 .app-select-menu button.active { background: var(--accent-soft); color: var(--accent-ink); }
 </style>

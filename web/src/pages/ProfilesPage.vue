@@ -33,20 +33,18 @@ function openRuleImport(item?: ProfileItem) {
 }
 const { health, loading: coreHealthLoading, refresh: refreshCoreHealth } = useCoreHealth()
 const vergeFallback = 'clash-verge/v2.5.10'
-const vergeUserAgent = ref(vergeFallback)
-const defaultUserAgent = ref('')
-const customUaEnabled = ref(false)
-const uaSelection = ref('custom')
+const defaultUserAgent = ref(vergeFallback)
+const uaSelection = ref('default')
 const presetUserAgents = computed(() => {
   const version = [health.value?.version?.version, discovery.value.runtime?.binaryVersion]
     .map(value => value?.match(/^v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$/)?.[1]).find(Boolean)
   return [
-    { value: 'mihomo', label: version ? `mihomo/v${version}` : 'mihomo', disabled: !version },
-    { value: 'verge', label: vergeUserAgent.value },
-    { value: 'meta', label: 'clash.meta/alpha' },
-  ]
+    { value: version ? `mihomo/v${version}` : 'mihomo', disabled: !version },
+    { value: 'clash.meta/alpha' },
+  ].map(option => ({ ...option, label: option.value }))
 })
 const userAgentOptions = computed(() => [
+  { value: 'default', label: [t('默认'), defaultUserAgent.value].filter(Boolean).join(' · ') },
   ...presetUserAgents.value,
   { value: 'custom', label: t('自定义') },
 ])
@@ -56,21 +54,11 @@ watch(modal, async (current, _, onCleanup) => {
   if (!coreHealthLoading.value) void refreshCoreHealth().catch(() => {})
   const controller = new AbortController()
   onCleanup(() => controller.abort())
-  const timeout = window.setTimeout(() => controller.abort(), 5000)
   try {
-    const response = await fetch('https://api.github.com/repos/clash-verge-rev/clash-verge-rev/releases/latest', {
-      signal: controller.signal, cache: 'no-cache', credentials: 'omit', referrerPolicy: 'no-referrer',
-    })
-    if (!response.ok) return
-    const release = await response.json()
-    const version = typeof release.tag_name === 'string' && /^v?(\d+\.\d+\.\d+)$/.exec(release.tag_name)
-    if (version && !release.draft && !release.prerelease && !controller.signal.aborted) {
-      vergeUserAgent.value = `clash-verge/v${version[1]}`
-    }
+    const data = await api<{ userAgent: string }>('/api/profiles/default-user-agent', { signal: controller.signal })
+    if (!controller.signal.aborted && data.userAgent) defaultUserAgent.value = data.userAgent
   } catch {
-    // Keep the last successful version, or the initial fallback when offline.
-  } finally {
-    window.clearTimeout(timeout)
+    // Keep the last known default when the gateway is unavailable.
   }
 })
 const openEditMenuId = ref('')
@@ -79,11 +67,19 @@ const importedPaths = computed(() => new Set(items.value.map(item => item.source
 let alive = true
 const jobControllers = new Map<string, AbortController>()
 
+// Preserve a selected literal if a background refresh replaces its preset.
+watch(presetUserAgents, options => {
+  const selected = uaSelection.value
+  if (selected === 'default' || selected === 'custom' || options.some(option => option.value === selected)) return
+  form.userAgent = selected
+  uaSelection.value = 'custom'
+})
+
 function openRemote(item?: ProfileItem) {
   editing.value = item || null
   const savedUA = item?.customUserAgent || ''
-  customUaEnabled.value = Boolean(savedUA)
-  uaSelection.value = presetUserAgents.value.find(option => !option.disabled && option.label === savedUA)?.value || 'custom'
+  const isPreset = presetUserAgents.value.some(option => !option.disabled && option.value === savedUA)
+  uaSelection.value = isPreset ? savedUA : (savedUA ? 'custom' : 'default')
   Object.assign(form, item ? { userAgent: item.customUserAgent || '', name: item.name, url: item.url || '', intervalMinutes: item.intervalMinutes ?? 360, autoUpdate: Boolean(item.autoUpdate), autoApply: Boolean(item.autoApply) } : emptyForm())
   modal.value = 'remote'
 }
@@ -144,7 +140,7 @@ function runtimeDetail(runtime: LocalRuntime) {
 function runtimeTag(runtime: LocalRuntime) { return runtime.mode === 'managed' ? '托管模式' : runtime.mode === 'external' ? '本机 Core' : '自动检测' }
 
 async function loadProfiles() {
-  try { const data = await api<ProfilesResponse>('/api/profiles'); if (alive) { items.value = data.items || []; defaultUserAgent.value = data.defaultUserAgent || ''; error.value = '' } }
+  try { const data = await api<ProfilesResponse>('/api/profiles'); if (alive) { items.value = data.items || []; error.value = '' } }
   catch (cause) { if (alive) error.value = errorMessage(cause) }
   finally { if (alive) loading.value = false }
 }
@@ -161,8 +157,8 @@ async function saveRemote() {
   busyId.value = 'remote'
   try {
     const selectedUA = uaSelection.value === 'custom' ? form.userAgent.trim()
-      : presetUserAgents.value.find(option => option.value === uaSelection.value && !option.disabled)?.label || ''
-    const payload = { ...form, userAgent: customUaEnabled.value ? selectedUA : '', name: form.name.trim(), url: form.url.trim() }
+      : uaSelection.value === 'default' ? '' : uaSelection.value
+    const payload = { ...form, userAgent: selectedUA, name: form.name.trim(), url: form.url.trim() }
     await api(editing.value ? `/api/profiles/${editing.value.id}` : '/api/profiles', jsonRequest(editing.value ? 'PATCH' : 'POST', payload))
     notify(editing.value ? '订阅设置已保存' : '订阅已添加'); modal.value = null; await loadProfiles()
   } catch (cause) { notify(errorMessage(cause), true) }
@@ -318,21 +314,14 @@ onBeforeUnmount(() => {
       <input id="profile-remote-interval" v-model.number="form.intervalMinutes" type="number" min="5">
       <label for="profile-remote-url">{{ t("订阅 URL") }}</label>
       <input id="profile-remote-url" v-model="form.url" class="remote-wide" placeholder="https://...">
-      <span class="remote-label">User-Agent</span>
-      <div class="remote-wide remote-check" :title="customUaEnabled ? undefined : defaultUserAgent">
-        <input id="profile-ua-enabled" v-model="customUaEnabled" type="checkbox" :aria-label="t('自定义 User-Agent')">
-        <label for="profile-ua-enabled">{{ t("自定义") }}</label>
+      <label for="profile-remote-ua-choice">User-Agent</label>
+      <div class="remote-wide remote-ua-controls">
+        <AppSelect id="profile-remote-ua-choice" v-model="uaSelection" label="User-Agent" single-line :options="userAgentOptions" />
+        <template v-if="uaSelection === 'custom'">
+          <label for="profile-remote-ua">{{ t("自定义值") }}</label>
+          <input id="profile-remote-ua" v-model="form.userAgent" :placeholder="t('留空使用默认值')" spellcheck="false" autocapitalize="none">
+        </template>
       </div>
-      <template v-if="customUaEnabled">
-        <label for="profile-remote-ua-choice">{{ t("预设") }}</label>
-        <div class="remote-wide remote-ua-controls">
-          <AppSelect id="profile-remote-ua-choice" v-model="uaSelection" :label="t('预设')" :options="userAgentOptions" />
-          <template v-if="uaSelection === 'custom'">
-            <label for="profile-remote-ua">{{ t("自定义值") }}</label>
-            <input id="profile-remote-ua" v-model="form.userAgent" :placeholder="t('留空使用默认值')" spellcheck="false" autocapitalize="none">
-          </template>
-        </div>
-      </template>
     </div>
     <div class="remote-options">
       <div class="remote-check">
@@ -363,7 +352,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px 8px;
 }
-.remote-fields > label, .remote-ua-controls > label, .remote-label {
+.remote-fields > label, .remote-ua-controls > label {
   text-align: end;
   color: var(--text);
   font-size: 13px;

@@ -80,6 +80,7 @@ type gateway struct {
 	ruleProviderMu     sync.Mutex
 	configMu           sync.Mutex
 	networkMu          sync.Mutex
+	vergeRelease       vergeReleaseCache
 	profileMu          sync.Mutex
 	ruleImportPreviews map[string]*ruleImportPreview
 	jobMu              sync.Mutex
@@ -164,6 +165,7 @@ func newGateway(cfg config) *gateway {
 	}
 	return &gateway{
 		config:             cfg,
+		vergeRelease:       vergeReleaseCache{url: vergeReleaseURL},
 		logs:               logs,
 		settings:           &appsettings.Store{File: cfg.settingsFile},
 		profileJobs:        make(map[string]*profileJob),

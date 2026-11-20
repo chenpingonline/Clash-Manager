@@ -112,6 +112,11 @@ func (g *gateway) readProfiles() (profileState, error) {
 	if err := json.Unmarshal(body, &state); err != nil {
 		return state, err
 	}
+	for _, item := range state.Items {
+		if item != nil {
+			item.UserAgent = subscriptionOverride(item.UserAgent)
+		}
+	}
 	if state.Items == nil {
 		state.Items = []*profile{}
 	}
@@ -126,21 +131,18 @@ func (g *gateway) writeProfiles(state profileState) error {
 	return writeAtomicFile(g.config.profilesFile, body)
 }
 
-func (item *profile) effectiveUserAgent() string {
-	if item.UserAgent != "" {
-		return item.UserAgent
-	}
-	return defaultSubscriptionUA
-}
-
 func validSubscriptionUA(value string) bool {
 	return !strings.ContainsFunc(value, func(r rune) bool { return r < 32 || r == 127 })
 }
 
-func publicProfile(item *profile, current *string) map[string]any {
+func (g *gateway) publicProfile(item *profile, current *string) map[string]any {
 	typeName := item.Type
 	if typeName == "" {
 		typeName = "remote"
+	}
+	ua := item.UserAgent
+	if ua == "" {
+		ua = g.vergeRelease.current()
 	}
 	isCurrent := current != nil && *current == item.ID
 	return map[string]any{
@@ -149,7 +151,7 @@ func publicProfile(item *profile, current *string) map[string]any {
 		"autoApply": item.AutoApply, "intervalMinutes": item.IntervalMinutes,
 		"updatedAt": nullableValue(item.UpdatedAt), "lastError": nullableValue(item.LastError),
 		"subscriptionInfo": nullableMap(item.SubscriptionInfo), "profileWebPageUrl": nullableValue(item.ProfileWebPageURL),
-		"userAgent": item.effectiveUserAgent(), "customUserAgent": item.UserAgent, "lastDownload": nullableMap(item.LastDownload), "current": isCurrent,
+		"userAgent": ua, "customUserAgent": item.UserAgent, "lastDownload": nullableMap(item.LastDownload), "current": isCurrent,
 	}
 }
 
@@ -182,6 +184,10 @@ func findProfile(state *profileState, id string) *profile {
 }
 
 func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requestPath string) bool {
+	if requestPath == "/api/profiles/default-user-agent" && r.Method == http.MethodGet {
+		writeJSON(w, 200, map[string]string{"userAgent": g.vergeRelease.resolve(r.Context())})
+		return true
+	}
 	if strings.HasPrefix(requestPath, "/api/local-config/") {
 		return g.handleLocalConfigAPI(w, r, requestPath)
 	}
@@ -195,9 +201,9 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 		}
 		items := make([]map[string]any, 0, len(state.Items))
 		for _, item := range state.Items {
-			items = append(items, publicProfile(item, state.Current))
+			items = append(items, g.publicProfile(item, state.Current))
 		}
-		writeJSON(w, 200, map[string]any{"current": state.Current, "items": items, "defaultUserAgent": defaultSubscriptionUA})
+		writeJSON(w, 200, map[string]any{"current": state.Current, "items": items, "defaultUserAgent": g.vergeRelease.current()})
 		return true
 	}
 	if requestPath == "/api/profiles" && r.Method == http.MethodPost {
@@ -224,7 +230,7 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 			writeJSON(w, 400, map[string]string{"error": "User-Agent 必须是单行文本"})
 			return true
 		}
-		item := &profile{ID: newHexID(6), Name: body.Name, URL: body.URL, UserAgent: strings.TrimSpace(body.UserAgent), Type: "remote", AutoUpdate: body.AutoUpdate == nil || *body.AutoUpdate, AutoApply: body.AutoApply, IntervalMinutes: body.IntervalMinutes}
+		item := &profile{ID: newHexID(6), Name: body.Name, URL: body.URL, UserAgent: subscriptionOverride(body.UserAgent), Type: "remote", AutoUpdate: body.AutoUpdate == nil || *body.AutoUpdate, AutoApply: body.AutoApply, IntervalMinutes: body.IntervalMinutes}
 		if item.IntervalMinutes == 0 {
 			item.IntervalMinutes = 360
 		}
@@ -241,7 +247,7 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 			item.LastError = err.Error()
 			_ = g.writeProfiles(state)
 		}
-		response := publicProfile(item, state.Current)
+		response := g.publicProfile(item, state.Current)
 		g.profileMu.Unlock()
 		writeJSON(w, 201, response)
 		return true
@@ -273,7 +279,7 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 		if err != nil {
 			writeJSON(w, 500, map[string]string{"error": err.Error()})
 		} else {
-			writeJSON(w, 201, publicProfile(item, state.Current))
+			writeJSON(w, 201, g.publicProfile(item, state.Current))
 		}
 		return true
 	}
@@ -347,7 +353,7 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 		}
 		var system map[string]any
 		system, err = g.activateProfileLocked(r.Context(), &state, item, true, nil)
-		response := publicProfile(item, state.Current)
+		response := g.publicProfile(item, state.Current)
 		g.profileMu.Unlock()
 		if err != nil {
 			writeJSON(w, 502, map[string]string{"error": err.Error()})
@@ -393,9 +399,9 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 				writeJSON(w, 400, map[string]string{"error": "User-Agent 必须是单行文本"})
 				return true
 			}
-			previous := item.effectiveUserAgent()
-			item.UserAgent = strings.TrimSpace(value)
-			if previous != item.effectiveUserAgent() {
+			previous := item.UserAgent
+			item.UserAgent = subscriptionOverride(value)
+			if previous != item.UserAgent {
 				item.ETag, item.LastModified = "", ""
 			}
 		}
@@ -414,7 +420,7 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 		if err := g.writeProfiles(state); err != nil {
 			writeJSON(w, 500, map[string]string{"error": err.Error()})
 		} else {
-			writeJSON(w, 200, publicProfile(item, state.Current))
+			writeJSON(w, 200, g.publicProfile(item, state.Current))
 		}
 		return true
 	}
@@ -642,7 +648,10 @@ func (g *gateway) downloadProfile(ctx context.Context, item *profile) ([]byte, m
 		return nil
 	}}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	ua := item.effectiveUserAgent()
+	ua := subscriptionOverride(item.UserAgent)
+	if ua == "" {
+		ua = g.vergeRelease.resolve(ctx)
+	}
 	req.Header.Set("User-Agent", ua)
 	// Subscription servers may return different representations for different UAs.
 	if previousUA, _ := item.LastDownload["userAgent"].(string); previousUA == ua {
@@ -1399,7 +1408,7 @@ func (g *gateway) handleLocalConfigAPI(w http.ResponseWriter, r *http.Request, r
 	if err != nil {
 		writeJSON(w, 502, map[string]string{"error": err.Error()})
 	} else {
-		writeJSON(w, 200, map[string]any{"item": publicProfile(item, state.Current), "applied": body.Apply, "sourcePath": candidate.Path})
+		writeJSON(w, 200, map[string]any{"item": g.publicProfile(item, state.Current), "applied": body.Apply, "sourcePath": candidate.Path})
 	}
 	return true
 }

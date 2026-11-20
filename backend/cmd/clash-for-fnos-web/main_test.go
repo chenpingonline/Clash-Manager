@@ -168,6 +168,7 @@ func TestRemoteProfileDownloadUsesExpectedContract(t *testing.T) {
 	defer remote.Close()
 	root := t.TempDir()
 	handler := newGateway(config{publicDir: root, gateway: "/app/clash-for-fnos", profilesFile: filepath.Join(root, "profiles.json"), profileDir: filepath.Join(root, "profiles")})
+	handler.vergeRelease.url = ""
 	recorder := httptest.NewRecorder()
 	payload := fmt.Sprintf(`{"Name":"远程订阅","URL":%q}`, remote.URL)
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/app/clash-for-fnos/api/profiles", strings.NewReader(payload)))
@@ -188,6 +189,7 @@ func TestScheduledProfileUpdateAfterUserAgentChange(t *testing.T) {
 	defer remote.Close()
 	root := t.TempDir()
 	g := newGateway(config{profilesFile: filepath.Join(root, "profiles.json"), profileDir: filepath.Join(root, "profiles")})
+	g.vergeRelease.url = ""
 	create := httptest.NewRecorder()
 	g.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/api/profiles", strings.NewReader(fmt.Sprintf(`{"name":"fixture","url":%q}`, remote.URL))))
 	if create.Code != http.StatusCreated {
