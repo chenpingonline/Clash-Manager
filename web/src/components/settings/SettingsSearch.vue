@@ -55,7 +55,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 <style scoped>
 .settings-search { position: relative; width: clamp(170px, 24vw, 320px); max-width: 100%; }
 .settings-search-control { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--control-bg); color: var(--muted); }
-.settings-search-control:focus-within { border-color: var(--accent); }
+.settings-search-control:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
 .settings-search-control > svg { flex: none; }
 .settings-search-control input { flex: 1; min-width: 0; width: 100%; min-height: 0; height: 30px; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 13px; outline: none; box-shadow: none; }
 .settings-search-control input:focus, .settings-search-control input:focus-visible { outline: none; box-shadow: none; }

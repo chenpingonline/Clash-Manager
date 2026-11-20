@@ -26,6 +26,7 @@ function storedGroupSorts() {
 }
 
 const loading = ref(true), error = ref(''), query = ref('')
+const searchInput = ref<HTMLInputElement | null>(null)
 const groups = ref<ProxyGroup[]>([])
 const expanded = reactive(new Set<string>())
 const delayTests = useDelayTests()
@@ -218,9 +219,9 @@ onMounted(() => { void delayTests.restore(); void load() })
 <template>
   <Teleport defer to="#page-actions">
     <div class="proxy-topbar-tools">
-      <div class="proxy-search">
+      <div class="proxy-search" @click="searchInput?.focus()">
         <Search :size="14" :stroke-width="1.8" aria-hidden="true" />
-        <input v-model="query" :placeholder="t('搜索代理组或节点')" :aria-label="t('搜索代理组或节点')" autocomplete="off">
+        <input ref="searchInput" v-model="query" :placeholder="t('搜索代理组或节点')" :aria-label="t('搜索代理组或节点')" autocomplete="off">
         <button v-if="query" type="button" class="search-clear" :aria-label="t('清空搜索')" @click="query = ''">×</button>
       </div>
       <span class="search-result">{{ t(query ? `${filtered.length} 组 · ${visibleNodeCount} 个节点` : '') }}</span>

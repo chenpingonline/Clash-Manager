@@ -58,6 +58,7 @@ html[data-theme="light"] .topbar { background: var(--panel); }
 .topbar .log-search-wrap { height: 32px; min-height: 32px; border-radius: 8px; }
 .topbar .proxy-search input,
 .topbar .rule-search input { height: 28px; min-height: 28px; border: 0; background: transparent; box-shadow: none; }
+.topbar .page-actions :is(.proxy-search,.rule-search) > input { flex: 1 1 auto; min-width: 0; height: 100%; min-height: 0; border-radius: 0; }
 .topbar :is(.proxy-search,.rule-search) { background: var(--panel2); border-color: var(--line); }
 .topbar .config-search,.topbar .log-search { background: var(--panel2); }
 .topbar .proxy-search:focus-within,.topbar .rule-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
@@ -69,7 +70,7 @@ html[data-theme="light"] .topbar { background: var(--panel); }
 .log-search-wrap { position: relative; width: 190px; min-width: 120px; flex: 1 1 150px; }
 .log-search-wrap .log-search { width: 100%; min-width: 0; }
 .config-tools,.log-tools,.rule-topbar-tools { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
-.topbar :is(.proxy-topbar-tools,.config-tools,.log-tools,.rule-topbar-tools) { overflow-y: hidden; }
+.topbar :is(.proxy-topbar-tools,.config-tools,.log-tools,.rule-topbar-tools) { overflow-y: hidden; padding: 3px; }
 .topbar :is(.proxy-topbar-tools,.config-tools,.log-tools,.rule-topbar-tools)::-webkit-scrollbar { display: block; height: 3px; }
 .topbar :is(.proxy-topbar-tools,.config-tools,.log-tools,.rule-topbar-tools)::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--line); }
 .proxy-topbar-tools { width: 100%; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
@@ -226,7 +227,7 @@ html[data-theme="light"] .modal { background: rgb(31 49 78 / 20%); }
 html, body { font-size: 14px; }
 body { color: var(--text); -webkit-font-smoothing: antialiased; }
 button, input, textarea, .app-select { font-size: var(--text-base); }
-:where(button, a, input, textarea, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:where(button, a, [tabindex]:not(input, textarea)):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .profile-edit-popover button:focus-visible,
 .help-popover-trigger:focus-visible,
 .dashboard-node-trigger:focus-visible,
@@ -260,6 +261,7 @@ nav { gap: 2px; overflow-y: auto; }
 .topbar .language-select .app-select { height: 34px; min-height: 34px; border-radius: var(--radius-control); font-size: var(--text-sm); }
 .topbar .proxy-search, .topbar .rule-search, .topbar .config-search-wrap, .topbar .log-search-wrap { height: 34px; min-height: 34px; border-radius: var(--radius-control); }
 .content { padding: 20px 24px 40px; }
+.content.dashboard-content { padding-top: 18px; }
 .content.config-content, .content.logs-content, .content.rules-content { padding-top: 16px; }
 
 /* --- controls ----------------------------------------------------------- */
@@ -272,8 +274,13 @@ button, .btn { border-radius: var(--radius-control); padding: 8px 13px; font-siz
 .iconbtn { border-radius: var(--radius-sm); color: var(--muted); }
 
 input, .input, .app-select, textarea { min-height: 36px; padding: 8px 11px; border-radius: var(--radius-control); background: var(--control-bg); border: 1px solid var(--line); font-size: var(--text-base); }
-input:hover:not(:disabled), .app-select:hover:not(:disabled) { border-color: var(--line-strong); }
-input:focus, .app-select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
+input:hover:not(:disabled, :focus), .app-select:hover:not(:disabled, :focus) { border-color: var(--line-strong); }
+input:focus, .app-select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
+/* Native checkboxes use their own dimensions and keyboard focus outline. */
+input[type="checkbox"] { min-height: 0; }
+input[type="checkbox"]:focus { box-shadow: none; }
+label:has(> input[type="checkbox"]):not(.switch) { pointer-events: none; }
+label:not(.switch) > input[type="checkbox"] { pointer-events: auto; }
 .app-select { min-height: 36px; height: 36px; font-weight: 500; }
 .app-select-menu { border-radius: var(--radius-tile); padding: 5px; box-shadow: var(--shadow-pop); z-index: var(--z-popover); }
 .app-select-menu button { border-radius: var(--radius-xs); padding: 8px 9px; font-size: var(--text-base); }
@@ -374,8 +381,8 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
 .proxy-chevron, .proxy-head-actions .proxy-chevron { width: 34px; height: 34px; min-height: 34px; border-radius: var(--radius-control); color: var(--text-3); }
 .proxy-body, html[data-theme="light"] .proxy-body { padding: 14px; background: var(--panel2); }
 .proxy-group-filter { gap: 10px; margin-bottom: 12px; }
-.proxy-filter-search, html[data-theme="light"] .proxy-filter-search { min-height: 34px; border-radius: var(--radius-control); background: var(--control-bg); font-size: var(--text-sm); }
-.proxy-filter-search input { font-size: var(--text-sm); }
+.proxy-filter-search, html[data-theme="light"] .proxy-filter-search { height: 30px; border-radius: var(--radius-control); background: var(--control-bg); font-size: var(--text-sm); }
+.proxy-filter-search input { height: 100%; min-height: 0; font-size: var(--text-sm); }
 .proxy-timeout-toggle, .proxy-group-filter>span { font-size: var(--text-sm); }
 .node-list { gap: 8px; }
 .node-row, html[data-theme="light"] .node-row { height: 48px; border-radius: var(--radius-tile); background: var(--panel); border-color: var(--line); }
@@ -580,6 +587,7 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
   .sidebar-footer>div:last-child { display: none; }
   .topbar { height: auto; min-height: 56px; padding: 10px 16px; flex-wrap: wrap; }
   .content { padding: 14px 16px 28px; }
+  .content.dashboard-content { padding-top: 14px; }
   .log-summary { flex-wrap: wrap; padding: 10px 16px; }
   .log-secondary-actions { margin-left: 0; padding-left: 0; border-left: 0; flex-wrap: wrap; }
   .local-discovery-card .section-head > div { min-width: 0; }

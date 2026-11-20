@@ -1001,9 +1001,7 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshLogDisplayOnFoc
 
 
 .settings-home :deep(.setting-search-highlight) { background-color: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); border-radius: 6px; }
-/* A single focus border, without the additional outline and halo. */
-.settings-home :deep(input:not([type="checkbox"]):not([type="radio"]):focus),
-.settings-home :deep(textarea:focus), .settings-home :deep(.app-select:focus) { outline: none; box-shadow: none; border-color: var(--accent); }
+.settings-home :deep(.app-select:focus) { outline: none; border-color: var(--accent); }
 .settings-compact #core-settings h2 { font-size: 16px; font-weight: 600; }
 .settings-compact #core-settings .update-row-facts > strong { font-size: 13px; font-weight: 400; color: var(--muted); }
 /* Flat category tabs and compact forms share the existing theme tokens. */
@@ -1028,7 +1026,6 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshLogDisplayOnFoc
 .settings-compact .network-options :deep(.setting-toggle) { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
 .settings-compact .port-list :deep(.port-row:last-child),
 .settings-compact .network-options :deep(.auth-setting) { border-bottom: 0; }
-.settings-compact .port-list :deep(.port-row:focus-within) { box-shadow: inset 3px 0 var(--accent); }
 .settings-compact :deep(.port-input) { height: 32px; min-height: 32px; padding-block: 5px !important; }
 .settings-compact :deep(.auth-setting > button) { min-height: 30px; padding: 5px 10px; font-size: 12px; }
 /* The former accordion shell must not clip the inset DNS panel corners. */

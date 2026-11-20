@@ -218,7 +218,7 @@ onBeforeUnmount(() => {
       </div>
     </header>
     <div id="page-navigation" class="page-navigation" />
-    <section ref="contentRef" class="content" :class="{ 'config-content': current === 'config', 'logs-content': current === 'logs', 'rules-content': current === 'rules' }" @scroll.passive="markScrollActivity">
+    <section ref="contentRef" class="content" :class="{ 'dashboard-content': current === 'dashboard', 'config-content': current === 'config', 'logs-content': current === 'logs', 'rules-content': current === 'rules' }" @scroll.passive="markScrollActivity">
       <component v-if="current !== 'bypass' || (bypassPreferenceReady && bypassPageEnabled)" :is="activePage.component" :key="`${current}-${refreshKey}`" ref="activePageRef" />
       <p v-else role="status">{{ t(bypassPreferenceError || '正在读取旁路由显示设置…') }}</p>
     </section>

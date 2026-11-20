@@ -88,11 +88,11 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside, tru
         <button type="button" class="ghost small" :disabled="disabled || !bulkSelectedCount" @click="selectMatches(false)">{{ t(search.trim() ? '取消匹配项选择' : '取消全选') }}</button>
         <span class="muted">{{ t('已选 {arg0} / {arg1} 项', { arg0: bulkSelectedCount, arg1: bulkOptions.length }) }}</span>
       </div>
-      <div :id="`${id}-list`" class="group-member-options">
-        <label v-for="option in visibleOptions" :key="option" class="group-member-option" :class="{ 'is-selected': selected.has(option) }">
+      <div :id="`${id}-list`" class="group-member-options" tabindex="-1">
+        <div v-for="option in visibleOptions" :key="option" class="group-member-option" :class="{ 'is-selected': selected.has(option) }">
           <input type="checkbox" :value="option" :checked="selected.has(option)" :disabled="disabled" :aria-label="option" @change="toggle(option)" />
           <span :title="option">{{ option === customOption ? t('使用“{arg0}”', { arg0: option }) : option }}</span>
-        </label>
+        </div>
         <p v-if="!visibleOptions.length" class="policy-select-empty">{{ t('没有匹配的选项') }}</p>
       </div>
       <p v-if="matches.length > 100" class="policy-select-empty">{{ t('显示前 100 项，请搜索缩小范围') }}</p>
@@ -106,9 +106,9 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', outside, tru
 .group-member-actions button{padding:4px 8px;font-size:11px}
 .group-member-actions span{margin-left:auto;font-size:11px;white-space:nowrap}
 .group-member-options{min-height:0;max-height:min(240px,30dvh);overflow:auto;scrollbar-width:thin;scrollbar-color:var(--muted) transparent}
-.group-member-option{display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;font-size:12px;cursor:pointer;min-width:0}
+.group-member-option{display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;font-size:12px;min-width:0}
 .group-member-option:hover,.group-member-option:focus-within{background:color-mix(in srgb,var(--accent) 12%,var(--panel))}
 .group-member-option.is-selected{color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
-.group-member-option input[type=checkbox]{flex:none;width:15px;height:15px;min-height:0;padding:0;margin:0;accent-color:var(--accent)}
+.group-member-option input[type=checkbox]{flex:none;width:15px;height:15px;min-height:0;padding:0;margin:0;cursor:pointer;accent-color:var(--accent)}
 .group-member-option span{min-width:0;overflow-wrap:anywhere}
 </style>
