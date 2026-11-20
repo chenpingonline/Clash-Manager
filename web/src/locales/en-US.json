@@ -1,4 +1,6 @@
 {
+  "User-Agent 必须是单行文本": "User-Agent must be a single line without control characters.",
+  "留空使用默认值": "Leave blank to use the default",
   "仪表盘": "Dashboard",
   "代理节点": "Proxies",
   "订阅配置": "Profiles",

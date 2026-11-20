@@ -187,6 +187,7 @@ export interface ProfileJob {
 }
 
 export interface ProfileItem {
+  customUserAgent?: string
   id: string
   name: string
   type: 'remote' | 'local' | string

@@ -176,6 +176,62 @@ func TestRemoteProfileDownloadUsesExpectedContract(t *testing.T) {
 	}
 }
 
+func TestScheduledProfileUpdateAfterUserAgentChange(t *testing.T) {
+	t.Parallel()
+	requests := make(chan http.Header, 2)
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- r.Header.Clone()
+		w.Header().Set("ETag", "old")
+		w.Header().Set("Last-Modified", "Wed, 18 Nov 2026 12:00:00 GMT")
+		_, _ = io.WriteString(w, "# "+r.UserAgent())
+	}))
+	defer remote.Close()
+	root := t.TempDir()
+	g := newGateway(config{profilesFile: filepath.Join(root, "profiles.json"), profileDir: filepath.Join(root, "profiles")})
+	create := httptest.NewRecorder()
+	g.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/api/profiles", strings.NewReader(fmt.Sprintf(`{"name":"fixture","url":%q}`, remote.URL))))
+	if create.Code != http.StatusCreated {
+		t.Fatal(create.Body.String())
+	}
+	select {
+	case header := <-requests:
+		if header.Get("User-Agent") != defaultSubscriptionUA {
+			t.Fatalf("unexpected default UA: %v", header)
+		}
+	default:
+		t.Fatal("initial download missing")
+	}
+	state, err := g.readProfiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := state.Items[0]
+	patch := httptest.NewRecorder()
+	g.ServeHTTP(patch, httptest.NewRequest(http.MethodPatch, "/api/profiles/"+item.ID, strings.NewReader(`{"userAgent":"mihomo/v1.19.33"}`)))
+	if patch.Code != http.StatusOK {
+		t.Fatal(patch.Body.String())
+	}
+	state, err = g.readProfiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	item = state.Items[0]
+	item.UpdatedAt = 0
+	item.LastDownload["updatedAt"] = 0
+	if err := g.writeProfiles(state); err != nil {
+		t.Fatal(err)
+	}
+	g.profileSchedulerTick(t.Context())
+	select {
+	case header := <-requests:
+		if header.Get("User-Agent") != "mihomo/v1.19.33" || header.Get("If-None-Match") != "" || header.Get("If-Modified-Since") != "" {
+			t.Fatalf("unexpected scheduled request: %v", header)
+		}
+	default:
+		t.Fatal("scheduled download missing")
+	}
+}
+
 func TestAuthorizedLocalConfigDiscoveryAndImportAreServedByGo(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

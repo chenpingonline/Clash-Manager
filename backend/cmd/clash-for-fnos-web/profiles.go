@@ -32,6 +32,7 @@ type profile struct {
 	Name              string         `json:"name"`
 	URL               string         `json:"url"`
 	Type              string         `json:"type,omitempty"`
+	UserAgent         string         `json:"userAgent,omitempty"`
 	SourcePath        string         `json:"sourcePath,omitempty"`
 	AutoUpdate        bool           `json:"autoUpdate"`
 	AutoApply         bool           `json:"autoApply"`
@@ -125,6 +126,17 @@ func (g *gateway) writeProfiles(state profileState) error {
 	return writeAtomicFile(g.config.profilesFile, body)
 }
 
+func (item *profile) effectiveUserAgent() string {
+	if item.UserAgent != "" {
+		return item.UserAgent
+	}
+	return defaultSubscriptionUA
+}
+
+func validSubscriptionUA(value string) bool {
+	return !strings.ContainsFunc(value, func(r rune) bool { return r < 32 || r == 127 })
+}
+
 func publicProfile(item *profile, current *string) map[string]any {
 	typeName := item.Type
 	if typeName == "" {
@@ -137,7 +149,7 @@ func publicProfile(item *profile, current *string) map[string]any {
 		"autoApply": item.AutoApply, "intervalMinutes": item.IntervalMinutes,
 		"updatedAt": nullableValue(item.UpdatedAt), "lastError": nullableValue(item.LastError),
 		"subscriptionInfo": nullableMap(item.SubscriptionInfo), "profileWebPageUrl": nullableValue(item.ProfileWebPageURL),
-		"userAgent": defaultSubscriptionUA, "lastDownload": nullableMap(item.LastDownload), "current": isCurrent,
+		"userAgent": item.effectiveUserAgent(), "customUserAgent": item.UserAgent, "lastDownload": nullableMap(item.LastDownload), "current": isCurrent,
 	}
 }
 
@@ -191,6 +203,7 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 	if requestPath == "/api/profiles" && r.Method == http.MethodPost {
 		var body struct {
 			Name, URL       string
+			UserAgent       string  `json:"userAgent"`
 			AutoUpdate      *bool   `json:"autoUpdate"`
 			AutoApply       bool    `json:"autoApply"`
 			IntervalMinutes float64 `json:"intervalMinutes"`
@@ -207,7 +220,11 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 			writeJSON(w, 400, map[string]string{"error": err.Error()})
 			return true
 		}
-		item := &profile{ID: newHexID(6), Name: body.Name, URL: body.URL, Type: "remote", AutoUpdate: body.AutoUpdate == nil || *body.AutoUpdate, AutoApply: body.AutoApply, IntervalMinutes: body.IntervalMinutes}
+		if !validSubscriptionUA(body.UserAgent) {
+			writeJSON(w, 400, map[string]string{"error": "User-Agent 必须是单行文本"})
+			return true
+		}
+		item := &profile{ID: newHexID(6), Name: body.Name, URL: body.URL, UserAgent: strings.TrimSpace(body.UserAgent), Type: "remote", AutoUpdate: body.AutoUpdate == nil || *body.AutoUpdate, AutoApply: body.AutoApply, IntervalMinutes: body.IntervalMinutes}
 		if item.IntervalMinutes == 0 {
 			item.IntervalMinutes = 360
 		}
@@ -369,6 +386,18 @@ func (g *gateway) handleProfilesAPI(w http.ResponseWriter, r *http.Request, requ
 				item.ETag, item.LastModified, item.ContentSHA256 = "", "", ""
 			}
 			item.URL = value
+		}
+		if raw, present := patch["userAgent"]; present {
+			value, ok := raw.(string)
+			if !ok || !validSubscriptionUA(value) {
+				writeJSON(w, 400, map[string]string{"error": "User-Agent 必须是单行文本"})
+				return true
+			}
+			previous := item.effectiveUserAgent()
+			item.UserAgent = strings.TrimSpace(value)
+			if previous != item.effectiveUserAgent() {
+				item.ETag, item.LastModified = "", ""
+			}
 		}
 		if value, ok := patch["autoUpdate"].(bool); ok {
 			item.AutoUpdate = value
@@ -613,7 +642,8 @@ func (g *gateway) downloadProfile(ctx context.Context, item *profile) ([]byte, m
 		return nil
 	}}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	req.Header.Set("User-Agent", defaultSubscriptionUA)
+	ua := item.effectiveUserAgent()
+	req.Header.Set("User-Agent", ua)
 	if item.ETag != "" {
 		req.Header.Set("If-None-Match", item.ETag)
 	}
@@ -626,7 +656,7 @@ func (g *gateway) downloadProfile(ctx context.Context, item *profile) ([]byte, m
 		return nil, nil, nil, nil, false, fmt.Errorf("订阅下载失败: %w", err)
 	}
 	defer response.Body.Close()
-	download := map[string]any{"method": "direct", "label": "直连", "status": response.StatusCode, "durationMs": time.Since(started).Milliseconds(), "redirects": 0, "userAgent": defaultSubscriptionUA, "proxyUrl": nil, "updatedAt": time.Now().UnixMilli()}
+	download := map[string]any{"method": "direct", "label": "直连", "status": response.StatusCode, "durationMs": time.Since(started).Milliseconds(), "redirects": 0, "userAgent": ua, "proxyUrl": nil, "updatedAt": time.Now().UnixMilli()}
 	if response.StatusCode == http.StatusNotModified {
 		download["unchanged"] = true
 		download["conditional"] = true
