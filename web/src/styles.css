@@ -250,7 +250,7 @@ body{margin:0;background:var(--startup-frame,var(--bg))!important}
   display:grid;
   grid-template-columns:200px minmax(0,1fr);
   column-gap:var(--workspace-gap);
-  padding:0 var(--workspace-gap) var(--workspace-gap) 0;
+  padding:0 var(--workspace-gap) 0 0;
   background:#0C0C0C;
 }
 .sidebar{height:100%;min-height:0;padding-bottom:0;border-right:0}

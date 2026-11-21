@@ -235,7 +235,7 @@ button, input, textarea, .app-select { font-size: var(--text-base); }
 
 /* --- shell: sidebar ------------------------------------------------------ */
 #app { grid-template-columns: 204px minmax(0, 1fr); }
-.sidebar { padding: 16px 12px 14px; background: var(--bg); border-right: 1px solid var(--line); backdrop-filter: none; }
+.sidebar { padding: 16px 12px var(--workspace-gap); background: var(--bg); border-right: 1px solid var(--line); backdrop-filter: none; }
 .brand { padding: 2px 8px 18px; }
 .brand strong { font-size: var(--text-lg); }
 .brand small { font-size: var(--text-sm); }
@@ -571,7 +571,7 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
 }
 @media(max-width:1000px) {
   #app { grid-template-columns: 76px minmax(0,1fr); }
-  .sidebar { padding: 14px 10px; }
+  .sidebar { padding: 14px 10px var(--workspace-gap); }
   .nav-item { min-height: 44px; justify-content: center; padding: 10px; }
   .nav-item.active::before { left: -10px; }
 }
