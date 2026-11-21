@@ -261,7 +261,7 @@ nav { gap: 2px; overflow-y: auto; }
 .topbar .language-select .app-select { height: 34px; min-height: 34px; border-radius: var(--radius-control); font-size: var(--text-sm); }
 .topbar .proxy-search, .topbar .rule-search, .topbar .config-search-wrap, .topbar .log-search-wrap { height: 34px; min-height: 34px; border-radius: var(--radius-control); }
 .content { padding: 20px 24px 40px; }
-.content.dashboard-content { padding-top: 18px; }
+.content.dashboard-content { --dashboard-card-gap: 12px; padding-top: var(--dashboard-card-gap); }
 .content.config-content, .content.logs-content, .content.rules-content { padding-top: 16px; }
 
 /* --- controls ----------------------------------------------------------- */
@@ -318,9 +318,10 @@ label:not(.switch) > input[type="checkbox"] { pointer-events: auto; }
 /* --- dashboard ---------------------------------------------------------- */
 .dashboard-connection-panel, .dashboard-runtime-panel, .dashboard-subscription, .dashboard-live,
 html[data-theme="light"] :is(.dashboard-connection-panel,.dashboard-runtime-panel,.dashboard-subscription,.dashboard-live) {
-  padding: 16px 20px; margin-top: 12px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow);
+  padding: 16px 20px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow);
 }
-.dashboard-connection-panel { margin-top: 0; }
+.dashboard-content > .card { margin-top: 0; }
+.dashboard-content > .card + .card { margin-top: var(--dashboard-card-gap); }
 .dashboard-section-title, .dashboard-live>h2, html[data-theme="light"] :is(.dashboard-section-title,.dashboard-live>h2) {
   min-height: 0; padding: 0; border: 0; background: transparent; border-radius: 0;
 }
@@ -587,7 +588,6 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
   .sidebar-footer>div:last-child { display: none; }
   .topbar { height: auto; min-height: 56px; padding: 10px 16px; flex-wrap: wrap; }
   .content { padding: 14px 16px 28px; }
-  .content.dashboard-content { padding-top: 14px; }
   .log-summary { flex-wrap: wrap; padding: 10px 16px; }
   .log-secondary-actions { margin-left: 0; padding-left: 0; border-left: 0; flex-wrap: wrap; }
   .local-discovery-card .section-head > div { min-width: 0; }
