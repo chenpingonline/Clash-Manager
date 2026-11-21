@@ -132,7 +132,7 @@ onUnmounted(() => portalTarget.value?.remove())
 .app-select { width: 100%; min-width: 0; min-height: 0; height: 34px; display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--control-bg); color: var(--text); font-size: 12px; font-weight: 400; text-align: left; cursor: pointer; }
 .app-select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-select > svg { flex: none; }
-.app-select:focus-visible, .app-select[aria-expanded="true"] { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
+.app-select:focus-visible, .app-select[aria-expanded="true"] { outline: none; border-color: var(--accent); box-shadow: none; }
 .app-select:disabled { background: var(--surface-disabled); color: var(--muted); }
 .app-select-menu { position: fixed; z-index: 1100; overflow-y: auto; overscroll-behavior: contain; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
 .app-select-menu button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); font-size: 12px; font-weight: 400; text-align: left; }

@@ -61,7 +61,7 @@ html[data-theme="light"] .topbar { background: var(--panel); }
 .topbar .page-actions :is(.proxy-search,.rule-search) > input { flex: 1 1 auto; min-width: 0; height: 100%; min-height: 0; border-radius: 0; }
 .topbar :is(.proxy-search,.rule-search) { background: var(--panel2); border-color: var(--line); }
 .topbar .config-search,.topbar .log-search { background: var(--panel2); }
-.topbar .proxy-search:focus-within,.topbar .rule-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
+.topbar .proxy-search:focus-within,.topbar .rule-search:focus-within { border-color: var(--accent); box-shadow: none; }
 .topbar :is(.proxy-search,.rule-search,.config-search-wrap,.log-search-wrap) > svg { flex: none; color: var(--muted); }
 .config-search-wrap > svg,
 .log-search-wrap > svg { position: absolute; z-index: 1; top: 50%; left: 10px; transform: translateY(-50%); pointer-events: none; }
@@ -96,17 +96,17 @@ button,.btn,.nav-item,.node-row,input,.app-select,textarea {
 button:active:not(:disabled),.btn:active { opacity: .85; }
 .top-actions button:active:not(:disabled) { transform: scale(.98); }
 :where(button,a,input[type="checkbox"],input[type="radio"],input[type="range"],input[type="file"]):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-input:focus,.app-select:focus,textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
+input:focus,.app-select:focus,textarea:focus { border-color: var(--accent); box-shadow: none; }
 input::placeholder,textarea::placeholder { color: var(--muted); opacity: 1; }
 
 /* The label and text field form one control, including its focus indicator. */
 .proxy-filter-search { background: var(--panel2); transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease; }
-.proxy-filter-search:focus-within,html[data-theme="light"] .proxy-filter-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
+.proxy-filter-search:focus-within,html[data-theme="light"] .proxy-filter-search:focus-within { border-color: var(--accent); box-shadow: none; }
 .proxy-filter-search input { min-width: 0; flex: 1; border-radius: 0; outline: none; box-shadow: none; }
 
 /* Composite controls own the focus border; their inner fields stay borderless. */
 :is(.proxy-sort-control,.dashboard-sort-control,.system-proxy-bypass-editor,.core-timeout-input):focus-within,
-html[data-theme="light"] :is(.proxy-sort-control,.dashboard-sort-control,.system-proxy-bypass-editor,.core-timeout-input):focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent); }
+html[data-theme="light"] :is(.proxy-sort-control,.dashboard-sort-control,.system-proxy-bypass-editor,.core-timeout-input):focus-within { border-color: var(--accent); box-shadow: none; }
 :is(.proxy-search,.rule-search,.proxy-filter-search,.system-proxy-bypass-editor,.core-timeout-input) input:focus,
 :is(.proxy-sort-control,.dashboard-sort-control) .app-select:focus { outline: none; box-shadow: none; }
 /* A port row is a layout container, rather than an additional input border. */
@@ -275,7 +275,7 @@ button, .btn { border-radius: var(--radius-control); padding: 8px 13px; font-siz
 
 input, .input, .app-select, textarea { min-height: 36px; padding: 8px 11px; border-radius: var(--radius-control); background: var(--control-bg); border: 1px solid var(--line); font-size: var(--text-base); }
 input:hover:not(:disabled, :focus), .app-select:hover:not(:disabled, :focus) { border-color: var(--line-strong); }
-input:focus, .app-select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
+input:focus, .app-select:focus, textarea:focus { border-color: var(--accent); box-shadow: none; }
 /* Native checkboxes use their own dimensions and keyboard focus outline. */
 input[type="checkbox"] { min-height: 0; }
 input[type="checkbox"]:focus { box-shadow: none; }

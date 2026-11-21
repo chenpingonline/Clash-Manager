@@ -1112,7 +1112,7 @@ onBeforeUnmount(() => window.removeEventListener('focus', refreshLogDisplayOnFoc
 .core-healthcheck-url, .core-field-help { font-size: 11px; line-height: 1.5; color: var(--muted); }
 .core-healthcheck-url { overflow-wrap: anywhere; }
 .core-timeout-input { height: 32px; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 9px; background: var(--control-bg); overflow: hidden; }
-.core-timeout-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 9%, transparent); }
+.core-timeout-input:focus-within { border-color: var(--accent); box-shadow: none; }
 .core-timeout-input input { height: 30px; min-height: 30px; min-width: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .core-timeout-input span { flex: none; padding-right: 12px; color: var(--muted); font-size: 12px; }
 .core-custom-healthcheck { max-width: 560px; margin-top: 12px; }
