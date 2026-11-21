@@ -270,7 +270,8 @@ onBeforeUnmount(() => {
                 <button type="button" role="menuitem" @click="openExtension(item, 'groups')">{{ t("编辑代理组") }}</button>
                 <button type="button" role="menuitem" @click="openExtension(item, 'override')">{{ t("扩展覆写配置") }}</button>
                 <button type="button" role="menuitem" @click="openExtension(item, 'script')">{{ t("扩展脚本") }}</button>
-                <button v-if="item.type === 'remote'" type="button" role="menuitem" class="profile-edit-secondary" @click="closeEditMenu(); openRemote(item)">{{ t("订阅信息") }}</button>
+                <button v-if="item.type === 'remote'" type="button" role="menuitem" @click="closeEditMenu(); openRemote(item)">{{ t("订阅信息") }}</button>
+                <hr class="profile-menu-divider">
                 <button type="button" role="menuitem" class="profile-menu-delete" :disabled="Boolean(busyId)" @click="closeEditMenu(); remove(item)">{{ t("删除") }}</button>
               </div>
             </div>

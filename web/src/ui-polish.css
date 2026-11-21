@@ -26,7 +26,7 @@ html[data-theme="light"] .topbar { background: var(--panel); }
 .port-dependency-note { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--accent-line); border-radius: 9px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; line-height: 1.6; }
 .profile-title-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .profile-current-badge { flex: none; padding: 2px 7px; border: 1px solid var(--accent-line); border-radius: 6px; background: var(--panel); color: var(--accent-ink); font-size: 11px; line-height: 18px; font-weight: 600; }
-.profile-edit-popover .profile-menu-delete { margin-top: 5px; border-top: 1px solid var(--line); border-radius: 0 0 7px 7px; color: var(--bad); }
+.profile-edit-popover .profile-menu-delete { color: var(--bad); }
 .profile-advanced { margin-top: 16px; border-top: 1px solid var(--line); }
 .profile-advanced>summary { padding: 12px 0 0; cursor: pointer; color: var(--text); font-size: 13px; font-weight: 600; }
 .profile-advanced>summary span { margin-left: 12px; color: var(--muted); font-size: 12px; font-weight: 400; }
@@ -417,7 +417,7 @@ html[data-theme="light"] :is(.dashboard-overview-head h2,.dashboard-runtime-head
 .global-extension-copy small { font-size: var(--text-sm); color: var(--muted); }
 .profile-edit-popover { border-radius: 12px; padding: 6px; box-shadow: var(--shadow-pop); }
 .profile-edit-popover button { padding: 9px 10px; border-radius: var(--radius-sm); font-size: var(--text-sm); }
-.profile-edit-popover .profile-edit-secondary { margin-top: 5px; padding-top: 10px; border-top: 1px solid var(--line); border-radius: 0 0 var(--radius-sm) var(--radius-sm); color: var(--text); }
+.profile-menu-divider { margin: 4px 8px; border: 0; border-top: 1px solid var(--line); }
 
 /* --- config + rules + connections + logs -------------------------------- */
 .config-meta { min-height: 40px; padding: 0 24px; gap: 10px; font-size: var(--text-sm); border-bottom-color: var(--line); }

@@ -137,7 +137,7 @@ onUnmounted(() => portalTarget.value?.remove())
 .app-select-menu { position: fixed; z-index: 1100; overflow-y: auto; overscroll-behavior: contain; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
 .app-select-menu button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); font-size: 12px; font-weight: 400; text-align: left; }
 .app-select-menu button > span { min-width: 0; overflow-wrap: anywhere; }
-.app-select-menu.single-line button { justify-content: flex-start; }
+.app-select-menu.single-line button { justify-content: flex-start; font-weight: 600; }
 .app-select-menu.single-line button > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .app-select-menu button > svg { flex: none; }
 .app-select-menu button.active { background: var(--accent-soft); color: var(--accent-ink); }
