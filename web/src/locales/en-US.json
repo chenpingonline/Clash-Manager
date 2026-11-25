@@ -1,4 +1,12 @@
 {
+  "自定义监听地址": "Custom listen address",
+  "监听 IP": "Listen IP",
+  "保存后将重启运行中的内核。": "Saving restarts the core if it is running.",
+  "Mihomo 管理接口": "Mihomo management API",
+  "Controller 监听地址无效": "Invalid Controller listen address",
+  "请填写本机网卡的 IPv4 或 IPv6 地址": "Enter an IPv4 or IPv6 address assigned to this host",
+  "仅托管内核支持修改 Controller 监听地址": "Changing the Controller listen address requires a managed core",
+  "局域网访问 Controller 需要先配置 Secret": "Configure a Secret before enabling LAN access to the Controller",
   "自定义值": "Custom value",
   "预设": "Preset",
   "自定义 User-Agent": "Custom User-Agent",

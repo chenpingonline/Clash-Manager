@@ -4,8 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/chenpingonline/Clash-Manager/backend/internal/configyaml"
 	"gopkg.in/yaml.v3"
@@ -56,7 +60,32 @@ func (h *helper) attachUserSettings(prepared map[string]any, patch map[string]an
 	}
 }
 
-func normalizeUserPatch(input map[string]any) (map[string]any, error) {
+// A port-only update from an older client must retain the current listener.
+func controllerEndpoint(item map[string]any, current string) (string, error) {
+	host, currentPort, err := net.SplitHostPort(current)
+	if err != nil {
+		return "", fail(400, "Controller 监听地址无效")
+	}
+	if value, supplied := item["host"]; supplied {
+		text, _ := value.(string)
+		ip, err := netip.ParseAddr(strings.TrimSpace(text))
+		ip = ip.Unmap()
+		if err != nil || ip.Zone() != "" || !(ip.IsLoopback() || ip.IsGlobalUnicast() || ip.IsLinkLocalUnicast()) {
+			return "", fail(400, "请填写本机网卡的 IPv4 或 IPv6 地址")
+		}
+		host = ip.String()
+		if _, changePort := item["port"]; !changePort {
+			return net.JoinHostPort(host, currentPort), nil
+		}
+	}
+	port, ok := item["port"].(float64)
+	if !ok || port < 1 || port > 65535 || port != float64(int(port)) {
+		return "", fail(400, "端口必须为 1–65535 的整数")
+	}
+	return net.JoinHostPort(host, strconv.Itoa(int(port))), nil
+}
+
+func normalizeUserPatch(input map[string]any, currentController string) (map[string]any, error) {
 	patch := map[string]any{}
 	ports := map[string]string{"controller": "external-controller", "mixed": "mixed-port", "socks": "socks-port", "http": "port", "redir": "redir-port", "tproxy": "tproxy-port"}
 	for key, value := range input {
@@ -65,7 +94,11 @@ func normalizeUserPatch(input map[string]any) (map[string]any, error) {
 			port := item["port"]
 			enabled, _ := item["enabled"].(bool)
 			if key == "controller" {
-				patch[target] = fmt.Sprintf("127.0.0.1:%.0f", port)
+				endpoint, err := controllerEndpoint(item, currentController)
+				if err != nil {
+					return nil, err
+				}
+				patch[target] = endpoint
 			} else if enabled {
 				patch[target] = port
 			} else {

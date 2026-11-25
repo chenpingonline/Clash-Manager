@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +14,26 @@ import (
 )
 
 const defaultController = "http://127.0.0.1:9090"
+
+// A controller bound to a local NIC must remain reachable even if the host
+// itself uses Mihomo as its environment proxy.
+var controllerTransport = func() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = func(req *http.Request) (*url.URL, error) {
+		proxy, err := http.ProxyFromEnvironment(req)
+		ip := net.ParseIP(req.URL.Hostname())
+		if proxy != nil && ip != nil {
+			addresses, _ := net.InterfaceAddrs()
+			for _, address := range addresses {
+				if network, ok := address.(*net.IPNet); ok && network.IP.Equal(ip) {
+					return nil, nil
+				}
+			}
+		}
+		return proxy, err
+	}
+	return transport
+}()
 
 type Settings struct {
 	Controller         string `json:"controller"`
@@ -102,7 +123,7 @@ func (c *Client) Do(ctx context.Context, method, apiPath string, body io.Reader,
 	}
 	client := c.HTTPClient
 	if client == nil {
-		client = &http.Client{}
+		client = &http.Client{Transport: controllerTransport}
 	}
 	requestClient := *client
 	if timeout > 0 {

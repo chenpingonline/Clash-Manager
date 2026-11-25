@@ -1415,11 +1415,13 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 	if err != nil {
 		return nil, err
 	}
-	patch, err := normalizeUserPatch(input)
+	raw := active["content"].(string)
+	previousController, _, _ := parseController(raw)
+	patch, err := normalizeUserPatch(input, previousController)
 	if err != nil {
 		return nil, err
 	}
-	for _, key := range []string{"controller", "mixed", "socks", "http", "redir", "tproxy"} {
+	for _, key := range []string{"mixed", "socks", "http", "redir", "tproxy"} {
 		value, exists := input[key]
 		if !exists {
 			continue
@@ -1429,7 +1431,7 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 			return nil, fail(400, "端口设置格式无效")
 		}
 		enabled, _ := port["enabled"].(bool)
-		if enabled || key == "controller" {
+		if enabled {
 			n, ok := port["port"].(float64)
 			if !ok || n < 1 || n > 65535 || n != float64(int(n)) {
 				return nil, fail(400, "端口必须为 1–65535 的整数")
@@ -1441,9 +1443,7 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 			return nil, fail(409, "托管内核尚未安装，无法校验配置，请先完成内核安装")
 		}
 	}
-	raw := active["content"].(string)
 	previousTunEnabled := yamlNestedBoolean(raw, "tun", "enable", false)
-	previousController, _, _ := parseController(raw)
 	// Existing keys stay in place; missing keys are appended in this fixed order.
 	mapping := []struct{ api, key string }{
 		{"controller", "external-controller"}, {"mixed", "mixed-port"},
@@ -1479,8 +1479,27 @@ func (h *helper) updateNetwork(ctx context.Context, input map[string]any) (map[s
 			continue
 		}
 		if api == "controller" {
-			port := int(numberFromMap(value, "port", 9090))
-			raw = replaceTopLevel(raw, key, fmt.Sprintf("external-controller: 127.0.0.1:%d", port))
+			endpoint := patch[key].(string)
+			item := value.(map[string]any)
+			if _, supplied := item["host"]; supplied {
+				if active["mode"] != "managed" {
+					return nil, fail(409, "仅托管内核支持修改 Controller 监听地址")
+				}
+				host, _, _ := net.SplitHostPort(endpoint)
+				if !net.ParseIP(host).IsLoopback() {
+					var credentials struct {
+						Secret string `yaml:"secret"`
+					}
+					if err := yaml.Unmarshal([]byte(raw), &credentials); err != nil {
+						return nil, err
+					}
+					if strings.TrimSpace(credentials.Secret) == "" {
+						return nil, fail(400, "局域网访问 Controller 需要先配置 Secret")
+					}
+				}
+				item["host"] = host
+			}
+			raw = replaceTopLevel(raw, key, renderYAML(key, endpoint))
 			continue
 		}
 		if key == "" {
@@ -1645,14 +1664,6 @@ func shouldSaveDisabledTunOnly(input map[string]any, previousEnabled, nextEnable
 	_, ok := input["tun"].(map[string]any)
 	return ok
 }
-func numberFromMap(value any, key string, fallback float64) float64 {
-	if data, ok := value.(map[string]any); ok {
-		if n, ok := data[key].(float64); ok && n >= 1 && n <= 65535 {
-			return n
-		}
-	}
-	return fallback
-}
 func (h *helper) networkStatus(ctx context.Context) (map[string]any, error) {
 	return h.readNetworkStatus(ctx, true)
 }
@@ -1677,7 +1688,8 @@ func (h *helper) readNetworkStatus(ctx context.Context, includeListeners bool) (
 	hijack, _ := tun["dns-hijack"].([]any)
 	controller, _, mixed := parseController(raw)
 	controllerPort := 9090
-	if _, portText, ok := strings.Cut(controller, ":"); ok {
+	controllerHost, portText, splitErr := net.SplitHostPort(controller)
+	if splitErr == nil {
 		if value, err := strconv.Atoi(portText); err == nil {
 			controllerPort = value
 		}
@@ -1691,6 +1703,9 @@ func (h *helper) readNetworkStatus(ctx context.Context, includeListeners bool) (
 		return map[string]any{"enabled": true, "port": value}
 	}
 	settings := map[string]any{"controller": map[string]any{"enabled": true, "port": controllerPort}, "mixed": port("mixed-port", mixed), "socks": port("socks-port", 7898), "http": port("port", 7899), "redir": port("redir-port", 7895), "tproxy": port("tproxy-port", 7896), "allowLan": yamlBoolean(raw, "allow-lan", false), "bindAddress": proxyBindAddressFromConfig(raw), "core": map[string]any{"ipv6": yamlBoolean(raw, "ipv6", true), "unifiedDelay": yamlBoolean(raw, "unified-delay", false)}, "tun": map[string]any{"enabled": nestedBoolean("tun", "enable", false), "stack": yamlNestedString(raw, "tun", "stack", ""), "congestionController": yamlNestedString(raw, "tun", "congestion-controller", ""), "mtu": yamlNestedInteger(raw, "tun", "mtu", 1500), "routeExcludeAddress": yamlNestedStringList(raw, "tun", "route-exclude-address"), "autoRoute": nestedBoolean("tun", "auto-route", true), "autoRedirect": nestedBoolean("tun", "auto-redirect", true), "autoDetectInterface": nestedBoolean("tun", "auto-detect-interface", true), "dnsHijack": len(hijack) > 0, "strictRoute": nestedBoolean("tun", "strict-route", false)}}
+	if active["mode"] == "managed" && splitErr == nil {
+		settings["controller"].(map[string]any)["host"] = controllerHost
+	}
 	settings["dnsEnabled"] = nestedBoolean("dns", "enable", false)
 	requirements, _ := configyaml.TunDNSRequirements([]byte(raw))
 	auth, err := configyaml.ProxyAuthenticationFromDocument(document)

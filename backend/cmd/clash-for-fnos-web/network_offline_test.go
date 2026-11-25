@@ -215,3 +215,53 @@ func TestControllerPortChangeRestartsManagedCore(t *testing.T) {
 		t.Fatalf("controller settings not switched: %s", raw)
 	}
 }
+
+func TestControllerAddressRollbackAfterFailedVerification(t *testing.T) {
+	// The restarted core answers the initial probe, then fails the runtime check.
+	candidate := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/version" {
+			writeJSON(w, 200, map[string]string{"version": "test"})
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer candidate.Close()
+	var restarts atomic.Int32
+	var rolledBack atomic.Bool
+	socket := startTunHelper(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/network/update":
+			writeJSON(w, 200, map[string]any{"txId": "host", "controllerChanged": true, "controller": map[string]string{"clientUrl": candidate.URL}})
+		case "/status":
+			writeJSON(w, 200, map[string]any{"mode": "managed", "canRestartService": true, "managedController": candidate.URL, "managedSecret": "test"})
+		case "/config/activate":
+			writeJSON(w, 200, map[string]string{"method": "hot-reload"})
+		case "/config/rollback":
+			rolledBack.Store(true)
+			writeJSON(w, 200, map[string]bool{"ok": true})
+		case "/core/restart-managed":
+			if restarts.Add(1) == 2 && !rolledBack.Load() {
+				t.Error("restarted before restoring original config")
+			}
+			writeJSON(w, 200, map[string]bool{"ok": true})
+		default:
+			t.Errorf("unexpected helper request %s", r.URL.Path)
+			w.WriteHeader(500)
+		}
+	}))
+	path := writeGatewaySettings(t, "http://127.0.0.1:9193")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := newGateway(config{publicDir: t.TempDir(), gateway: "/app/clash-for-fnos", settingsFile: path, privilegedSocket: socket})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/app/clash-for-fnos/api/network/settings", strings.NewReader(`{"controller":{"host":"192.0.2.5"}}`)))
+	if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "网络设置已回滚") || !rolledBack.Load() || restarts.Load() != 2 {
+		t.Fatalf("response=%d %s rollback=%v restarts=%d", w.Code, w.Body.String(), rolledBack.Load(), restarts.Load())
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || string(before) != string(after) {
+		t.Fatalf("gateway credentials not restored: %v", err)
+	}
+}

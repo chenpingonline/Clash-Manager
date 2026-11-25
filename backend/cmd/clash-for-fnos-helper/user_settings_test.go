@@ -96,7 +96,7 @@ func TestUserPortOverridesPreserveDisabledAndUntouchedFields(t *testing.T) {
 		"controller": map[string]any{"port": float64(9191)},
 		"mixed":      map[string]any{"enabled": false, "port": float64(7890)},
 		"allowLan":   false,
-	})
+	}, "127.0.0.1:9090")
 	if err != nil {
 		t.Fatal(err)
 	}

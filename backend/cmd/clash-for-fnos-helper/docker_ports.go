@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -31,11 +32,7 @@ func (h *helper) applyStandaloneStartupPorts() error {
 		if err != nil || port < 1 || port > 65535 {
 			return fmt.Errorf("%s 必须为 1–65535 的整数", item.env)
 		}
-		if item.key == "external-controller" {
-			patch[item.key] = fmt.Sprintf("127.0.0.1:%d", port)
-		} else {
-			patch[item.key] = port
-		}
+		patch[item.key] = port
 	}
 	if len(patch) == 0 {
 		// Web synchronizes Controller credentials shortly after Helper becomes
@@ -53,6 +50,14 @@ func (h *helper) applyStandaloneStartupPorts() error {
 	raw, err := os.ReadFile(h.config.managedConfig)
 	if err != nil {
 		return err
+	}
+	if port, ok := patch["external-controller"].(int); ok {
+		current, _, _ := parseController(string(raw))
+		host, _, splitErr := net.SplitHostPort(current)
+		if splitErr != nil {
+			return splitErr
+		}
+		patch["external-controller"] = net.JoinHostPort(host, strconv.Itoa(port))
 	}
 	content, err := configyaml.MergeOverrides(raw, patch)
 	if err != nil {

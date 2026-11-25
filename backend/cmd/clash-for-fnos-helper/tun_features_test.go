@@ -67,7 +67,7 @@ func TestOfflineTunReportsUnspecifiedAndExplicitStack(t *testing.T) {
 }
 
 func TestTunDefaultPatchSurvivesSubscriptionReapply(t *testing.T) {
-	patch, err := normalizeUserPatch(map[string]any{"tun": map[string]any{"stack": "", "congestionController": ""}})
+	patch, err := normalizeUserPatch(map[string]any{"tun": map[string]any{"stack": "", "congestionController": ""}}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestTunDefaultPatchSurvivesSubscriptionReapply(t *testing.T) {
 	if strings.Contains(string(out), "stack:") || strings.Contains(string(out), "congestion-controller:") || !strings.Contains(string(out), "device: keep") || !strings.Contains(string(out), "mtu: 1400") {
 		t.Fatalf("%s", out)
 	}
-	patch, err = normalizeUserPatch(map[string]any{"tun": map[string]any{"mtu": 1500}})
+	patch, err = normalizeUserPatch(map[string]any{"tun": map[string]any{"mtu": 1500}}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

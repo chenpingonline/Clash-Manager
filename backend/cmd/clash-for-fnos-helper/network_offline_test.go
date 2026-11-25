@@ -140,3 +140,79 @@ func TestOfflineNetworkNeverFallsBackForExternalMode(t *testing.T) {
 		t.Fatal("external mode read managed config")
 	}
 }
+
+func TestControllerListenHostSurvivesPortAndProfileEdits(t *testing.T) {
+	h := offlineNetworkHelper(t)
+	ctx := context.Background()
+	apply := func(fields map[string]any) string {
+		t.Helper()
+		prepared, err := h.updateNetwork(ctx, map[string]any{"controller": fields})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if prepared["controllerChanged"] != true {
+			t.Fatal("listener change did not request a restart")
+		}
+		id := prepared["txId"].(string)
+		if _, err := h.activateConfig(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	check := func(host string, port int, endpoint string) {
+		t.Helper()
+		status, err := h.networkStatus(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		controller := status["settings"].(map[string]any)["controller"].(map[string]any)
+		if controller["host"] != host || controller["port"] != port {
+			t.Fatalf("read back %v", controller)
+		}
+		result, err := h.composeUserSettings(map[string]any{"content": "external-controller: 127.0.0.1:1\nrules: []\n"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		actual, _, _ := parseController(result["content"].(string))
+		if actual != endpoint {
+			t.Fatalf("composed controller %q, want %q", actual, endpoint)
+		}
+	}
+	id := apply(map[string]any{"host": "::1"})
+	if _, err := h.commitConfig(id); err != nil {
+		t.Fatal(err)
+	}
+	check("::1", 9191, "[::1]:9191")
+	id = apply(map[string]any{"port": float64(49152)})
+	if _, err := h.commitConfig(id); err != nil {
+		t.Fatal(err)
+	}
+	check("::1", 49152, "[::1]:49152")
+	id = apply(map[string]any{"host": "127.0.0.1"})
+	check("127.0.0.1", 49152, "127.0.0.1:49152")
+	if _, err := h.rollbackConfig(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	check("::1", 49152, "[::1]:49152")
+}
+
+func TestControllerListenHostRejectsInvalidInputAndMissingSecret(t *testing.T) {
+	h := offlineNetworkHelper(t)
+	const raw = "external-controller: 127.0.0.1:9191\nsecret: '' # no authentication\n"
+	if err := atomicWrite(h.config.managedConfig, []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, host := range []any{nil, "", "0.0.0.0", "::", "224.0.0.1", "http://192.0.2.1:9191", "192.0.2.1"} {
+		_, err := h.updateNetwork(context.Background(), map[string]any{"controller": map[string]any{"host": host}})
+		if err == nil {
+			t.Fatalf("accepted host %v", host)
+		}
+		if host == "192.0.2.1" && !strings.Contains(err.Error(), "Secret") {
+			t.Fatal(err)
+		}
+	}
+	body, err := os.ReadFile(h.config.managedConfig)
+	if err != nil || string(body) != raw {
+		t.Fatalf("changed active config on validation failure: %v", err)
+	}
+}

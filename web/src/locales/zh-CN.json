@@ -1,4 +1,12 @@
 {
+  "自定义监听地址": "自定义监听地址",
+  "监听 IP": "监听 IP",
+  "保存后将重启运行中的内核。": "保存后将重启运行中的内核。",
+  "Mihomo 管理接口": "Mihomo 管理接口",
+  "Controller 监听地址无效": "Controller 监听地址无效",
+  "请填写本机网卡的 IPv4 或 IPv6 地址": "请填写本机网卡的 IPv4 或 IPv6 地址",
+  "仅托管内核支持修改 Controller 监听地址": "仅托管内核支持修改 Controller 监听地址",
+  "局域网访问 Controller 需要先配置 Secret": "局域网访问 Controller 需要先配置 Secret",
   "自定义值": "自定义值",
   "预设": "预设",
   "自定义 User-Agent": "自定义 User-Agent",
