@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -40,6 +41,30 @@ func TestClientUsesControllerAndBearerSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	response.Body.Close()
+}
+
+func TestWildcardControllerDialsLoopbackAndRetainsListener(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.Host, "127.0.0.1:") {
+			t.Errorf("dialed %s", r.Host)
+		}
+	}))
+	defer server.Close()
+	bindURL := strings.Replace(server.URL, "127.0.0.1", "0.0.0.0", 1)
+	client := Client{SettingsFile: writeSettings(t, Settings{Controller: bindURL})}
+	snapshot, err := client.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := snapshot.Do(context.Background(), http.MethodGet, "/version", nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	settings, err := snapshot.LoadSettings()
+	if err != nil || settings.Controller != bindURL {
+		t.Fatalf("configuration reload lost the wildcard listener: %v", err)
+	}
 }
 
 func TestClientPreservesMihomoStatusAndMessage(t *testing.T) {

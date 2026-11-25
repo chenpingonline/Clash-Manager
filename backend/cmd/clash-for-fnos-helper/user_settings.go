@@ -70,7 +70,7 @@ func controllerEndpoint(item map[string]any, current string) (string, error) {
 		text, _ := value.(string)
 		ip, err := netip.ParseAddr(strings.TrimSpace(text))
 		ip = ip.Unmap()
-		if err != nil || ip.Zone() != "" || !(ip.IsLoopback() || ip.IsGlobalUnicast() || ip.IsLinkLocalUnicast()) {
+		if err != nil || ip.Zone() != "" || !(ip == netip.IPv4Unspecified() || ip.IsLoopback() || ip.IsGlobalUnicast() || ip.IsLinkLocalUnicast()) {
 			return "", fail(400, "请填写本机网卡的 IPv4 或 IPv6 地址")
 		}
 		host = ip.String()

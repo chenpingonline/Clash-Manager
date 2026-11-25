@@ -107,6 +107,14 @@ func (c *Client) Do(ctx context.Context, method, apiPath string, body io.Reader,
 		return nil, err
 	}
 	base, _ := url.Parse(settings.Controller + "/")
+	// Keep the wildcard in settings for config reloads, but dial the local API.
+	if base.Hostname() == "0.0.0.0" {
+		port := base.Port()
+		base.Host = "127.0.0.1"
+		if port != "" {
+			base.Host = net.JoinHostPort(base.Host, port)
+		}
+	}
 	reference, err := url.Parse(strings.TrimPrefix(apiPath, "/"))
 	if err != nil {
 		return nil, fmt.Errorf("Mihomo API 路径无效: %w", err)

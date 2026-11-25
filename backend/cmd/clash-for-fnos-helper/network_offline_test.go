@@ -188,8 +188,8 @@ func TestControllerListenHostSurvivesPortAndProfileEdits(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("::1", 49152, "[::1]:49152")
-	id = apply(map[string]any{"host": "127.0.0.1"})
-	check("127.0.0.1", 49152, "127.0.0.1:49152")
+	id = apply(map[string]any{"host": "0.0.0.0"})
+	check("0.0.0.0", 49152, "0.0.0.0:49152")
 	if _, err := h.rollbackConfig(ctx, id); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestControllerListenHostRejectsInvalidInputAndMissingSecret(t *testing.T) {
 		if err == nil {
 			t.Fatalf("accepted host %v", host)
 		}
-		if host == "192.0.2.1" && !strings.Contains(err.Error(), "Secret") {
+		if (host == "192.0.2.1" || host == "0.0.0.0") && !strings.Contains(err.Error(), "Secret") {
 			t.Fatal(err)
 		}
 	}

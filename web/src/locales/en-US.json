@@ -1,4 +1,5 @@
 {
+  "Controller 监听设置": "Controller listen settings",
   "自定义监听地址": "Custom listen address",
   "监听 IP": "Listen IP",
   "保存后将重启运行中的内核。": "Saving restarts the core if it is running.",
